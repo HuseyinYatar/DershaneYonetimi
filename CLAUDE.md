@@ -58,7 +58,7 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 | api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama | Java (Spring Cloud Gateway) | — | — |
 | kimlik | Giriş, token, roller | **Keycloak** (önerilen, bkz. Açık kararlar) | PostgreSQL | — |
 | kullanici | Öğrenci/öğretmen/veli profilleri, sınıf, şube, veli–öğrenci eşleşmesi | Java (Spring Boot) | PostgreSQL | Yayınlar: `OgrenciSinifaEklendi` |
-| deneme-analizi | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `DenemeSonucuAciklandi` |
+| deneme-analizi | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `DenemeSonucuAciklandi`, `OgrenciSonucuEklendi`; Dinler: `OgrenciSinifaEklendi` |
 | mesajlasma | WebSocket sohbet, fotoğraflı soru, okundu bilgisi | Java (Spring Boot) | PostgreSQL, Redis Pub/Sub | Yayınlar: `YeniMesaj` (alıcı çevrimdışıysa) |
 | gorev | Görev/ödev atama, tekrarlı görevler, teslim ve değerlendirme | Java (Spring Boot) | PostgreSQL | Yayınlar: `GorevAtandi`, `GorevYaklasiyor`, `GorevGecikti`, `TeslimDegerlendirildi`; Dinler: `OgrenciSinifaEklendi` |
 | yoklama | Derse katılım, devamsızlık | Java (Spring Boot) | PostgreSQL | Yayınlar: `OgrenciDevamsiz` |
@@ -85,9 +85,31 @@ Frontend: Next.js (React, TypeScript).
 
 - Her deneme için soru → ders → konu → doğru cevap eşleştirmesi (cevap anahtarı) önceden yüklenir. Konular müfredata göre sabit bir katalogdan seçilir.
 - Net = Doğru − Yanlış ÷ 4 (YKS). LGS'de bölen 3'tür; sınav türüne göre yapılandırılır, kodda sabit yazılmaz.
-- Tahmini puan her yerde "tahmini" olarak etiketlenir.
-- Zayıf konu: başarı oranı eşiğin altında olan ve yeterli soruyla ölçülmüş konu. Az soruyla ölçülen konular ayrıca işaretlenir.
 - Hesaplamalar pandas ile vektörel yapılır, satır satır döngü kurulmaz.
+
+### Puanlama
+
+- ÖSYM ve MEB puanı **soru bazlı değil, test bazlı standart puanla** hesaplar: standart puan = 50 + 10 × (net − ortalama) ÷ standart sapma. Sonra testler ders ağırlıklarıyla (`Ders.agirlik`) toplanır. Bir sorunun puanı, onu kaç kişinin doğru yaptığına göre değişmez; zor geçen testte aynı netin puan değeri artar.
+- Standart puan için testin ortalaması ve standart sapması gerekir. Bunlar `DenemeDersIstatistigi`nde tutulur ve iki kaynaktan gelir:
+  - `KURUM_ICI`: optik dosya işlenince dershane öğrencilerinden otomatik hesaplanır.
+  - `ULKE_GENELI`: yayınevi veya sınav organizasyonu açıkladıktan sonra **yalnızca yönetici** elle girer.
+- Hangi istatistiğin kullanılacağını `Deneme.puanlamaKaynagi` belirler; deneme oluşturulurken seçilir. Öğrenci denemesi başına tek puan görür.
+- Türkiye geneli bir denemede ülke istatistiği henüz girilmediyse `tahminiPuan` boş kalır; net ve konu analizi yine görünür. İstatistik girilince puan otomatik hesaplanır.
+- Tahmini puan her yerde "tahmini" olarak etiketlenir ve kaynağı belirtilir: "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)". Kurum içi puan Türkiye geneliyle karşılaştırılamaz.
+
+### Zayıf konu
+
+- Zayıf konu tek denemeye değil, öğrencinin son N denemesine bakılarak belirlenir. Bu denemelerdeki bir konunun tüm soruları toplanır; başarı oranı eşiğin altındaysa konu zayıftır.
+- N ve başarı oranı eşiği `ZayifKonuAyari`nda şube başına tutulur ve **yalnızca yönetici** değiştirir. Eşikler kodda sabit yazılmaz.
+- Sonuç `OgrenciKonuDurumu` özetinde tutulur. Özet her yeni deneme işlendiğinde ve ayar değiştiğinde `KonuSonuc` kayıtlarından yeniden hesaplanır; eski deneme pencereden çıkınca değer geri çıkarılmaz.
+- Alt konular `Konu.ustKonuId` ile üst konuya toplanabilir. Zayıf çıkan konulardan öğrenci ve öğretmene "şu konuları çalış" tavsiyesi üretilir.
+
+### Optik dosya içe aktarma
+
+- Satırdaki öğrenci numarası `OgrenciKopya` ile eşleştirilir. Eşleşmeyen satırlar atılmaz, `EslesmeyenSatir` olarak saklanır.
+- Yönetici eşleşmeyen satırı elle bir öğrenciye bağlayabilir; yalnızca denemenin şubesindeki öğrenciler seçilebilir. Aynı öğrenciye aynı denemede ikinci satır bağlanamaz. Kimin kimi bağladığı kaydedilir. Satır hatalıysa `YOKSAYILDI` işaretlenir, silinmez.
+- Bağlama sonrası öğrencinin sonucu üretilir, `KURUM_ICI` istatistik ve `OgrenciKonuDurumu` yeniden hesaplanır.
+- Sonuçlar açıklanmış denemede de geç bağlama yapılabilir. Bu durumda `DenemeSonucuAciklandi` yeniden yayınlanmaz; yalnızca o öğrenci için `OgrenciSonucuEklendi` yayınlanır ve bildirim servisi öğrenciye (ve velisine) haber verir.
 
 ## Depo yapısı
 
@@ -176,6 +198,7 @@ Bunlar netleşince bu bölümden çıkarılıp yukarıya işlenmelidir.
 
 - **Mesaj kuyruğu:** RabbitMQ (Kubernetes içinde, taşınabilir) veya Amazon SQS + SNS (yönetilen, Floci ile emüle edilir). Kafka bu hacim için gereğinden ağır olduğu için elendi. Rapor şu an SQS + SNS diyor.
 - **Kimlik doğrulama:** Keycloak önerildi (kendi auth servisini yazmak yerine). Alternatif: Amazon Cognito. Keycloak seçilirse kullanici servisi yine iş verisi için kalır.
+- **Tahmini puan ölçekleme formülü:** Ağırlıklı standart puanların TYT, AYT ve LGS için hangi aralığa ve nasıl ölçekleneceği (taban puan dahil) ÖSYM ve MEB kılavuzlarından doğrulanıp sınav türüne işlenmeli.
 - **Fakülte/bölüm adı ve danışman unvanı:** Rapor kapağı için eksik.
 
 ## Rapor
