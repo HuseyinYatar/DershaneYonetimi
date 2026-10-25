@@ -1,0 +1,118 @@
+# Local development environment: the AWS services are emulated by Floci, identity by Keycloak.
+#   docker compose -f local/docker-compose.yml up -d                       # dependencies only
+#   docker compose -f local/docker-compose.yml --profile services up -d    # + user service
+name: dershane
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      # Tokens always carry the browser-facing issuer; services inside the network still reach
+      # Keycloak as http://keycloak:8080 (backchannel).
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak/dershane-realm.json:/opt/keycloak/data/import/dershane-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The image has no curl; ask the management port with bash's /dev/tcp.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/localhost/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  floci:
+    image: floci/floci:2.3.0
+    environment:
+      FLOCI_DEFAULT_REGION: eu-central-1
+    ports:
+      - "4566:4566"
+
+  # Creates the SNS topic and an inspection queue, then exits.
+  floci-init:
+    image: floci/floci:2.3.0-compat
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: eu-central-1
+      AWS_ENDPOINT_URL: http://floci:4566
+    volumes:
+      - ./floci/init.sh:/init.sh:ro
+    depends_on:
+      - floci
+    restart: "no"
+
+  # Catches the e-mails Keycloak sends (password setup). UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+  user:
+    profiles: ["services"]
+    build:
+      context: ../services/user
+      args:
+        GIT_COMMIT_SHA: local
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_URL: jdbc:postgresql://postgres:5432/user_service
+      DB_USERNAME: user_service
+      DB_PASSWORD: user_service
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/dershane
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
+      KEYCLOAK_PUBLIC_URL: http://localhost:8180
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: eu-central-1
+      USER_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:000000000000:user-events
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      floci-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
