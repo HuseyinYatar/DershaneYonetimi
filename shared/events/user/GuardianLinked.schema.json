@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/user/GuardianLinked.schema.json",
+  "title": "GuardianLinked (schemaVersion 1)",
+  "description": "A guardian is linked to a student, or the relationship of an existing link changed. A student has at most one guardian; when the guardian is replaced, GuardianUnlinked for the old one comes first. Consumer: notification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["guardianId", "studentId", "relationship"],
+  "properties": {
+    "guardianId": { "$ref": "#/$defs/uuid" },
+    "studentId": { "$ref": "#/$defs/uuid" },
+    "relationship": { "enum": ["MOTHER", "FATHER", "LEGAL_GUARDIAN", "OTHER"] }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}

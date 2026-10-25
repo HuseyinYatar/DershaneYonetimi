@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/user/StudentAddedToClassroom.schema.json",
+  "title": "StudentAddedToClassroom (schemaVersion 1)",
+  "description": "A student joined a classroom. Carries everything exam-analysis needs for its student copy (matching optical-reader rows by student number). Consumers: exam-analysis, task, attendance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["membershipId", "studentId", "classroomId", "branchId", "studentNumber", "fullName", "startDate"],
+  "properties": {
+    "membershipId": { "$ref": "#/$defs/uuid" },
+    "studentId": { "$ref": "#/$defs/uuid" },
+    "classroomId": { "$ref": "#/$defs/uuid" },
+    "branchId": { "$ref": "#/$defs/uuid" },
+    "studentNumber": { "type": "string", "minLength": 1, "maxLength": 20 },
+    "fullName": { "type": "string", "minLength": 1 },
+    "startDate": { "$ref": "#/$defs/date" }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+  }
+}
