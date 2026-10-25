@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/user/UserUpdated.schema.json",
+  "title": "UserUpdated (schemaVersion 1)",
+  "description": "Current state of a user, published on creation and on every change (upsert semantics). SNS does not guarantee order: a consumer ignores an event whose recordVersion is lower than the one it stored. Consumers: notification (contact details), exam-analysis (student name).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["userId", "role", "branchId", "firstName", "lastName", "email", "phone", "active", "studentNumber", "recordVersion"],
+  "properties": {
+    "userId": { "$ref": "#/$defs/uuid" },
+    "role": { "enum": ["STUDENT", "TEACHER", "GUARDIAN", "ADMIN"] },
+    "branchId": { "$ref": "#/$defs/uuid" },
+    "firstName": { "type": "string", "minLength": 1 },
+    "lastName": { "type": "string", "minLength": 1 },
+    "email": { "type": ["string", "null"] },
+    "phone": { "type": ["string", "null"] },
+    "active": { "type": "boolean" },
+    "studentNumber": {
+      "description": "Only for role STUDENT.",
+      "type": ["string", "null"]
+    },
+    "recordVersion": { "type": "integer", "minimum": 0 }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}
