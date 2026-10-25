@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/ExamResultsPublished.v1.json",
+  "title": "ExamResultsPublished",
+  "description": "Producer: exam-analysis. Results of a mock exam were published; notify every listed student (and their parents). Published once per exam.",
+  "allOf": [{"$ref": "_envelope.v1.json"}],
+  "properties": {
+    "eventType": {"const": "ExamResultsPublished"},
+    "version": {"const": 1},
+    "producer": {"const": "exam-analysis"},
+    "payload": {
+      "type": "object",
+      "required": ["mockExamId", "branchId", "examTypeCode", "studentIds"],
+      "properties": {
+        "mockExamId": {"type": "string", "format": "uuid"},
+        "branchId": {"type": "string", "format": "uuid"},
+        "examTypeCode": {"type": "string"},
+        "studentIds": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uuid"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

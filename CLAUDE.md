@@ -57,10 +57,11 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 |---|---|---|---|---|
 | api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama | Java (Spring Cloud Gateway) | — | — |
 | kimlik | Giriş, token, roller | **Keycloak** (önerilen, bkz. Açık kararlar) | PostgreSQL | — |
-| kullanici | Öğrenci/öğretmen/veli profilleri, sınıf, şube, veli–öğrenci eşleşmesi | Java (Spring Boot) | PostgreSQL | Yayınlar: `OgrenciSinifaEklendi` |
-| deneme-analizi | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `DenemeSonucuAciklandi`, `OgrenciSonucuEklendi`; Dinler: `OgrenciSinifaEklendi` |
+| kullanici | Öğrenci/öğretmen/veli profilleri, sınıf, şube, veli–öğrenci eşleşmesi | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAddedToClass` |
+| exam-analysis (deneme analizi) | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + SQLAlchemy + pandas) | PostgreSQL, Redis | Yayınlar: `ExamResultsPublished`, `StudentResultAdded`; Dinler: `StudentAddedToClass` |
+| omr (planlandı) | Fotoğraflanmış/taranmış optik formlardan işaretleri okur, kanonik satır dosyası üretir | Python (FastAPI + OpenCV) | PostgreSQL, S3 (dosya servisi üzerinden) | Yayınlar: `AnswerSheetsRecognized` |
 | mesajlasma | WebSocket sohbet, fotoğraflı soru, okundu bilgisi | Java (Spring Boot) | PostgreSQL, Redis Pub/Sub | Yayınlar: `YeniMesaj` (alıcı çevrimdışıysa) |
-| gorev | Görev/ödev atama, tekrarlı görevler, teslim ve değerlendirme | Java (Spring Boot) | PostgreSQL | Yayınlar: `GorevAtandi`, `GorevYaklasiyor`, `GorevGecikti`, `TeslimDegerlendirildi`; Dinler: `OgrenciSinifaEklendi` |
+| gorev | Görev/ödev atama, tekrarlı görevler, teslim ve değerlendirme | Java (Spring Boot) | PostgreSQL | Yayınlar: `GorevAtandi`, `GorevYaklasiyor`, `GorevGecikti`, `TeslimDegerlendirildi`; Dinler: `StudentAddedToClass` |
 | yoklama | Derse katılım, devamsızlık | Java (Spring Boot) | PostgreSQL | Yayınlar: `OgrenciDevamsiz` |
 | bildirim | Olayları dinleyip e-posta, SMS, uygulama içi bildirim gönderir | Python (FastAPI) | PostgreSQL | Dinler: yukarıdaki olaylar |
 | dosya | Fotoğraf, ödev, materyal yükleme/indirme | Java (Spring Boot) | S3 | — |
@@ -74,10 +75,13 @@ Frontend: Next.js (React, TypeScript).
   - Senkron: REST (istemci → gateway → servis, servisten servise anlık sorgu)
   - Asenkron: Mesaj kuyruğu (olaylar). Bir servis, olayı dinleyen servisin ayakta olmasını beklememeli.
   - Gerçek zamanlı: Sadece mesajlasma servisinde WebSocket. Birden fazla pod arası dağıtım Redis Pub/Sub ile.
-- Olay şemaları `shared/events/` altında tanımlanır ve her iki dil tarafından da kullanılır. Olay adları Türkçe, PascalCase.
+- Olay şemaları `shared/events/` altında JSON Schema olarak tanımlanır ve her iki dil tarafından da kullanılır. Olay adları İngilizce, PascalCase; alanlar camelCase. Diğer servislerin hâlâ Türkçe olan olay adları, servis yazılırken İngilizceye çevrilir.
+- **Dil:** Kod, servis adları, veritabanı tabloları, API alanları, olay adları ve Keycloak realm rolleri (`STUDENT`, `TEACHER`, `PARENT`, `ADMIN`) İngilizcedir. UML ve rapor Türkçe kalır; her servisin README'sinde Türkçe → İngilizce sözlük tutulur.
+- Olay yayınlayan servisler **transactional outbox** kullanır: olay, değişiklikle aynı transaction'da `outbox_event` tablosuna yazılır, worker SNS'e gönderir. Teslimat en az bir kezdir; tüketiciler `eventId` ile tekrarı ayıklar (`processed_event`).
 - Kullanıcı kimliği tüm servislerde Keycloak'ın `sub` değeridir.
-- Servisler token'ı Keycloak'ın JWKS adresiyle kendisi doğrular; her istekte kimlik servisine sorulmaz. Roller token içindeki claim'lerden okunur.
-- Uzun süren işler (optik dosya işleme) istek içinde değil, arka planda çalışır.
+- Servisler token'ı Keycloak'ın JWKS adresiyle kendisi doğrular; her istekte kimlik servisine sorulmaz. Roller token içindeki claim'lerden okunur. Öğretmen ve yönetici yalnızca token'daki `branch_id` claim'inin şubesinde işlem yapar.
+- Uzun süren işler (optik dosya işleme) istek içinde değil, arka planda çalışır. exam-analysis'te iş tablosu kuyruk olarak kullanılır (`SELECT … FOR UPDATE SKIP LOCKED`); worker aynı imajdan ayrı Deployment olarak çalışır ve HPA ile ölçeklenir.
+- **Sessiz guard clause kullanılmaz:** reddedilen her işlem kodlu bir domain hatası fırlatır ve tek yerde loglanır; arka planda atlanan her adım nedeniyle loglanır ve metrik artırır.
 - Tekrarlı görev üretimi, gecikme işaretleme ve hatırlatmalar Kubernetes CronJob ile yapılır.
 - Öğrencilerin çoğu reşit değildir: mesajlaşma kayıtları denetlenebilir tutulur, kişisel veriler loglanmaz (KVKK).
 
@@ -89,27 +93,32 @@ Frontend: Next.js (React, TypeScript).
 
 ### Puanlama
 
-- ÖSYM ve MEB puanı **soru bazlı değil, test bazlı standart puanla** hesaplar: standart puan = 50 + 10 × (net − ortalama) ÷ standart sapma. Sonra testler ders ağırlıklarıyla (`Ders.agirlik`) toplanır. Bir sorunun puanı, onu kaç kişinin doğru yaptığına göre değişmez; zor geçen testte aynı netin puan değeri artar.
-- Standart puan için testin ortalaması ve standart sapması gerekir. Bunlar `DenemeDersIstatistigi`nde tutulur ve iki kaynaktan gelir:
-  - `KURUM_ICI`: optik dosya işlenince dershane öğrencilerinden otomatik hesaplanır.
-  - `ULKE_GENELI`: yayınevi veya sınav organizasyonu açıkladıktan sonra **yalnızca yönetici** elle girer.
-- Hangi istatistiğin kullanılacağını `Deneme.puanlamaKaynagi` belirler; deneme oluşturulurken seçilir. Öğrenci denemesi başına tek puan görür.
-- Türkiye geneli bir denemede ülke istatistiği henüz girilmediyse `tahminiPuan` boş kalır; net ve konu analizi yine görünür. İstatistik girilince puan otomatik hesaplanır.
+- ÖSYM ve MEB puanı **soru bazlı değil, test bazlı standart puanla** hesaplar: standart puan = 50 + 10 × (net − ortalama) ÷ standart sapma. Sonra testler puan türü ağırlıklarıyla (`ScoreTypeWeight`) toplanır. Bir sorunun puanı, onu kaç kişinin doğru yaptığına göre değişmez; zor geçen testte aynı netin puan değeri artar.
+- Her sınav türünün bir veya daha fazla puan türü (`ScoreType`) vardır: TYT ve LGS'de tek, AYT'de SAY/EA/SÖZ, YDT'de DİL. Ağırlıklar ders üzerinde değil, puan türü–ders çiftinde tutulur.
+- Standart puan için testin ortalaması ve standart sapması gerekir. Bunlar `ExamSubjectStatistic`te tutulur ve iki kaynaktan gelir:
+  - `INSTITUTIONAL`: optik dosya işlenince dershane öğrencilerinden otomatik hesaplanır.
+  - `NATIONAL`: yayınevi veya sınav organizasyonu açıkladıktan sonra **yalnızca yönetici** elle girer.
+- Hangi istatistiğin kullanılacağını `MockExam.scoringSource` belirler; deneme oluşturulurken seçilir. Öğrenci denemesi başına her puan türü için tek puan görür (`StudentScore`).
+- Türkiye geneli bir denemede ülke istatistiği henüz girilmediyse `StudentScore.estimatedScore` boş kalır; net ve konu analizi yine görünür. İstatistik girilince puan otomatik hesaplanır.
 - Tahmini puan her yerde "tahmini" olarak etiketlenir ve kaynağı belirtilir: "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)". Kurum içi puan Türkiye geneliyle karşılaştırılamaz.
 
 ### Zayıf konu
 
 - Zayıf konu tek denemeye değil, öğrencinin son N denemesine bakılarak belirlenir. Bu denemelerdeki bir konunun tüm soruları toplanır; başarı oranı eşiğin altındaysa konu zayıftır.
-- N ve başarı oranı eşiği `ZayifKonuAyari`nda şube başına tutulur ve **yalnızca yönetici** değiştirir. Eşikler kodda sabit yazılmaz.
-- Sonuç `OgrenciKonuDurumu` özetinde tutulur. Özet her yeni deneme işlendiğinde ve ayar değiştiğinde `KonuSonuc` kayıtlarından yeniden hesaplanır; eski deneme pencereden çıkınca değer geri çıkarılmaz.
-- Alt konular `Konu.ustKonuId` ile üst konuya toplanabilir. Zayıf çıkan konulardan öğrenci ve öğretmene "şu konuları çalış" tavsiyesi üretilir.
+- N ve başarı oranı eşiği `WeakTopicSetting`te şube başına tutulur ve **yalnızca yönetici** değiştirir. Eşikler kodda sabit yazılmaz. Şubede ayar yoksa hesaplama uyarı logu ve metrikle atlanır.
+- Pencere yalnızca **açıklanmış** (`PUBLISHED`) denemelerden ve **konunun sınav türü içinden** oluşur: açıklanmamış deneme öğrenciye zayıf konu olarak sızmaz, TYT ve AYT denemeleri birbirinin penceresini doldurmaz.
+- Sonuç `StudentTopicStatus` özetinde tutulur. Özet deneme açıklanınca, açıklanmış denemede geç eşleştirme veya soru iptali olunca ve ayar değişince `TopicResult` kayıtlarından baştan hesaplanır; eski deneme pencereden çıkınca değer geri çıkarılmaz.
+- Alt konular `Topic.parentTopicId` ile üst konuya toplanır. Zayıf çıkan konulardan öğrenci ve öğretmene "şu konuları çalış" tavsiyesi üretilir (en zayıf önce).
 
 ### Optik dosya içe aktarma
 
-- Satırdaki öğrenci numarası `OgrenciKopya` ile eşleştirilir. Eşleşmeyen satırlar atılmaz, `EslesmeyenSatir` olarak saklanır.
-- Yönetici eşleşmeyen satırı elle bir öğrenciye bağlayabilir; yalnızca denemenin şubesindeki öğrenciler seçilebilir. Aynı öğrenciye aynı denemede ikinci satır bağlanamaz. Kimin kimi bağladığı kaydedilir. Satır hatalıysa `YOKSAYILDI` işaretlenir, silinmez.
-- Bağlama sonrası öğrencinin sonucu üretilir, `KURUM_ICI` istatistik ve `OgrenciKonuDurumu` yeniden hesaplanır.
-- Sonuçlar açıklanmış denemede de geç bağlama yapılabilir. Bu durumda `DenemeSonucuAciklandi` yeniden yayınlanmaz; yalnızca o öğrenci için `OgrenciSonucuEklendi` yayınlanır ve bildirim servisi öğrenciye (ve velisine) haber verir.
+- İki kaynak vardır: optik okuyucu cihazın düz metin dosyası ve fotoğraftan okuma. Görüntü işleme exam-analysis'te yapılmaz; omr servisi fotoğraflardan `omr-canonical-v1` formatında satır üretir ve exam-analysis iki kaynağı aynı hatla işler.
+- Satırdaki öğrenci numarası `StudentReplica` ile eşleştirilir. Eşleşmeyen satırlar atılmaz, nedeniyle (`STUDENT_NOT_FOUND`, `DUPLICATE_STUDENT`, `INVALID_BOOKLET`, `MALFORMED_LINE`) `UnmatchedRow` olarak saklanır.
+- Yönetici eşleşmeyen satırı elle bir öğrenciye bağlayabilir; yalnızca denemenin şubesindeki öğrenciler seçilebilir. Aynı öğrenciye aynı denemede ikinci satır bağlanamaz. Kimin bağladığı veya yok saydığı kaydedilir. Satır hatalıysa `IGNORED` işaretlenir, silinmez.
+- Bağlama sonrası öğrencinin sonucu üretilir, `INSTITUTIONAL` istatistik, tüm puan ve sıralar yeniden hesaplanır.
+- Sonuçlar açıklanmış denemede de geç bağlama yapılabilir. Bu durumda `ExamResultsPublished` yeniden yayınlanmaz; yalnızca o öğrenci için `StudentResultAdded` yayınlanır ve bildirim servisi öğrenciye (ve velisine) haber verir. Açıklanmış denemeye yeni dosya yüklenemez.
+- İptal edilen soru (`AnswerStatus.CANCELLED`) ÖSYM uygulamasındaki gibi doğru/yanlış/boş ve konu toplamlarına girmez. Sonuçlar saklanan cevaplardan yeniden puanlanır; olay yeniden yayınlanmaz.
+- Servisler arası iletişim (4. hafta) gelene kadar geçici adaptörler kullanılır: `StudentReplica` yönetici endpoint'iyle doldurulur, optik dosya doğrudan exam-analysis'e yüklenir.
 
 ## Depo yapısı
 
@@ -129,7 +138,7 @@ dershane-gitops/               ArgoCD bu depoyu izler
 └── environments/{dev,prod}/values.yaml
 ```
 
-Servis klasör adları küçük harf, tire ile ayrılmış ve Türkçe karaktersiz (`deneme-analizi`, `mesajlasma`).
+Servis klasör adları küçük harf, tire ile ayrılmış ve İngilizce (`exam-analysis`). Henüz yazılmamış servisler yazılırken İngilizce adlarını alır.
 
 ## CI/CD
 
@@ -196,9 +205,9 @@ Entegrasyon testleri gerçek AWS'ye bağlanmaz; Floci ve Testcontainers kullanı
 
 Bunlar netleşince bu bölümden çıkarılıp yukarıya işlenmelidir.
 
-- **Mesaj kuyruğu:** RabbitMQ (Kubernetes içinde, taşınabilir) veya Amazon SQS + SNS (yönetilen, Floci ile emüle edilir). Kafka bu hacim için gereğinden ağır olduğu için elendi. Rapor şu an SQS + SNS diyor.
+- **Mesaj kuyruğu:** RabbitMQ (Kubernetes içinde, taşınabilir) veya Amazon SQS + SNS (yönetilen, Floci ile emüle edilir). Kafka bu hacim için gereğinden ağır olduğu için elendi. Rapor şu an SQS + SNS diyor. exam-analysis SNS + SQS adaptörüyle yazıldı; `EventPublisher` arayüzü sayesinde RabbitMQ'ya geçiş tek adaptör değişikliğidir.
 - **Kimlik doğrulama:** Keycloak önerildi (kendi auth servisini yazmak yerine). Alternatif: Amazon Cognito. Keycloak seçilirse kullanici servisi yine iş verisi için kalır.
-- **Tahmini puan ölçekleme formülü:** Ağırlıklı standart puanların TYT, AYT ve LGS için hangi aralığa ve nasıl ölçekleneceği (taban puan dahil) ÖSYM ve MEB kılavuzlarından doğrulanıp sınav türüne işlenmeli.
+- **Tahmini puan ölçekleme formülü:** Ağırlıklı standart puanların TYT, AYT ve LGS için hangi aralığa ve nasıl ölçekleneceği (taban puan dahil) ÖSYM ve MEB kılavuzlarından doğrulanıp puan türüne (`ScoreType.baseScore`, `ScoreTypeWeight`) işlenmeli. `services/exam-analysis/seed/catalog.json` içindeki ağırlıklar şimdilik yer tutucudur (`weightsVerified: false`).
 - **Fakülte/bölüm adı ve danışman unvanı:** Rapor kapağı için eksik.
 
 ## Rapor

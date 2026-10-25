@@ -1,0 +1,98 @@
+# Local dependencies (Floci instead of AWS). Start: docker compose -f local/docker-compose.yml up -d
+# Services themselves run on the host during development, or in containers with --profile app.
+
+name: dershane
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: ["5433:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # One database and one owner per service (database-per-service rule).
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  pgadmin:
+    # Web UI for browsing the local databases. Desktop mode: no pgAdmin login.
+    image: dpage/pgadmin4:8.14
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports: ["5050:80"]
+    volumes:
+      # Pre-registers the compose postgres; the password is asked once on first connect.
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  redis:
+    image: redis:7.4.1-alpine
+    ports: ["6379:6379"]
+
+  floci:
+    # Local AWS emulator (S3, SNS, SQS, Secrets Manager ...). Pin a released tag instead of latest.
+    image: ${FLOCI_IMAGE:-hectorvent/floci:latest}
+    ports: ["4566:4566"]
+    environment:
+      AWS_DEFAULT_REGION: eu-central-1
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Tokens always carry iss=http://localhost:8080/realms/dershane, also when services
+      # fetch the JWKS through the compose network (keycloak:8080).
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    ports: ["8080:8080"]
+    volumes:
+      - ./keycloak/realm-dershane.json:/opt/keycloak/data/import/realm-dershane.json:ro
+
+  exam-analysis-migrate:
+    profiles: ["app"]
+    build: ../services/exam-analysis
+    command: ["alembic", "upgrade", "head"]
+    environment: &exam-analysis-env
+      DATABASE_URL: postgresql+psycopg://exam_analysis:exam_analysis@postgres:5432/exam_analysis
+      REDIS_URL: redis://redis:6379/0
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: eu-central-1
+      OIDC_ISSUER: http://localhost:8080/realms/dershane
+      OIDC_JWKS_URL: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
+      OIDC_AUDIENCE: exam-analysis
+      OUTBOX_RELAY_ENABLED: ${OUTBOX_RELAY_ENABLED:-false}
+      SNS_TOPIC_ARN: ${SNS_TOPIC_ARN:-}
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  exam-analysis-api:
+    profiles: ["app"]
+    build: ../services/exam-analysis
+    environment: *exam-analysis-env
+    ports: ["8001:8000"]
+    depends_on:
+      exam-analysis-migrate: {condition: service_completed_successfully}
+
+  exam-analysis-worker:
+    profiles: ["app"]
+    build: ../services/exam-analysis
+    command: ["python", "-m", "app.worker"]
+    environment: *exam-analysis-env
+    ports: ["9101:9100"]
+    depends_on:
+      exam-analysis-migrate: {condition: service_completed_successfully}
+
+volumes:
+  postgres-data:

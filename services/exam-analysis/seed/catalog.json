@@ -1,0 +1,194 @@
+{
+  "_note": "Starter catalog. Topic lists are a sample of the curriculum; extend them through the API or this file. Score type weights are placeholders until verified against the OSYM/MEB guides (weightsVerified=false logs a warning on seeding). Optical layouts are examples; define each reader's real layout as its own format.",
+  "examTypes": [
+    {
+      "code": "TYT",
+      "name": "Temel Yeterlilik Testi",
+      "wrongDivisor": 4,
+      "subjects": [
+        {
+          "code": "TUR",
+          "name": "Türkçe",
+          "topics": [
+            {"name": "Sözcükte Anlam"},
+            {"name": "Cümlede Anlam"},
+            {"name": "Paragraf"},
+            {"name": "Ses Bilgisi"},
+            {"name": "Yazım Kuralları"},
+            {"name": "Noktalama İşaretleri"},
+            {"name": "Sözcük Türleri"},
+            {"name": "Cümlenin Ögeleri"}
+          ]
+        },
+        {
+          "code": "SOS",
+          "name": "Sosyal Bilimler",
+          "topics": [
+            {"name": "Tarih", "children": [{"name": "İlk Türk Devletleri"}, {"name": "Osmanlı Devleti"}, {"name": "Kurtuluş Savaşı"}]},
+            {"name": "Coğrafya", "children": [{"name": "Harita Bilgisi"}, {"name": "İklim Bilgisi"}, {"name": "Nüfus ve Yerleşme"}]},
+            {"name": "Felsefe"},
+            {"name": "Din Kültürü ve Ahlak Bilgisi"}
+          ]
+        },
+        {
+          "code": "MAT",
+          "name": "Temel Matematik",
+          "topics": [
+            {"name": "Temel Kavramlar"},
+            {"name": "Sayı Basamakları"},
+            {"name": "Bölme ve Bölünebilme"},
+            {"name": "EBOB - EKOK"},
+            {"name": "Rasyonel Sayılar"},
+            {"name": "Üslü Sayılar"},
+            {"name": "Köklü Sayılar"},
+            {"name": "Mutlak Değer"},
+            {
+              "name": "Problemler",
+              "children": [
+                {"name": "Sayı Problemleri"},
+                {"name": "Yaş Problemleri"},
+                {"name": "Yüzde, Kâr ve Zarar Problemleri"},
+                {"name": "Hareket Problemleri"}
+              ]
+            },
+            {"name": "Kümeler"},
+            {"name": "Fonksiyonlar"},
+            {"name": "Olasılık"},
+            {"name": "Geometri", "children": [{"name": "Üçgenler"}, {"name": "Çokgenler"}, {"name": "Çember ve Daire"}]}
+          ]
+        },
+        {
+          "code": "FEN",
+          "name": "Fen Bilimleri",
+          "topics": [
+            {"name": "Fizik", "children": [{"name": "Kuvvet ve Hareket"}, {"name": "Enerji"}, {"name": "Elektrik"}]},
+            {"name": "Kimya", "children": [{"name": "Atom ve Periyodik Sistem"}, {"name": "Kimyasal Türler Arası Etkileşimler"}, {"name": "Mol Kavramı"}]},
+            {"name": "Biyoloji", "children": [{"name": "Hücre"}, {"name": "Canlıların Sınıflandırılması"}, {"name": "Kalıtım"}]}
+          ]
+        }
+      ],
+      "scoreTypes": [
+        {"code": "TYT", "name": "TYT Puanı", "baseScore": null, "weightsVerified": false, "weights": {"TUR": 1, "SOS": 1, "MAT": 1, "FEN": 1}}
+      ]
+    },
+    {
+      "code": "AYT",
+      "name": "Alan Yeterlilik Testleri",
+      "wrongDivisor": 4,
+      "subjects": [
+        {"code": "EDB", "name": "Türk Dili ve Edebiyatı", "topics": [{"name": "Şiir Bilgisi"}, {"name": "Edebi Akımlar"}, {"name": "Cumhuriyet Dönemi Edebiyatı"}]},
+        {"code": "TAR1", "name": "Tarih-1", "topics": [{"name": "Tarih Bilimi"}, {"name": "Osmanlı Kültür ve Medeniyeti"}]},
+        {"code": "COG1", "name": "Coğrafya-1", "topics": [{"name": "Ekosistem"}, {"name": "Nüfus Politikaları"}]},
+        {"code": "TAR2", "name": "Tarih-2", "topics": [{"name": "XX. Yüzyıl Başlarında Dünya"}, {"name": "Soğuk Savaş Dönemi"}]},
+        {"code": "COG2", "name": "Coğrafya-2", "topics": [{"name": "Türkiye Ekonomisi"}, {"name": "Küresel Ortam"}]},
+        {"code": "FEL", "name": "Felsefe Grubu", "topics": [{"name": "Mantık"}, {"name": "Psikoloji"}, {"name": "Sosyoloji"}]},
+        {"code": "DIN", "name": "Din Kültürü ve Ahlak Bilgisi", "topics": [{"name": "İslam Düşüncesi"}]},
+        {
+          "code": "MAT",
+          "name": "Matematik",
+          "topics": [
+            {"name": "Polinomlar"},
+            {"name": "Logaritma"},
+            {"name": "Diziler"},
+            {"name": "Trigonometri"},
+            {"name": "Türev"},
+            {"name": "İntegral"}
+          ]
+        },
+        {"code": "FIZ", "name": "Fizik", "topics": [{"name": "Vektörler"}, {"name": "Elektrik ve Manyetizma"}, {"name": "Modern Fizik"}]},
+        {"code": "KIM", "name": "Kimya", "topics": [{"name": "Kimyasal Tepkimelerde Hız"}, {"name": "Kimyasal Denge"}, {"name": "Organik Kimya"}]},
+        {"code": "BIY", "name": "Biyoloji", "topics": [{"name": "Sinir Sistemi"}, {"name": "Genden Proteine"}, {"name": "Bitki Biyolojisi"}]}
+      ],
+      "scoreTypes": [
+        {"code": "SAY", "name": "Sayısal", "baseScore": null, "weightsVerified": false, "weights": {"MAT": 1, "FIZ": 1, "KIM": 1, "BIY": 1}},
+        {"code": "EA", "name": "Eşit Ağırlık", "baseScore": null, "weightsVerified": false, "weights": {"MAT": 1, "EDB": 1, "TAR1": 1, "COG1": 1}},
+        {
+          "code": "SOZ",
+          "name": "Sözel",
+          "baseScore": null,
+          "weightsVerified": false,
+          "weights": {"EDB": 1, "TAR1": 1, "COG1": 1, "TAR2": 1, "COG2": 1, "FEL": 1, "DIN": 1}
+        }
+      ]
+    },
+    {
+      "code": "YDT",
+      "name": "Yabancı Dil Testi",
+      "wrongDivisor": 4,
+      "subjects": [
+        {"code": "ING", "name": "İngilizce", "topics": [{"name": "Kelime Bilgisi"}, {"name": "Dil Bilgisi"}, {"name": "Okuduğunu Anlama"}]}
+      ],
+      "scoreTypes": [
+        {"code": "DIL", "name": "Dil", "baseScore": null, "weightsVerified": false, "weights": {"ING": 1}}
+      ]
+    },
+    {
+      "code": "LGS",
+      "name": "Liselere Geçiş Sistemi",
+      "wrongDivisor": 3,
+      "subjects": [
+        {"code": "TUR", "name": "Türkçe", "topics": [{"name": "Sözcükte Anlam"}, {"name": "Paragraf"}, {"name": "Fiilimsiler"}]},
+        {"code": "MAT", "name": "Matematik", "topics": [{"name": "Çarpanlar ve Katlar"}, {"name": "Üslü İfadeler"}, {"name": "Kareköklü İfadeler"}, {"name": "Olasılık"}]},
+        {"code": "FEN", "name": "Fen Bilimleri", "topics": [{"name": "Mevsimler ve İklim"}, {"name": "DNA ve Genetik Kod"}, {"name": "Basınç"}]},
+        {"code": "INK", "name": "T.C. İnkılap Tarihi ve Atatürkçülük", "topics": [{"name": "Bir Kahraman Doğuyor"}, {"name": "Milli Uyanış"}]},
+        {"code": "DIN", "name": "Din Kültürü ve Ahlak Bilgisi", "topics": [{"name": "Kader İnancı"}, {"name": "Zekât ve Sadaka"}]},
+        {"code": "ING", "name": "Yabancı Dil", "topics": [{"name": "Friendship"}, {"name": "Teen Life"}]}
+      ],
+      "scoreTypes": [
+        {"code": "LGS", "name": "LGS Puanı", "baseScore": null, "weightsVerified": false, "weights": {"TUR": 4, "MAT": 4, "FEN": 4, "INK": 1, "DIN": 1, "ING": 1}}
+      ]
+    }
+  ],
+  "opticalFormats": [
+    {
+      "code": "tyt-fwf-v1",
+      "name": "TYT optical reader export (example layout)",
+      "fieldDefinition": {
+        "encoding": "windows-1254",
+        "studentNo": {"start": 0, "length": 10},
+        "booklet": {"start": 10, "length": 1},
+        "answerSegments": [
+          {"start": 11, "length": 40},
+          {"start": 51, "length": 20},
+          {"start": 71, "length": 40},
+          {"start": 111, "length": 20}
+        ],
+        "blankChars": " "
+      }
+    },
+    {
+      "code": "ayt-fwf-v1",
+      "name": "AYT optical reader export (example layout)",
+      "fieldDefinition": {
+        "encoding": "windows-1254",
+        "studentNo": {"start": 0, "length": 10},
+        "booklet": {"start": 10, "length": 1},
+        "answerSegments": [{"start": 11, "length": 160}],
+        "blankChars": " "
+      }
+    },
+    {
+      "code": "lgs-fwf-v1",
+      "name": "LGS optical reader export (example layout)",
+      "fieldDefinition": {
+        "encoding": "windows-1254",
+        "studentNo": {"start": 0, "length": 10},
+        "booklet": {"start": 10, "length": 1},
+        "answerSegments": [{"start": 11, "length": 90}],
+        "blankChars": " "
+      }
+    },
+    {
+      "code": "omr-canonical-v1",
+      "name": "Canonical rows produced by the omr service from photographed sheets",
+      "fieldDefinition": {
+        "encoding": "utf-8",
+        "studentNo": {"start": 0, "length": 12},
+        "booklet": {"start": 12, "length": 1},
+        "sheetRef": {"start": 13, "length": 36},
+        "answerSegments": [{"start": 49, "length": 200}],
+        "blankChars": " "
+      }
+    }
+  ]
+}

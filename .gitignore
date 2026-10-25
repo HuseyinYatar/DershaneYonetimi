@@ -1,0 +1,35 @@
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Secrets and local settings (every service ships a .env.example instead)
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Java (Spring Boot services)
+target/
+build/
+.gradle/
+
+# Frontend
+node_modules/
+.next/
+
+# Logs
+*.log
+
+# Personal study notes (not part of the project)
+docs/ogrenme-gunlugu.md
+docs/exam-analysis-kurulum-rehberi.pdf
