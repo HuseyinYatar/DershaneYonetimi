@@ -1,0 +1,23 @@
+# Local development against local/docker-compose.yml (PostgreSQL, Keycloak, Floci, Mailpit).
+spring:
+  flyway:
+    locations: classpath:db/migration, classpath:db/local
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak-admin:
+            # Matches local/keycloak/dershane-realm.json. Real secrets come from Secrets Manager.
+            client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:user-service-local-secret}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+user:
+  aws:
+    endpoint-url: ${AWS_ENDPOINT_URL:http://localhost:4566}
+    static-access-key-id: test
+    static-secret-access-key: test
