@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/exam-analysis/ExamResultsPublished.schema.json",
+  "title": "ExamResultsPublished (schemaVersion 1)",
+  "description": "An admin published the results of a mock exam. Published once per exam; later results of the same exam come as StudentResultAdded. Consumers: notification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mockExamId", "branchId", "examTypeCode", "studentIds"],
+  "properties": {
+    "mockExamId": { "$ref": "#/$defs/uuid" },
+    "branchId": { "$ref": "#/$defs/uuid" },
+    "examTypeCode": { "type": "string", "minLength": 1, "maxLength": 16 },
+    "studentIds": {
+      "description": "Students who have a result in the exam.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/uuid" }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}

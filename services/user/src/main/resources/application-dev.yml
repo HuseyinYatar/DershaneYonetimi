@@ -1,0 +1,6 @@
+# Shared dev environment (kind cluster). Swagger UI is available; production keeps it off.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

@@ -17,10 +17,8 @@ logger = structlog.get_logger(__name__)
 def exam_analysis_key(mock_exam_id: uuid.UUID) -> str:
     return f"exam-analysis:{mock_exam_id}"
 
-
 def progress_key(student_id: uuid.UUID, exam_type_id: uuid.UUID) -> str:
     return f"progress:{student_id}:{exam_type_id}"
-
 
 class ResultCache(Protocol):
     def get_json(self, key: str) -> Any | None: ...

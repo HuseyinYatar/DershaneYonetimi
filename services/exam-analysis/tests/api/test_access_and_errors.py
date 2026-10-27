@@ -40,6 +40,29 @@ def test_admins_act_only_on_their_branch(client, actors, catalog) -> None:
     assert (foreign.status_code, foreign.json()["code"]) == (403, "BRANCH_NOT_ALLOWED")
 
 
+def test_super_admin_acts_on_every_branch(client, actors, catalog) -> None:
+    created = client.post(
+        f"{API}/mock-exams", headers=actors.super_admin, json=exam_payload(catalog, actors.branch_id)
+    )
+
+    assert created.status_code == 201, created.text
+    assert (
+        client.get(f"{API}/mock-exams/{created.json()['id']}", headers=actors.super_admin).status_code == 200
+    )
+
+
+def test_swagger_offers_keycloak_login_and_pasted_tokens(client) -> None:
+    schema = client.get("/openapi.json").json()
+
+    flow = schema["components"]["securitySchemes"]["keycloak"]["flows"]["authorizationCode"]
+    assert flow["authorizationUrl"].endswith("/protocol/openid-connect/auth")
+    assert schema["paths"][f"{API}/exam-types"]["get"]["security"] == [
+        {"HTTPBearer": []},
+        {"keycloak": ["openid"]},
+    ]
+    assert "security" not in schema["paths"]["/health/live"]["get"]
+
+
 def test_weak_topic_setting_is_admin_only(client, actors) -> None:
     body = {"windowSize": 3, "successThreshold": "0.5"}
 

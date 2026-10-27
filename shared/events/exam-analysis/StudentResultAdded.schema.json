@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/exam-analysis/StudentResultAdded.schema.json",
+  "title": "StudentResultAdded (schemaVersion 1)",
+  "description": "A result was added to an already published exam (an unmatched optical row was matched late). Consumers: notification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mockExamId", "branchId", "studentId"],
+  "properties": {
+    "mockExamId": { "$ref": "#/$defs/uuid" },
+    "branchId": { "$ref": "#/$defs/uuid" },
+    "studentId": { "$ref": "#/$defs/uuid" }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}

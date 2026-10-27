@@ -22,6 +22,9 @@ class OutboxEvent(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     event_type: Mapped[str] = mapped_column(String(100))
     envelope: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    # W3C trace context of the request that caused the event; sent as an SNS message attribute
+    # because the envelope schema allows no extra fields.
+    traceparent: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     published_at: Mapped[datetime | None]
     attempts: Mapped[int] = mapped_column(default=0)

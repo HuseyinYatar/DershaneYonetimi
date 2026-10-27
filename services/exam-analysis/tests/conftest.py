@@ -15,7 +15,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 os.environ.setdefault("OIDC_ISSUER", "http://keycloak.test/realms/dershane")
-os.environ.setdefault("OIDC_AUDIENCE", "exam-analysis")
+os.environ.setdefault("OIDC_AUDIENCE", "dershane-api")
 os.environ.setdefault("REDIS_URL", "")
 os.environ.setdefault("OTEL_ENABLED", "false")
 
@@ -214,6 +214,7 @@ class Actors:
     admin: dict[str, str]
     teacher: dict[str, str]
     other_branch_admin: dict[str, str]
+    super_admin: dict[str, str]
     admin_id: uuid.UUID
 
     @staticmethod
@@ -227,10 +228,13 @@ def actors(make_token: TokenFactory) -> Actors:
     admin_id = uuid.uuid4()
     return Actors(
         branch_id=branch_id,
-        admin=Actors.bearer(make_token(sub=admin_id, roles=["ADMIN"], branch_id=branch_id)),
-        teacher=Actors.bearer(make_token(sub=uuid.uuid4(), roles=["TEACHER"], branch_id=branch_id)),
+        admin=Actors.bearer(make_token(sub=admin_id, roles=["admin"], branch_id=branch_id)),
+        teacher=Actors.bearer(make_token(sub=uuid.uuid4(), roles=["teacher"], branch_id=branch_id)),
         other_branch_admin=Actors.bearer(
-            make_token(sub=uuid.uuid4(), roles=["ADMIN"], branch_id=uuid.uuid4())
+            make_token(sub=uuid.uuid4(), roles=["admin"], branch_id=uuid.uuid4())
+        ),
+        super_admin=Actors.bearer(
+            make_token(sub=uuid.uuid4(), roles=["admin", "super-admin"], branch_id=uuid.uuid4())
         ),
         admin_id=admin_id,
     )
@@ -238,4 +242,4 @@ def actors(make_token: TokenFactory) -> Actors:
 
 @pytest.fixture
 def student_headers(make_token: TokenFactory) -> Callable[[uuid.UUID], dict[str, str]]:
-    return lambda student_id: Actors.bearer(make_token(sub=student_id, roles=["STUDENT"]))
+    return lambda student_id: Actors.bearer(make_token(sub=student_id, roles=["student"]))

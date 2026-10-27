@@ -1,24 +1,24 @@
-"""Event contracts. JSON Schemas of the same events live in shared/events/ and a contract test
-keeps them in sync with these models."""
+"""Event contracts. JSON Schemas of the same events live in shared/events/ (envelope.schema.json and
+<source>/<EventType>.schema.json) and a contract test keeps them in sync with these models."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import Field
 
 from app.schemas.common import ApiModel
 
-PRODUCER = "exam-analysis"
+SOURCE = "exam-analysis"
 
 class EventEnvelope(ApiModel):
+    """Wrapper of every event (shared/events/envelope.schema.json). No other fields are allowed."""
     event_id: uuid.UUID
     event_type: str
-    version: int = 1
+    schema_version: int = 1
     occurred_at: datetime
-    producer: str = PRODUCER
-    traceparent: str | None = None
-    payload: dict[str, Any]
+    source: str = SOURCE
+    data: dict[str, Any]
 
 
 class ExamResultsPublished(ApiModel):
@@ -31,24 +31,24 @@ class ExamResultsPublished(ApiModel):
 
 class StudentResultAdded(ApiModel):
     """A result added to an already published exam (late matching of an unmatched row)."""
-
     mock_exam_id: uuid.UUID
     branch_id: uuid.UUID
     student_id: uuid.UUID
 
 
-class StudentAddedToClass(ApiModel):
+class StudentAddedToClassroom(ApiModel):
     """Produced by the user service; consumed here to maintain student_replica (week 4)."""
-
+    membership_id: uuid.UUID
     student_id: uuid.UUID
-    student_no: str
+    classroom_id: uuid.UUID
     branch_id: uuid.UUID
-    class_id: uuid.UUID
+    student_number: str
     full_name: str
+    start_date: date
 
 
 PUBLISHED_EVENTS: dict[str, type[ApiModel]] = {
     "ExamResultsPublished": ExamResultsPublished,
     "StudentResultAdded": StudentResultAdded,
 }
-CONSUMED_EVENTS: dict[str, type[ApiModel]] = {"StudentAddedToClass": StudentAddedToClass}
+CONSUMED_EVENTS: dict[str, type[ApiModel]] = {"StudentAddedToClassroom": StudentAddedToClassroom}

@@ -49,9 +49,11 @@ class ImportSource(StrEnum):
 
 
 class Role(StrEnum):
-    """Keycloak realm roles."""
+    """Keycloak realm roles (values as they appear in realm_access.roles). Never stored."""
 
-    STUDENT = "STUDENT"
-    TEACHER = "TEACHER"
-    PARENT = "PARENT"
-    ADMIN = "ADMIN"
+    STUDENT = "student"
+    TEACHER = "teacher"
+    GUARDIAN = "guardian"
+    ADMIN = "admin"
+    # Given together with admin; manages every branch.
+    SUPER_ADMIN = "super-admin"

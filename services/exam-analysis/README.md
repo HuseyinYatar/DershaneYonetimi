@@ -10,18 +10,24 @@ the glossary at the end maps the Turkish UML names to the English code names.
 ## Run locally
 
 ```bash
-docker compose -f ../../local/docker-compose.yml up -d     # postgres, redis, floci, keycloak
+docker compose -f ../../local/docker-compose.yml up -d     # postgres, redis, floci (+ init), keycloak
 cp .env.example .env
 uv sync
 uv run alembic upgrade head
-uv run python -m app.cli bootstrap-local                   # bucket + SNS topic + debug queue in Floci
 uv run python -m app.cli seed-catalog                      # TYT / AYT / YDT / LGS catalog, optical formats
 uv run python -m app.cli seed-students ../../local/dev-students.json
 uv run uvicorn app.main:create_app --factory --reload      # API on :8000, docs on /docs
 uv run python -m app.worker                                # import worker + outbox relay
 ```
 
-Set `OUTBOX_RELAY_ENABLED=true` and `SNS_TOPIC_ARN` (printed by `bootstrap-local`) to publish events.
+`floci-init` (`local/floci/init.sh`) creates the bucket, the `exam-analysis-events` topic and the
+`exam-analysis-user-events` queue, so `.env.example` can name the topic ARN directly. The service
+can also run in containers: `docker compose -f ../../local/docker-compose.yml --profile services up -d`
+(API on :8001).
+
+Swagger UI (`/docs`) logs in through Keycloak: **Authorize → keycloak → Authorize** (client
+`dershane-swagger`, PKCE; the password grant is disabled). The first user is
+`superadmin@dershane.local` / `admin`; further users are created by the user service.
 
 ## Tests
 
@@ -78,14 +84,15 @@ different numbers, so each booklet's item is cancelled separately.
 
 Errors are `{"code", "message", "details"}` with stable codes (`ANSWER_KEY_NOT_READY`,
 `STUDENT_NOT_IN_EXAM_BRANCH`, …). Teachers and admins act only on the branch in their token's
-`branch_id` claim. Students see published exams only. Parent access needs the parent–student
-link of the user service and is not available yet.
+`branch_id` claim; a `super-admin` acts on every branch. Students see published exams only.
+Guardian access needs the guardian–student link of the user service and is not available yet.
 
 ## Authentication
 
 Keycloak issues the tokens; this service only verifies them (`app/auth/keycloak.py`): RS256
 signature with keys from Keycloak's JWKS endpoint (fetched once, cached), `iss`, `aud`, `exp`.
-No request calls Keycloak. Roles come from `realm_access.roles` (`STUDENT`, `TEACHER`, `PARENT`, `ADMIN`).
+No request calls Keycloak. The audience is `dershane-api`, shared by all backend services. Roles come
+from `realm_access.roles` (`student`, `teacher`, `guardian`, `admin`, `super-admin`).
 
 ## Observability
 
@@ -99,13 +106,13 @@ No request calls Keycloak. Roles come from `realm_access.roles` (`STUDENT`, `TEA
   `import_jobs_total`, `import_job_duration_seconds`, `import_job_queue_wait_seconds`,
   `import_rows_total{result,reason}`, `score_calculation_skipped_total`, `outbox_pending`, …
 - **Traces:** OpenTelemetry (`OTEL_ENABLED=true`, standard `OTEL_EXPORTER_OTLP_*` variables);
-  the `traceparent` travels inside outbox events.
+  the `traceparent` is stored with each outbox event and sent as an SNS message attribute.
 
 ## Temporary adapters (until the other services exist)
 
 | Today | Later (week 4) |
 |---|---|
-| `PUT /admin/student-replicas` fills `student_replica` | `StudentAddedToClass` consumer + `processed_event`, same `replica_service.upsert` |
+| `PUT /admin/student-replicas` fills `student_replica` | `StudentAddedToClassroom` / `UserUpdated` consumer on `exam-analysis-user-events` + `processed_event`, same `replica_service.upsert` |
 | Multipart upload stored in this service's bucket | `file_id` from the file service, content via presigned URL (only `FileStorage` changes) |
 | — | `AnswerSheetsRecognized` from the omr service creates an `ImportJob` with `source=OMR` |
 
@@ -147,4 +154,4 @@ number, booklet, 36-char sheet image file id, 200 answer columns (`*` = multiple
 | CevapDurumu: DOGRU, YANLIS, BOS, IPTAL | `AnswerStatus`: CORRECT, WRONG, BLANK, CANCELLED | |
 | PuanlamaKaynagi: KURUM_ICI, ULKE_GENELI | `ScoringSource`: INSTITUTIONAL, NATIONAL | |
 | EslesmeDurumu: BEKLIYOR, ESLESTIRILDI, YOKSAYILDI | `MatchStatus`: PENDING, MATCHED, IGNORED | |
-| DenemeSonucuAciklandi / OgrenciSonucuEklendi / OgrenciSinifaEklendi | `ExamResultsPublished` / `StudentResultAdded` / `StudentAddedToClass` | events |
+| DenemeSonucuAciklandi / OgrenciSonucuEklendi / OgrenciSinifaEklendi | `ExamResultsPublished` / `StudentResultAdded` / `StudentAddedToClassroom` (user) | events |

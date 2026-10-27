@@ -2,7 +2,9 @@
 
 seed-catalog [PATH]     load exam types, subjects, topics, score types and optical formats (idempotent)
 seed-students PATH      load the local student copy from a JSON list (development only)
-bootstrap-local         create the bucket, SNS topic and a debug SQS queue in Floci
+
+AWS resources (bucket, topic, queues) are infrastructure: local/floci/init.sh creates them in Floci,
+Terraform on AWS.
 """
 
 import argparse
@@ -16,8 +18,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.aws import create_client
-from app.config import Settings, get_settings
+from app.config import get_settings
 from app.db import get_session_factory
 from app.models import ExamType, OpticalFormat, ScoreType, ScoreTypeWeight, Subject, Topic
 from app.observability.logging import configure_logging
@@ -127,33 +128,6 @@ def seed_students(session: Session, students: list[dict[str, Any]]) -> None:
     logger.info("seed.students_loaded", students=count)
 
 
-def bootstrap_local(settings: Settings) -> None:
-    if settings.aws_endpoint_url is None:
-        raise SystemExit("bootstrap-local only runs against Floci: set AWS_ENDPOINT_URL")
-    s3 = create_client("s3", settings)
-    s3.create_bucket(
-        Bucket=settings.optical_files_bucket,
-        CreateBucketConfiguration={"LocationConstraint": settings.aws_region},
-    )
-    sns = create_client("sns", settings)
-    topic_arn = sns.create_topic(Name="dershane-events")["TopicArn"]
-    sqs = create_client("sqs", settings)
-    queue_url = sqs.create_queue(QueueName="exam-analysis-events-debug")["QueueUrl"]
-    queue_arn = sqs.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["QueueArn"])["Attributes"][
-        "QueueArn"
-    ]
-    sns.subscribe(
-        TopicArn=topic_arn, Protocol="sqs", Endpoint=queue_arn, Attributes={"RawMessageDelivery": "true"}
-    )
-    logger.info(
-        "bootstrap.local_ready",
-        bucket=settings.optical_files_bucket,
-        topic_arn=topic_arn,
-        queue_url=queue_url,
-    )
-    print(f"SNS_TOPIC_ARN={topic_arn}\nDEBUG_QUEUE_URL={queue_url}")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -161,14 +135,10 @@ def main(argv: list[str] | None = None) -> int:
     catalog_parser.add_argument("path", nargs="?", type=Path, default=DEFAULT_CATALOG)
     students_parser = commands.add_parser("seed-students")
     students_parser.add_argument("path", type=Path)
-    commands.add_parser("bootstrap-local")
     args = parser.parse_args(argv)
 
     settings = get_settings()
     configure_logging(settings.log_level, f"{settings.service_name}-cli", settings.environment)
-    if args.command == "bootstrap-local":
-        bootstrap_local(settings)
-        return 0
     with get_session_factory()() as session:
         data = json.loads(args.path.read_text(encoding="utf-8"))
         if args.command == "seed-catalog":

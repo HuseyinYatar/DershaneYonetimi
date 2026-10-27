@@ -7,6 +7,7 @@ from prometheus_client import make_asgi_app
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.middleware import RequestContextMiddleware
+from app.api.openapi import install_keycloak_login, swagger_ui_oauth
 from app.api.routers import admin_replicas, catalog, health, import_jobs, mock_exams, settings, students
 from app.config import Settings, get_settings
 from app.db import get_engine
@@ -34,6 +35,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         description="Mock exam scoring, topic analysis and progress reports",
         version="0.1.0",
         lifespan=lifespan,
+        swagger_ui_init_oauth=swagger_ui_oauth(app_settings),
     )
     app.add_middleware(RequestContextMiddleware)
     register_exception_handlers(app)
@@ -42,6 +44,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     for module in (catalog, mock_exams, import_jobs, students, settings, admin_replicas):
         app.include_router(module.router, prefix=API_PREFIX)
     app.mount("/metrics", make_asgi_app())
+    install_keycloak_login(app, app_settings)
 
     configure_tracing(app_settings, app=app, engine=get_engine())
     return app

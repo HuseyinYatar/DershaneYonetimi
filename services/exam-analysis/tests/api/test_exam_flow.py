@@ -208,7 +208,7 @@ def test_full_exam_lifecycle(
     assert published.json()["status"] == "PUBLISHED"
     events = outbox_events(session_factory)
     assert [event["eventType"] for event in events] == ["ExamResultsPublished"]
-    assert set(events[0]["payload"]["studentIds"]) == {
+    assert set(events[0]["data"]["studentIds"]) == {
         str(students[k]) for k in ("ali", "ayse", "can", "deniz", "ece")
     }
     assert (
@@ -227,7 +227,7 @@ def test_full_exam_lifecycle(
     assert late.status_code == 200, late.text
     events = outbox_events(session_factory)
     assert [event["eventType"] for event in events] == ["ExamResultsPublished", "StudentResultAdded"]
-    assert events[1]["payload"]["studentId"] == str(students["fatma"])
+    assert events[1]["data"]["studentId"] == str(students["fatma"])
 
     # Weak topics need the branch setting.
     deniz = students["deniz"]

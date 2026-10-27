@@ -11,7 +11,6 @@ logger = structlog.get_logger(__name__)
 
 MAX_ERROR_LENGTH = 1000
 
-
 class OutboxRelay:
     def __init__(
         self, session_factory: sessionmaker[Session], publisher: EventPublisher, batch_size: int
@@ -22,12 +21,12 @@ class OutboxRelay:
 
     def relay_batch(self) -> int:
         """Publishes one batch of unpublished events; returns how many were published.
-
         Rows are locked with SKIP LOCKED so several worker replicas never send the same event
         twice in parallel. Delivery is still at-least-once: consumers deduplicate on eventId.
         """
         published = 0
         with self._session_factory() as session:
+            # DB'den evetler geliyor
             events = session.scalars(
                 select(OutboxEvent)
                 .where(OutboxEvent.published_at.is_(None))
@@ -37,7 +36,7 @@ class OutboxRelay:
             ).all()
             for event in events:
                 try:
-                    self._publisher.publish(event.envelope)
+                    self._publisher.publish(event.envelope, event.traceparent)
                 except Exception as exc:  # broker errors vary by adapter; every failure is recorded
                     event.attempts += 1
                     event.last_error = f"{type(exc).__name__}: {exc}"[:MAX_ERROR_LENGTH]

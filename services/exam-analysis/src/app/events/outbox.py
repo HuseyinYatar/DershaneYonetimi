@@ -11,6 +11,7 @@ from app.schemas.common import ApiModel
 
 logger = structlog.get_logger(__name__)
 
+
 def add_event(session: Session, payload: ApiModel) -> uuid.UUID:
     """Stages an event in the caller's transaction; the relay publishes it after commit."""
     event_type = type(payload).__name__
@@ -20,14 +21,14 @@ def add_event(session: Session, payload: ApiModel) -> uuid.UUID:
         event_id=uuid.uuid4(),
         event_type=event_type,
         occurred_at=utcnow(),
-        traceparent=current_traceparent(),
-        payload=payload.model_dump(mode="json", by_alias=True),
+        data=payload.model_dump(mode="json", by_alias=True),
     )
     session.add(
         OutboxEvent(
             id=envelope.event_id,
             event_type=event_type,
             envelope=envelope.model_dump(mode="json", by_alias=True),
+            traceparent=current_traceparent(),
         )
     )
     logger.info("outbox.event_staged", event_type=event_type, event_id=str(envelope.event_id))

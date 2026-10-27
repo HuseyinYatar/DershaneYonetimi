@@ -26,13 +26,16 @@ class Settings(BaseSettings):
     optical_files_bucket: str = "exam-analysis-optical-files"
     max_upload_bytes: int = 10 * 1024 * 1024
 
-    #Keycloak'a her seferinde sormadan JWT Token'ı kendi kendine doğrulaması ve içindeki bilgileri okuması
-    oidc_issuer: str = "http://localhost:8080/realms/dershane"
-    oidc_jwks_url: str = "http://localhost:8080/realms/dershane/protocol/openid-connect/certs"
-    # Empty value disables audience verification (logged as a warning at startup).
-    oidc_audience: str | None = "exam-analysis"
+    # Keycloak'a her seferinde sormadan JWT Token'ı kendi kendine doğrulaması ve içindeki bilgileri okuması
+    oidc_issuer: str = "http://localhost:8180/realms/dershane"
+    oidc_jwks_url: str = "http://localhost:8180/realms/dershane/protocol/openid-connect/certs"
+    # Shared by every backend service (realm client mapper). Empty value disables audience
+    # verification (logged as a warning at startup).
+    oidc_audience: str | None = "dershane-api"
     oidc_roles_claim: str = "realm_access.roles"
     oidc_branch_claim: str = "branch_id"
+    # Public Keycloak client Swagger UI logs in with (authorization code + PKCE).
+    oidc_swagger_client_id: str = "dershane-swagger"
 
     sns_topic_arn: str | None = None
     outbox_relay_enabled: bool = False

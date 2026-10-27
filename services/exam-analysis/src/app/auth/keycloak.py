@@ -4,6 +4,7 @@ Keycloak signs the token; this service only checks it. The signing keys are fetc
 Keycloak's JWKS endpoint once and cached, so no request ever calls Keycloak synchronously
 (CLAUDE.md: services validate tokens themselves with the JWKS address).
 """
+
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,6 +20,9 @@ from app.models.enums import Role
 logger = structlog.get_logger(__name__)
 
 KeyResolver = Callable[[str], Any]
+
+_KNOWN_ROLES = frozenset(role.value for role in Role)
+
 
 @dataclass(frozen=True)
 class CurrentUser:
@@ -37,6 +41,7 @@ def jwks_key_resolver(jwks_url: str) -> KeyResolver:
         return client.get_signing_key_from_jwt(token).key
 
     return resolve
+
 
 # setting congif dosyasından value almak icin
 class KeycloakTokenVerifier:
@@ -88,7 +93,7 @@ class KeycloakTokenVerifier:
         names = value if isinstance(value, list) else []
         # Keycloak also puts default roles (offline_access, uma_authorization, ...) here; only
         # this system's roles are relevant.
-        return frozenset(Role(name) for name in names if name in Role.__members__)
+        return frozenset(Role(name) for name in names if name in _KNOWN_ROLES)
 
     def _extract_branch(self, claims: dict[str, Any]) -> uuid.UUID | None:
         raw = claims.get(self._branch_claim)

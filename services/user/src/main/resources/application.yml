@@ -1,0 +1,172 @@
+spring:
+  application:
+    name: user
+  main:
+    banner-mode: off
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/user_service}
+    username: ${DB_USERNAME:user_service}
+    password: ${DB_PASSWORD:user_service}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      data-source-properties:
+        # KVKK: keeps column values (e.g. an e-mail in a unique violation) out of exception
+        # messages, so SQL errors can be logged safely.
+        logServerErrorDetail: false
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    locations: classpath:db/migration
+
+  messages:
+    basename: messages
+    fallback-to-system-locale: false
+
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Both are set so the service starts even when Keycloak is down (no discovery call).
+          # The issuer is the browser-facing URL; the JWKS URL may be an internal hostname.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/dershane}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/dershane/protocol/openid-connect/certs}
+          audiences: dershane-api
+      client:
+        registration:
+          keycloak-admin:
+            provider: keycloak
+            client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:user-service}
+            client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${KEYCLOAK_SERVER_URL:http://localhost:8180}/realms/dershane/protocol/openid-connect/token
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: 8080
+  shutdown: graceful
+
+# Management endpoints run on their own port, which the ingress does not expose.
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: health, info, prometheus, sbom
+      path-mapping:
+        prometheus: metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        # Only the database: a Keycloak or SNS outage must not take the pod out of rotation,
+        # reads keep working without them.
+        readiness:
+          include: readinessState, db
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  observations:
+    annotations:
+      enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      otlp:
+        enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  # Metrics are scraped by Prometheus and logs go to stdout for Loki; no OTLP push for those.
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
+
+info:
+  app:
+    # Image tag and commit SHA are the same (set by the Docker build).
+    commit: ${GIT_COMMIT_SHA:unknown}
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    root: INFO
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+    oauth:
+      client-id: dershane-swagger
+      use-pkce-with-authorization-code-grant: true
+      scopes: openid
+
+user:
+  time-zone: Europe/Istanbul
+  keycloak:
+    server-url: ${KEYCLOAK_SERVER_URL:http://localhost:8180}
+    realm: dershane
+    client-registration-id: keycloak-admin
+    password-setup-client-id: dershane-frontend
+    password-setup-redirect-uri: ${PASSWORD_SETUP_REDIRECT_URI:http://localhost:3000}
+    password-setup-lifespan: 72h
+    connect-timeout: 2s
+    read-timeout: 5s
+  aws:
+    region: ${AWS_REGION:eu-central-1}
+    endpoint-url: ${AWS_ENDPOINT_URL:}
+  outbox:
+    enabled: ${OUTBOX_ENABLED:true}
+    topic-arn: ${USER_EVENTS_TOPIC_ARN:arn:aws:sns:eu-central-1:000000000000:user-events}
+    publish-interval: 1s
+    batch-size: 20
+    retention: 7d
+    cleanup-cron: "0 30 3 * * *"
+  idempotency:
+    retention: 24h
+    cleanup-cron: "0 45 3 * * *"
+  openapi:
+    authorization-url: ${KEYCLOAK_PUBLIC_URL:http://localhost:8180}/realms/dershane/protocol/openid-connect/auth
+    token-url: ${KEYCLOAK_PUBLIC_URL:http://localhost:8180}/realms/dershane/protocol/openid-connect/token

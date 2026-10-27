@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/user/GuardianUnlinked.schema.json",
+  "title": "GuardianUnlinked (schemaVersion 1)",
+  "description": "The link between a guardian and a student was removed. Consumer: notification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["guardianId", "studentId"],
+  "properties": {
+    "guardianId": { "$ref": "#/$defs/uuid" },
+    "studentId": { "$ref": "#/$defs/uuid" }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}
