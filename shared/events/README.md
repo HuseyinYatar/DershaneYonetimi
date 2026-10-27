@@ -64,3 +64,5 @@ shared/events/
 | `UserUpdated` | user | notification, exam-analysis | A user is created or changed (full current state) |
 | `GuardianLinked` | user | notification | A guardian is linked to a student, or the relationship changes |
 | `GuardianUnlinked` | user | notification | A guardian link is removed or replaced |
+| `ExamResultsPublished` | exam-analysis | notification | An admin published the results of a mock exam (once per exam) |
+| `StudentResultAdded` | exam-analysis | notification | A result was added to an already published exam (late matching) |

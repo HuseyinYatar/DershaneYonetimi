@@ -98,8 +98,12 @@
       "directAccessGrantsEnabled": false,
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost:8080/swagger-ui/*"],
-      "webOrigins": ["http://localhost:8080"],
+      "redirectUris": [
+        "http://localhost:8080/swagger-ui/*",
+        "http://localhost:8000/docs/*",
+        "http://localhost:8001/docs/*"
+      ],
+      "webOrigins": ["http://localhost:8080", "http://localhost:8000", "http://localhost:8001"],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },

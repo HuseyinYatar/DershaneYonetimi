@@ -1,11 +1,12 @@
 # Yerel geliştirme ortamı
 
-AWS servisleri Floci ile, kimlik Keycloak ile yerelde çalışır. Gereken: Docker ve JDK 25.
+AWS servisleri Floci ile, kimlik Keycloak ile yerelde çalışır. Gereken: Docker; user için JDK 25,
+exam-analysis için Python 3.12+ ve [uv](https://docs.astral.sh/uv/).
 
 ## Başlatma
 
 ```bash
-# Bağımlılıklar: PostgreSQL, Keycloak, Floci (SNS/SQS), Mailpit
+# Bağımlılıklar: PostgreSQL, Keycloak, Floci (SNS/SQS/S3), Mailpit, Redis
 docker compose -f local/docker-compose.yml up -d
 
 # Servisi IDE'den ya da Maven ile çalıştır (local profili localhost portlarını kullanır)
@@ -21,6 +22,8 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 | Ne | Adres | Giriş |
 |---|---|---|
 | Swagger UI (user) | http://localhost:8080/swagger-ui.html | "Authorize" → Keycloak |
+| Swagger UI (exam-analysis) | http://localhost:8000/docs (container: 8001) | "Authorize" → keycloak |
+| pgAdmin (`--profile tools`) | http://localhost:5050 | sunucu şifresi = veritabanı kullanıcı adı |
 | Metrikler, sağlık, build bilgisi | http://localhost:8081/metrics, `/health/readiness`, `/info` | — |
 | Keycloak yönetim konsolu | http://localhost:8180 | `admin` / `admin` |
 | İlk super-admin (uygulama kullanıcısı) | Swagger'dan giriş | `superadmin@dershane.local` / `admin` |
@@ -28,6 +31,33 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 | Floci (AWS uç noktası) | http://localhost:4566 | herhangi bir anahtar |
 
 Bu şifreler yalnızca yerel ortam içindir. Gerçek gizli bilgiler Secrets Manager'dadır.
+
+## exam-analysis
+
+```bash
+cd services/exam-analysis
+cp .env.example .env
+uv sync
+uv run alembic upgrade head
+uv run python -m app.cli seed-catalog
+uv run python -m app.cli seed-students ../../local/dev-students.json   # user olayları gelene kadar
+uv run uvicorn app.main:create_app --factory --reload                  # API :8000
+uv run python -m app.worker                                            # optik dosya işleyici + outbox
+```
+
+`floci-init` exam-analysis için `exam-analysis-optical-files` bucket'ını, `exam-analysis-events`
+topic'ini (inceleme kuyruğu `local-inspect-exam-analysis-events`) ve `user-events`'e abone
+`exam-analysis-user-events` kuyruğunu açar.
+
+## Port çakışması
+
+Bilgisayarında başka bir PostgreSQL 5432'yi kullanıyorsa `local/.env` (git'e girmez) oluştur:
+
+```bash
+echo "POSTGRES_PORT=5433" > local/.env
+```
+
+Servislerin `.env` dosyasındaki veritabanı adresini de aynı porta çevir.
 
 ## Yayınlanan olayları görmek
 

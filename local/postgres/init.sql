@@ -5,3 +5,6 @@ CREATE DATABASE user_service OWNER user_service;
 
 CREATE USER keycloak WITH PASSWORD 'keycloak';
 CREATE DATABASE keycloak OWNER keycloak;
+
+CREATE USER exam_analysis WITH PASSWORD 'exam_analysis';
+CREATE DATABASE exam_analysis OWNER exam_analysis;

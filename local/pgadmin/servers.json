@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "dershane (local)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "exam_analysis",
+      "Username": "exam_analysis",
+      "SSLMode": "prefer"
+    }
+  }
+}
