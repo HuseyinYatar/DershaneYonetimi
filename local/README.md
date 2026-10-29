@@ -21,6 +21,8 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 
 | Ne | Adres | Giriş |
 |---|---|---|
+| API gateway (tek giriş noktası) | http://localhost:8000/api/v1/... | `Authorization: Bearer <token>` |
+| Gateway metrik, sağlık, build bilgisi | http://localhost:8002/metrics, `/health/readiness`, `/info` | — |
 | Swagger UI (user) | http://localhost:8080/swagger-ui.html | "Authorize" → Keycloak |
 | Swagger UI (exam-analysis) | http://localhost:8000/docs (container: 8001) | "Authorize" → keycloak |
 | pgAdmin (`--profile tools`) | http://localhost:5050 | sunucu şifresi = veritabanı kullanıcı adı |
@@ -29,6 +31,10 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 | İlk super-admin (uygulama kullanıcısı) | Swagger'dan giriş | `superadmin@dershane.local` / `admin` |
 | Mailpit (şifre belirleme e-postaları) | http://localhost:8025 | — |
 | Floci (AWS uç noktası) | http://localhost:4566 | herhangi bir anahtar |
+
+Servislere yerelde doğrudan (user için `:8080`) de erişilebilir; servis token'ı kendisi doğruladığı için
+gateway'i atlayan istek de geçerli bir JWT ister. Gateway'in hız sınırı kullanıcı başına saniyede 20
+istek (en çok 40'lık ani artış); `RATE_LIMIT_REPLENISH_RATE` ve `RATE_LIMIT_BURST` ile değişir.
 
 Bu şifreler yalnızca yerel ortam içindir. Gerçek gizli bilgiler Secrets Manager'dadır.
 

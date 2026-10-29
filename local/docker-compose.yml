@@ -1,6 +1,6 @@
 # Local development environment: the AWS services are emulated by Floci, identity by Keycloak.
 #   docker compose -f local/docker-compose.yml up -d                       # dependencies only
-#   docker compose -f local/docker-compose.yml --profile services up -d    # + user, exam-analysis
+#   docker compose -f local/docker-compose.yml --profile services up -d    # + user, exam-analysis, api-gateway
 #   docker compose -f local/docker-compose.yml --profile tools up -d       # + pgAdmin
 # Host ports can be overridden in local/.env (gitignored), e.g. POSTGRES_PORT=5433.
 name: dershane
@@ -80,11 +80,16 @@ services:
       - floci
     restart: "no"
 
-  # Result cache of exam-analysis.
+  # Result cache of exam-analysis and rate limit counters of the api-gateway (ElastiCache in production).
   redis:
     image: redis:7.4.1-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   # Browses the local databases. UI: http://localhost:5050 (no login; server password = db user name)
   pgadmin:
@@ -138,6 +143,29 @@ services:
         condition: service_healthy
       floci-init:
         condition: service_completed_successfully
+
+  # Single entry point: the frontend calls http://localhost:8000. Services stay reachable directly
+  # on their own ports for development. Management is on 8002 because exam-analysis-api uses 8001.
+  api-gateway:
+    profiles: ["services"]
+    build:
+      context: ../services/api-gateway
+      args:
+        GIT_COMMIT_SHA: local
+    environment:
+      USER_SERVICE_URL: http://user:8080
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/dershane
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
+      REDIS_HOST: redis
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8080"
+      - "8002:8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+      user:
+        condition: service_started
 
   exam-analysis-migrate:
     profiles: ["services"]
