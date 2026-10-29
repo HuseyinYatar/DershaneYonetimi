@@ -55,7 +55,7 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 
 | Servis | Sorumluluk | Dil | Veri | Olaylar |
 |---|---|---|---|---|
-| api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama, CORS | Java (Spring Cloud Gateway); ileride AWS API Gateway olabilir | — | — |
+| api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama, CORS | Java (Spring Cloud Gateway, WebFlux); ileride AWS API Gateway olabilir | Redis (hız sınırı sayaçları) | — |
 | identity | Giriş, token, roller | **Keycloak** | PostgreSQL | — |
 | user | Öğrenci/öğretmen/veli/yönetici profilleri, sınıf, şube, ders kataloğu, veli–öğrenci eşleşmesi; Keycloak hesaplarını açar | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAddedToClassroom`, `StudentRemovedFromClassroom`, `UserUpdated`, `GuardianLinked`, `GuardianUnlinked` |
 | exam-analysis | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `ExamResultsPublished`, `StudentResultAdded`; Dinler: `StudentAddedToClassroom`, `UserUpdated` |
@@ -110,7 +110,7 @@ Frontend: Next.js (React, TypeScript).
 
 ### Java servislerinin yapısı (hexagonal)
 
-Tüm Java servisleri (user, task, attendance, messaging, file) aynı iskeleti kullanır: ports & adapters, use case başına arayüz. `services/user` bu yapının şablonudur.
+Tüm Java servisleri (user, task, attendance, messaging, file) aynı iskeleti kullanır: ports & adapters, use case başına arayüz. `services/user` bu yapının şablonudur. **api-gateway bunun dışındadır:** domain'i yoktur, düz paket yapısı kullanır (aşağıdaki "Gateway servisi kuralları"); MapStruct, ArchUnit ve Spring Modulith kullanmaz.
 
 ```
 com.dershane.<servis>
@@ -130,6 +130,16 @@ com.dershane.<servis>
 - **Modül bağımlılığı tek yönlüdür, döngü yoktur.** `user` servisinde: `enrollment` → `user`, `classroom`, `subject`; `classroom` → `branch`; `user` → `branch`, `subject`; hepsi → `shared`; `shared` hiçbir iş modülünü bilmez. Bir modül başkasını yalnızca onun `domain` ve `port/in` paketleri üzerinden çağırır. Ters yöndeki ihtiyaç port'la çözülür: port'u ihtiyaç duyan modül tanımlar, veriyi tutan modül uygular (`BranchUsagePort`, `ClassroomEnrollmentPort`, `StudentRelationsPort`). Bir modülün başka modülün tablosuna yazması yasaktır; yalnızca okuma sorguları entity adıyla tablo birleştirebilir.
 - **Uygulama içi olaylar** (`UserDeactivated`, Spring `ApplicationEventPublisher`, aynı transaction'da) entegrasyon olaylarından (outbox → SNS) ayrıdır ve servisten dışarı çıkmaz.
 - **Her build'de denetlenir:** `ArchitectureTest` (ArchUnit) katman kurallarını, `ModularityTest` (Spring Modulith) modül sınırlarını ve döngüleri doğrular; modül diyagramlarını `target/spring-modulith-docs` altına yazar (rapor için). Yeni modül `package-info.java`'da `@ApplicationModule(allowedDependencies = ...)` ile izin verilen bağımlılıkları bildirir; başkasının kullandığı paketler `@NamedInterface` ile işaretlenir.
+
+## Gateway servisi kuralları
+
+- **Varyant:** Spring Cloud Gateway **WebFlux** (`spring-cloud-starter-gateway-server-webflux`, ayarlar `spring.cloud.gateway.server.webflux.*`). Gerekçe: hazır Redis `RequestRateLimiter`, YAML ile rota ve CORS, messaging'in WebSocket trafiği için olgun proxy. Düz paket yapısı: `security/`, `web/`, `ratelimit/`.
+- **Yalnızca kimlik doğrular, yetkilendirmez.** Token'ı JWKS ile (imza, issuer, `aud=dershane-api`) doğrular; rollere bakmaz ve **hiçbir kimlik başlığı eklemez**. `Authorization` ve `traceparent` başlıkları servise olduğu gibi gider. `/api/**` dışındaki yollar sunulmaz; yönetim uç noktaları 8081'de, ingress'e kapalıdır.
+- **Rotalar:** Her servis üst düzey kaynak adlarını `Path` listesinde **tek tek** yazar; `/api/v1/**` gibi toptan bir kural yoktur. Yeni servis kendi rotasını ekler, mevcutlara dokunmaz. Yol öneki soyulmaz (servisler zaten `/api/v1/...` sunar). İki servis aynı kaynak adını paylaşacaksa daha özel yol önce gelen rotada yazılır.
+- **Hız sınırı:** Redis tabanlı, kullanıcı başına (`sub`), varsayılan saniyede 20 istek ve en çok 40'lık ani artış; tüm rotalara `default-filters` ile uygulanır. Redis'e ulaşılamazsa sınırlayıcı isteği geçirir (fail-open) ve readiness'a Redis girmez; pod trafikten çıkmaz. Geçiş ancak Redis zaman aşımından sonra olur (`REDIS_TIMEOUT`, varsayılan 500 ms; Lettuce'un 60 sn'lik varsayılanı her isteği bir dakika bekletir). Her başarısız Redis çağrısını Spring Cloud Gateway kendisi ERROR olarak loglar (`RedisRateLimiter`: "Error calling rate limiter lua"); bu uyarı için alarm kurulmalıdır. Sınır aşılırsa 429 döner. Kimliksiz trafik JWT'de reddedildiği için sınırlanmaz.
+- **Hatalar:** Gateway'in kendi ürettiği hatalar (401, 403, 404 rota yok, 429, 503, 504, 500) servislerle aynı RFC 9457 ProblemDetail biçimindedir: `errorCode` + Türkçe `detail` (`Accept-Language: en` → İngilizce). Servislerin kendi hata yanıtlarına dokunulmaz. Bağlantı reddi 503, zaman aşımı 504'tür. Her ret sebebiyle loglanır (WARN; beklenmeyen hata ERROR).
+- **CORS yalnızca burada** yanıtlanır (`CORS_ALLOWED_ORIGINS`). Preflight (`OPTIONS`) token istemez.
+- **Yerelde** gateway `:8000`, yönetim `:8001`dir; servislere doğrudan erişim sürer ama servis yine JWT ister.
 
 ## User servisi kuralları
 
