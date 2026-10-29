@@ -1,0 +1,146 @@
+spring:
+  application:
+    name: api-gateway
+  main:
+    banner-mode: off
+  # Carries the trace context through reactive operators, so every log line has traceId/spanId.
+  reactor:
+    context-propagation: auto
+
+  messages:
+    basename: messages
+    fallback-to-system-locale: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # The limiter lets requests through when Redis fails, but only after these timeouts. The
+      # Lettuce default (60 s) would stall every request for a minute during an outage.
+      timeout: ${REDIS_TIMEOUT:500ms}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Both are set so the gateway starts even when Keycloak is down (no discovery call).
+          # The issuer is the browser-facing URL; the JWKS URL may be an internal hostname.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/dershane}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/dershane/protocol/openid-connect/certs}
+          audiences: dershane-api
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: ${UPSTREAM_RESPONSE_TIMEOUT:30s}
+
+          # CORS is answered here only; the services do not set CORS headers.
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+                allowed-methods: GET,POST,PATCH,PUT,DELETE,OPTIONS
+                allowed-headers: Authorization,Content-Type,Accept-Language,Idempotency-Key,traceparent
+                exposed-headers: Location,Retry-After
+                allow-credentials: false
+                max-age: 3600
+
+          # Every route inherits the per-user rate limit. throw-on-limit makes the limiter raise
+          # instead of returning an empty 429, so GatewayErrorHandler can write the problem body.
+          default-filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@subjectKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_RATE:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+                throw-on-limit: true
+
+          # Each service owns its top-level resource names and lists them explicitly (no catch-all
+          # /api/v1/**), so a new service adds its own route without touching this one. The path
+          # prefix is kept: the services already serve /api/v1/...
+          routes:
+            - id: user
+              uri: ${USER_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/api/v1/branches/**,/api/v1/classrooms/**,/api/v1/subjects/**,/api/v1/students/**,/api/v1/teachers/**,/api/v1/guardians/**,/api/v1/admins/**,/api/v1/users/**,/api/v1/me/**
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: 8080
+  shutdown: graceful
+
+# Management endpoints run on their own port, which the ingress does not expose.
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: health, info, prometheus, sbom
+      path-mapping:
+        prometheus: metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        # The gateway has no database. Redis is left out on purpose: when it is down the rate
+        # limiter lets requests through, so the pod must stay in rotation.
+        readiness:
+          include: readinessState
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  observations:
+    annotations:
+      enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      otlp:
+        enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  # Metrics are scraped by Prometheus and logs go to stdout for Loki; no OTLP push for those.
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
+
+info:
+  app:
+    # Image tag and commit SHA are the same (set by the Docker build).
+    commit: ${GIT_COMMIT_SHA:unknown}
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    root: INFO
