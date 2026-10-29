@@ -139,7 +139,7 @@ com.dershane.<servis>
 - **Hız sınırı:** Redis tabanlı, kullanıcı başına (`sub`), varsayılan saniyede 20 istek ve en çok 40'lık ani artış; tüm rotalara `default-filters` ile uygulanır. Redis'e ulaşılamazsa sınırlayıcı isteği geçirir (fail-open) ve readiness'a Redis girmez; pod trafikten çıkmaz. Geçiş ancak Redis zaman aşımından sonra olur (`REDIS_TIMEOUT`, varsayılan 500 ms; Lettuce'un 60 sn'lik varsayılanı her isteği bir dakika bekletir). Her başarısız Redis çağrısını Spring Cloud Gateway kendisi ERROR olarak loglar (`RedisRateLimiter`: "Error calling rate limiter lua"); bu uyarı için alarm kurulmalıdır. Sınır aşılırsa 429 döner. Kimliksiz trafik JWT'de reddedildiği için sınırlanmaz.
 - **Hatalar:** Gateway'in kendi ürettiği hatalar (401, 403, 404 rota yok, 429, 503, 504, 500) servislerle aynı RFC 9457 ProblemDetail biçimindedir: `errorCode` + Türkçe `detail` (`Accept-Language: en` → İngilizce). Servislerin kendi hata yanıtlarına dokunulmaz. Bağlantı reddi 503, zaman aşımı 504'tür. Her ret sebebiyle loglanır (WARN; beklenmeyen hata ERROR).
 - **CORS yalnızca burada** yanıtlanır (`CORS_ALLOWED_ORIGINS`). Preflight (`OPTIONS`) token istemez.
-- **Yerelde** gateway `:8000`, yönetim `:8001`dir; servislere doğrudan erişim sürer ama servis yine JWT ister.
+- **Yerelde** gateway `:8000`, yönetim `:8002`dir (`:8001` exam-analysis container'ının); servislere doğrudan erişim sürer ama servis yine JWT ister.
 
 ## User servisi kuralları
 
@@ -171,27 +171,32 @@ com.dershane.<servis>
 
 ### Puanlama
 
-- ÖSYM ve MEB puanı **soru bazlı değil, test bazlı standart puanla** hesaplar: standart puan = 50 + 10 × (net − ortalama) ÷ standart sapma. Sonra testler ders ağırlıklarıyla (`Ders.agirlik`) toplanır. Bir sorunun puanı, onu kaç kişinin doğru yaptığına göre değişmez; zor geçen testte aynı netin puan değeri artar.
-- Standart puan için testin ortalaması ve standart sapması gerekir. Bunlar `DenemeDersIstatistigi`nde tutulur ve iki kaynaktan gelir:
-  - `KURUM_ICI`: optik dosya işlenince dershane öğrencilerinden otomatik hesaplanır.
-  - `ULKE_GENELI`: yayınevi veya sınav organizasyonu açıkladıktan sonra **yalnızca yönetici** elle girer.
-- Hangi istatistiğin kullanılacağını `Deneme.puanlamaKaynagi` belirler; deneme oluşturulurken seçilir. Öğrenci denemesi başına tek puan görür.
-- Türkiye geneli bir denemede ülke istatistiği henüz girilmediyse `tahminiPuan` boş kalır; net ve konu analizi yine görünür. İstatistik girilince puan otomatik hesaplanır.
+- ÖSYM ve MEB puanı **soru bazlı değil, test bazlı standart puanla** hesaplar: standart puan = 50 + 10 × (net − ortalama) ÷ standart sapma. Sonra testler puan türü ağırlıklarıyla (`ScoreTypeWeight`) toplanır. Bir sorunun puanı, onu kaç kişinin doğru yaptığına göre değişmez; zor geçen testte aynı netin puan değeri artar.
+- Her sınav türünün bir veya daha fazla puan türü (`ScoreType`) vardır: TYT ve LGS'de tek, AYT'de SAY/EA/SÖZ, YDT'de DİL. Ağırlıklar ders üzerinde değil, puan türü–ders çiftinde tutulur.
+- Standart puan için testin ortalaması ve standart sapması gerekir. Bunlar `ExamSubjectStatistic`te tutulur ve iki kaynaktan gelir:
+  - `INSTITUTIONAL`: optik dosya işlenince dershane öğrencilerinden otomatik hesaplanır.
+  - `NATIONAL`: yayınevi veya sınav organizasyonu açıkladıktan sonra **yalnızca yönetici** elle girer.
+- Hangi istatistiğin kullanılacağını `MockExam.scoringSource` belirler; deneme oluşturulurken seçilir. Öğrenci denemesi başına her puan türü için tek puan görür (`StudentScore`).
+- Türkiye geneli bir denemede ülke istatistiği henüz girilmediyse `StudentScore.estimatedScore` boş kalır; net ve konu analizi yine görünür. İstatistik girilince puan otomatik hesaplanır.
 - Tahmini puan her yerde "tahmini" olarak etiketlenir ve kaynağı belirtilir: "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)". Kurum içi puan Türkiye geneliyle karşılaştırılamaz.
 
 ### Zayıf konu
 
 - Zayıf konu tek denemeye değil, öğrencinin son N denemesine bakılarak belirlenir. Bu denemelerdeki bir konunun tüm soruları toplanır; başarı oranı eşiğin altındaysa konu zayıftır.
-- N ve başarı oranı eşiği `ZayifKonuAyari`nda şube başına tutulur ve **yalnızca yönetici** değiştirir. Eşikler kodda sabit yazılmaz.
-- Sonuç `OgrenciKonuDurumu` özetinde tutulur. Özet her yeni deneme işlendiğinde ve ayar değiştiğinde `KonuSonuc` kayıtlarından yeniden hesaplanır; eski deneme pencereden çıkınca değer geri çıkarılmaz.
-- Alt konular `Konu.ustKonuId` ile üst konuya toplanabilir. Zayıf çıkan konulardan öğrenci ve öğretmene "şu konuları çalış" tavsiyesi üretilir.
+- N ve başarı oranı eşiği `WeakTopicSetting`te şube başına tutulur ve **yalnızca yönetici** değiştirir. Eşikler kodda sabit yazılmaz. Şubede ayar yoksa hesaplama uyarı logu ve metrikle atlanır.
+- Pencere yalnızca **açıklanmış** (`PUBLISHED`) denemelerden ve **konunun sınav türü içinden** oluşur: açıklanmamış deneme öğrenciye zayıf konu olarak sızmaz, TYT ve AYT denemeleri birbirinin penceresini doldurmaz.
+- Sonuç `StudentTopicStatus` özetinde tutulur. Özet deneme açıklanınca, açıklanmış denemede geç eşleştirme veya soru iptali olunca ve ayar değişince `TopicResult` kayıtlarından baştan hesaplanır; eski deneme pencereden çıkınca değer geri çıkarılmaz.
+- Alt konular `Topic.parentTopicId` ile üst konuya toplanır. Zayıf çıkan konulardan öğrenci ve öğretmene "şu konuları çalış" tavsiyesi üretilir (en zayıf önce).
 
 ### Optik dosya içe aktarma
 
-- Satırdaki öğrenci numarası `OgrenciKopya` ile eşleştirilir. Eşleşmeyen satırlar atılmaz, `EslesmeyenSatir` olarak saklanır.
-- Yönetici eşleşmeyen satırı elle bir öğrenciye bağlayabilir; yalnızca denemenin şubesindeki öğrenciler seçilebilir. Aynı öğrenciye aynı denemede ikinci satır bağlanamaz. Kimin kimi bağladığı kaydedilir. Satır hatalıysa `YOKSAYILDI` işaretlenir, silinmez.
-- Bağlama sonrası öğrencinin sonucu üretilir, `KURUM_ICI` istatistik ve `OgrenciKonuDurumu` yeniden hesaplanır.
-- Sonuçlar açıklanmış denemede de geç bağlama yapılabilir. Bu durumda `ExamResultsPublished` yeniden yayınlanmaz; yalnızca o öğrenci için `StudentResultAdded` yayınlanır ve notification servisi öğrenciye (ve velisine) haber verir.
+- İki kaynak vardır: optik okuyucu cihazın düz metin dosyası ve fotoğraftan okuma. Görüntü işleme exam-analysis'te yapılmaz; omr servisi fotoğraflardan `omr-canonical-v1` formatında satır üretir ve exam-analysis iki kaynağı aynı hatla işler.
+- Satırdaki öğrenci numarası `StudentReplica` ile eşleştirilir. Eşleşmeyen satırlar atılmaz, nedeniyle (`STUDENT_NOT_FOUND`, `DUPLICATE_STUDENT`, `INVALID_BOOKLET`, `MALFORMED_LINE`) `UnmatchedRow` olarak saklanır.
+- Yönetici eşleşmeyen satırı elle bir öğrenciye bağlayabilir; yalnızca denemenin şubesindeki öğrenciler seçilebilir. Aynı öğrenciye aynı denemede ikinci satır bağlanamaz. Kimin bağladığı veya yok saydığı kaydedilir. Satır hatalıysa `IGNORED` işaretlenir, silinmez.
+- Bağlama sonrası öğrencinin sonucu üretilir, `INSTITUTIONAL` istatistik, tüm puan ve sıralar yeniden hesaplanır.
+- Sonuçlar açıklanmış denemede de geç bağlama yapılabilir. Bu durumda `ExamResultsPublished` yeniden yayınlanmaz; yalnızca o öğrenci için `StudentResultAdded` yayınlanır ve notification servisi öğrenciye (ve velisine) haber verir. Açıklanmış denemeye yeni dosya yüklenemez.
+- İptal edilen soru (`AnswerStatus.CANCELLED`) ÖSYM uygulamasındaki gibi doğru/yanlış/boş ve konu toplamlarına girmez. Sonuçlar saklanan cevaplardan yeniden puanlanır; olay yeniden yayınlanmaz.
+- Servisler arası iletişim (4. hafta) gelene kadar geçici adaptörler kullanılır: `StudentReplica` yönetici endpoint'iyle doldurulur, optik dosya doğrudan exam-analysis'e yüklenir.
 
 ## Depo yapısı
 
@@ -285,7 +290,7 @@ Bunlar netleşince bu bölümden çıkarılıp yukarıya işlenmelidir.
 
 - **Üretimde ilk super-admin kurulumu:** Yerelde realm JSON'u ve `db/local` tohum verisi var; üretimde nasıl yapılacağı AWS haftasında (8–9) belirlenecek.
 - **exam-analysis'teki `Ders` ile user'daki `Subject` ilişkisi:** exam-analysis'te sınav türüne bağlı, ağırlıklı ayrı bir ders kataloğu var; iki katalog exam-analysis servisi yazılırken eşleştirilecek.
-- **Tahmini puan ölçekleme formülü:** Ağırlıklı standart puanların TYT, AYT ve LGS için hangi aralığa ve nasıl ölçekleneceği (taban puan dahil) ÖSYM ve MEB kılavuzlarından doğrulanıp sınav türüne işlenmeli.
+- **Tahmini puan ölçekleme formülü:** Ağırlıklı standart puanların TYT, AYT ve LGS için hangi aralığa ve nasıl ölçekleneceği (taban puan dahil) ÖSYM ve MEB kılavuzlarından doğrulanıp puan türüne (`ScoreType.baseScore`, `ScoreTypeWeight`) işlenmeli. `services/exam-analysis/seed/catalog.json` içindeki ağırlıklar şimdilik yer tutucudur (`weightsVerified: false`).
 - **Fakülte/bölüm adı ve danışman unvanı:** Rapor kapağı için eksik.
 
 ## Rapor

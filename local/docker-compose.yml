@@ -1,6 +1,8 @@
 # Local development environment: the AWS services are emulated by Floci, identity by Keycloak.
 #   docker compose -f local/docker-compose.yml up -d                       # dependencies only
-#   docker compose -f local/docker-compose.yml --profile services up -d    # + user service, api-gateway
+#   docker compose -f local/docker-compose.yml --profile services up -d    # + user, exam-analysis, api-gateway
+#   docker compose -f local/docker-compose.yml --profile tools up -d       # + pgAdmin
+# Host ports can be overridden in local/.env (gitignored), e.g. POSTGRES_PORT=5433.
 name: dershane
 
 services:
@@ -10,7 +12,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -78,16 +80,9 @@ services:
       - floci
     restart: "no"
 
-  # Catches the e-mails Keycloak sends (password setup). UI: http://localhost:8025
-  mailpit:
-    image: axllent/mailpit:v1.31.6
-    ports:
-      - "8025:8025"
-      - "1025:1025"
-
-  # Rate limit counters of the api-gateway (ElastiCache in production).
+  # Result cache of exam-analysis and rate limit counters of the api-gateway (ElastiCache in production).
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.1-alpine
     ports:
       - "6379:6379"
     healthcheck:
@@ -95,6 +90,30 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # Browses the local databases. UI: http://localhost:5050 (no login; server password = db user name)
+  pgadmin:
+    profiles: ["tools"]
+    image: dpage/pgadmin4:8.14
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Catches the e-mails Keycloak sends (password setup). UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports:
+      - "8025:8025"
+      - "1025:1025"
 
   user:
     profiles: ["services"]
@@ -126,7 +145,7 @@ services:
         condition: service_completed_successfully
 
   # Single entry point: the frontend calls http://localhost:8000. Services stay reachable directly
-  # on their own ports for development.
+  # on their own ports for development. Management is on 8002 because exam-analysis-api uses 8001.
   api-gateway:
     profiles: ["services"]
     build:
@@ -141,12 +160,59 @@ services:
       CORS_ALLOWED_ORIGINS: http://localhost:3000
     ports:
       - "8000:8080"
-      - "8001:8081"
+      - "8002:8081"
     depends_on:
       redis:
         condition: service_healthy
       user:
         condition: service_started
+
+  exam-analysis-migrate:
+    profiles: ["services"]
+    build: ../services/exam-analysis
+    command: ["alembic", "upgrade", "head"]
+    environment: &exam-analysis-env
+      DATABASE_URL: postgresql+psycopg://exam_analysis:exam_analysis@postgres:5432/exam_analysis
+      REDIS_URL: redis://redis:6379/0
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: eu-central-1
+      OIDC_ISSUER: http://localhost:8180/realms/dershane
+      OIDC_JWKS_URL: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
+      OIDC_AUDIENCE: dershane-api
+      SNS_TOPIC_ARN: arn:aws:sns:eu-central-1:000000000000:exam-analysis-events
+      OUTBOX_RELAY_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  exam-analysis-api:
+    profiles: ["services"]
+    build: ../services/exam-analysis
+    environment: *exam-analysis-env
+    ports:
+      - "8001:8000"
+    depends_on:
+      exam-analysis-migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+      floci-init:
+        condition: service_completed_successfully
+
+  exam-analysis-worker:
+    profiles: ["services"]
+    build: ../services/exam-analysis
+    command: ["python", "-m", "app.worker"]
+    environment: *exam-analysis-env
+    ports:
+      - "9101:9100"
+    depends_on:
+      exam-analysis-migrate:
+        condition: service_completed_successfully
+      floci-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:
