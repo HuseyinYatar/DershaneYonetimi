@@ -8,3 +8,6 @@ CREATE DATABASE keycloak OWNER keycloak;
 
 CREATE USER exam_analysis WITH PASSWORD 'exam_analysis';
 CREATE DATABASE exam_analysis OWNER exam_analysis;
+
+CREATE USER attendance_service WITH PASSWORD 'attendance_service';
+CREATE DATABASE attendance_service OWNER attendance_service;

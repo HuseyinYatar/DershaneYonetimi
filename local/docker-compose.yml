@@ -1,6 +1,6 @@
 # Local development environment: the AWS services are emulated by Floci, identity by Keycloak.
 #   docker compose -f local/docker-compose.yml up -d                       # dependencies only
-#   docker compose -f local/docker-compose.yml --profile services up -d    # + user, exam-analysis, api-gateway
+#   docker compose -f local/docker-compose.yml --profile services up -d    # + user, attendance, exam-analysis, api-gateway
 #   docker compose -f local/docker-compose.yml --profile tools up -d       # + pgAdmin
 # Host ports can be overridden in local/.env (gitignored), e.g. POSTGRES_PORT=5433.
 name: dershane
@@ -144,6 +144,37 @@ services:
       floci-init:
         condition: service_completed_successfully
 
+  attendance:
+    profiles: ["services"]
+    build:
+      context: ../services/attendance
+      args:
+        GIT_COMMIT_SHA: local
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_URL: jdbc:postgresql://postgres:5432/attendance_service
+      DB_USERNAME: attendance_service
+      DB_PASSWORD: attendance_service
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/dershane
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
+      KEYCLOAK_PUBLIC_URL: http://localhost:8180
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: eu-central-1
+      ATTENDANCE_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:000000000000:attendance-events
+    # The CronJobs run the same image once and exit, e.g.
+    #   docker compose -f local/docker-compose.yml run --rm attendance --attendance.job=generate-sessions
+    #   docker compose -f local/docker-compose.yml run --rm attendance --attendance.job=expire-sessions
+    ports:
+      - "8082:8080"
+      - "8083:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      floci-init:
+        condition: service_completed_successfully
+
   # Single entry point: the frontend calls http://localhost:8000. Services stay reachable directly
   # on their own ports for development. Management is on 8002 because exam-analysis-api uses 8001.
   api-gateway:
@@ -154,6 +185,7 @@ services:
         GIT_COMMIT_SHA: local
     environment:
       USER_SERVICE_URL: http://user:8080
+      ATTENDANCE_SERVICE_URL: http://attendance:8080
       KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/dershane
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
       REDIS_HOST: redis
@@ -165,6 +197,8 @@ services:
       redis:
         condition: service_healthy
       user:
+        condition: service_started
+      attendance:
         condition: service_started
 
   exam-analysis-migrate:

@@ -44,3 +44,13 @@ echo "Bucket: $BUCKET"
 echo "Topic:  $EXAM_TOPIC_ARN"
 echo "Queue:  $EXAM_INSPECT_URL (read it to see published events)"
 echo "Queue:  $EXAM_USER_EVENTS_URL (user events for exam-analysis)"
+
+# attendance: its own topic with an inspection queue. It will consume user events (memberships,
+# guardian links) from a queue of its own in week 4; until then a temporary REST adapter feeds it.
+ATTENDANCE_TOPIC_ARN=$(aws sns create-topic --name attendance-events --query TopicArn --output text)
+ATTENDANCE_INSPECT_URL=$(subscribe "$ATTENDANCE_TOPIC_ARN" local-inspect-attendance-events)
+ATTENDANCE_USER_EVENTS_URL=$(subscribe "$TOPIC_ARN" attendance-user-events)
+
+echo "Topic:  $ATTENDANCE_TOPIC_ARN"
+echo "Queue:  $ATTENDANCE_INSPECT_URL (read it to see published events)"
+echo "Queue:  $ATTENDANCE_USER_EVENTS_URL (user events for attendance)"
