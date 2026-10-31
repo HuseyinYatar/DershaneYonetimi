@@ -68,6 +68,10 @@ spring:
               uri: ${USER_SERVICE_URL:http://localhost:8080}
               predicates:
                 - Path=/api/v1/branches/**,/api/v1/classrooms/**,/api/v1/subjects/**,/api/v1/students/**,/api/v1/teachers/**,/api/v1/guardians/**,/api/v1/admins/**,/api/v1/users/**,/api/v1/me/**
+            - id: attendance
+              uri: ${ATTENDANCE_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/class-schedules/**,/api/v1/class-sessions/**,/api/v1/attendance-records/**,/api/v1/attendance-summaries/**,/api/v1/attendance-replicas/**,/api/v1/excuses/**
 
   lifecycle:
     timeout-per-shutdown-phase: 20s
