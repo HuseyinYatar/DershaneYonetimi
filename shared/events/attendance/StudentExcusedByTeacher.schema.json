@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/attendance/StudentExcusedByTeacher.schema.json",
+  "title": "StudentExcusedByTeacher (schemaVersion 1)",
+  "description": "The teacher excused a student without an approved guardian excuse covering the date, when attendance was taken or corrected to EXCUSED. The reason is not in the payload (free text, KVKK); the guardian reads it through the attendance REST API. Times are the institution's local time (Europe/Istanbul). Consumers: notification (student and guardian: the teacher allowed the absence).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recordId", "sessionId", "studentId", "classroomId", "branchId", "subjectId", "sessionDate", "startTime", "endTime"],
+  "properties": {
+    "recordId": { "$ref": "#/$defs/uuid" },
+    "sessionId": { "$ref": "#/$defs/uuid" },
+    "studentId": { "$ref": "#/$defs/uuid" },
+    "classroomId": { "$ref": "#/$defs/uuid" },
+    "branchId": { "$ref": "#/$defs/uuid" },
+    "subjectId": { "$ref": "#/$defs/uuid" },
+    "sessionDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "startTime": { "type": "string", "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$" },
+    "endTime": { "type": "string", "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$" }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}
