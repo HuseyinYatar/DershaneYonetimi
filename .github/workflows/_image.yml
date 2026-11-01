@@ -1,0 +1,44 @@
+name: image
+
+# Reusable: build the image (tag = commit SHA, never latest), write the CycloneDX SBOM, scan with Trivy.
+# Pushing to ECR and updating the GitOps repo (main only) are added here once AWS is up.
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+
+env:
+  IMAGE: ${{ inputs.service }}:${{ github.sha }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: services/${{ inputs.service }}
+          load: true
+          tags: ${{ env.IMAGE }}
+          build-args: GIT_COMMIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.service }}
+      # SBOM first: the scan below fails the job, the SBOM should still be uploaded.
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          format: cyclonedx
+          output: sbom.cdx.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.service }}-sbom
+          path: sbom.cdx.json
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1

@@ -1,0 +1,36 @@
+name: exam-analysis
+
+on:
+  pull_request:
+    paths:
+      - services/exam-analysis/**
+      - shared/events/**
+      - .github/workflows/exam-analysis.yml
+      - .github/workflows/_python-service.yml
+      - .github/workflows/_image.yml
+  push:
+    branches: [main]
+    paths:
+      - services/exam-analysis/**
+      - shared/events/**
+      - .github/workflows/exam-analysis.yml
+      - .github/workflows/_python-service.yml
+      - .github/workflows/_image.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    uses: ./.github/workflows/_python-service.yml
+    with:
+      service: exam-analysis
+  image:
+    needs: test
+    uses: ./.github/workflows/_image.yml
+    with:
+      service: exam-analysis
