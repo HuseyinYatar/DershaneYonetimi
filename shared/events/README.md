@@ -70,3 +70,9 @@ shared/events/
 | `GuardianUnlinked` | user | notification | A guardian link is removed or replaced |
 | `ExamResultsPublished` | exam-analysis | notification | An admin published the results of a mock exam (once per exam). Optional `mockExamName`, `examDate` for the texts |
 | `StudentResultAdded` | exam-analysis | notification | A result was added to an already published exam (late matching). Optional `mockExamName`, `examDate` |
+| `GuardianLinked` | user | notification, attendance | A guardian is linked to a student, or the relationship changes |
+| `GuardianUnlinked` | user | notification, attendance | A guardian link is removed or replaced |
+| `ExamResultsPublished` | exam-analysis | notification | An admin published the results of a mock exam (once per exam) |
+| `StudentResultAdded` | exam-analysis | notification | A result was added to an already published exam (late matching) |
+| `StudentAbsent` | attendance | notification | A student ended up absent without an approved excuse (when attendance is taken or corrected) |
+| `StudentExcusedByTeacher` | attendance | notification | The teacher excused a student without an approved guardian excuse (when attendance is taken or corrected) |
