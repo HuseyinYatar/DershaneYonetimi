@@ -2,8 +2,8 @@
 
 import structlog
 from fastapi import FastAPI
-from opentelemetry import trace
-from opentelemetry.propagate import inject
+from opentelemetry import context, trace
+from opentelemetry.propagate import extract, inject
 from sqlalchemy.engine import Engine
 
 from app.config import Settings
@@ -49,3 +49,8 @@ def current_traceparent() -> str | None:
     carrier: dict[str, str] = {}
     inject(carrier)
     return carrier.get("traceparent")
+
+
+def producer_context(traceparent: str | None) -> context.Context:
+    """Trace context of the request that published a consumed event (SNS attribute `traceparent`)."""
+    return extract({"traceparent": traceparent} if traceparent else {})

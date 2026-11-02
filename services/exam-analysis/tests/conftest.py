@@ -18,6 +18,10 @@ os.environ.setdefault("OIDC_ISSUER", "http://keycloak.test/realms/dershane")
 os.environ.setdefault("OIDC_AUDIENCE", "dershane-api")
 os.environ.setdefault("REDIS_URL", "")
 os.environ.setdefault("OTEL_ENABLED", "false")
+# Beats the .env file: AWS clients in tests must reach moto, never a running Floci.
+os.environ["AWS_ENDPOINT_URL"] = ""
+# Workers started in tests do not read a queue unless the test asks for it.
+os.environ["SQS_QUEUE_NAME"] = ""
 
 TEST_ISSUER = os.environ["OIDC_ISSUER"]
 TEST_AUDIENCE = os.environ["OIDC_AUDIENCE"]

@@ -42,4 +42,13 @@ OUTBOX_PUBLISH_FAILURES = Counter(
 
 CACHE_REQUESTS = Counter("cache_requests_total", "Cache lookups by result (hit/miss/error)", ["result"])
 
+# outcome: processed / duplicate / invalid / unknown_type / failed
+EVENTS_CONSUMED = Counter(
+    "events_consumed_total", "Queue messages by event type and outcome", ["event_type", "outcome"]
+)
+# reason: older_version / not_a_student / student_number_missing / classroom_mismatch
+REPLICA_EVENTS_IGNORED = Counter(
+    "replica_events_ignored_total", "Events that did not change student_replica", ["event_type", "reason"]
+)
+
 WORKER_LAST_LOOP = Gauge("worker_last_loop_timestamp_seconds", "Unix time of the last worker loop")

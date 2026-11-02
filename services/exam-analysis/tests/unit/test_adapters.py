@@ -18,7 +18,9 @@ from app.events.payloads import (
     EventEnvelope,
     ExamResultsPublished,
     StudentAddedToClassroom,
+    StudentRemovedFromClassroom,
     StudentResultAdded,
+    UserUpdated,
 )
 from app.events.publisher import SnsEventPublisher
 from app.models.enums import Role
@@ -216,3 +218,36 @@ class TestEventContracts:
 
         assert (event.student_number, event.start_date) == ("1001", date(2026, 10, 25))
         assert event.model_dump(mode="json", by_alias=True) == data
+
+    def test_consumed_user_updated_contract(self) -> None:
+        data = {
+            "userId": str(uuid.uuid4()),
+            "role": "STUDENT",
+            "branchId": str(uuid.uuid4()),
+            "firstName": "Ali",
+            "lastName": "Yılmaz",
+            "email": "ali@example.com",
+            "phone": None,
+            "active": True,
+            "studentNumber": "ST7001",
+            "recordVersion": 2,
+        }
+        self.validator("user/UserUpdated.schema.json").validate(data)
+
+        event = UserUpdated.model_validate(data)
+
+        assert (event.student_number, event.record_version) == ("ST7001", 2)
+        # Contact details are not needed here, so they are not even kept in memory.
+        assert "email" not in event.model_dump()
+
+    def test_consumed_student_removed_contract(self) -> None:
+        data = {
+            "membershipId": str(uuid.uuid4()),
+            "studentId": str(uuid.uuid4()),
+            "classroomId": str(uuid.uuid4()),
+            "branchId": str(uuid.uuid4()),
+            "endDate": "2026-11-02",
+        }
+        self.validator("user/StudentRemovedFromClassroom.schema.json").validate(data)
+
+        assert StudentRemovedFromClassroom.model_validate(data).end_date == date(2026, 11, 2)

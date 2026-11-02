@@ -1,7 +1,7 @@
 """Maintenance of the local student copy.
 
-Today an admin endpoint feeds it; in week 4 the StudentAddedToClass consumer calls upsert()
-with the same rows, so both paths share one implementation.
+The user service's events feed it (app.events.handlers). This admin path remains until the event
+path is verified, then it is removed.
 """
 
 from collections import Counter
@@ -74,7 +74,7 @@ def upsert(session: Session, students: Sequence[StudentReplicaIn]) -> int:
 
     now = utcnow()
     statement = pg_insert(StudentReplica).values(
-        [{**student.model_dump(), "updated_at": now} for student in students]
+        [{**student.model_dump(), "is_active": True, "updated_at": now} for student in students]
     )
     statement = statement.on_conflict_do_update(
         index_elements=[StudentReplica.student_id],
@@ -83,6 +83,7 @@ def upsert(session: Session, students: Sequence[StudentReplicaIn]) -> int:
             "branch_id": statement.excluded.branch_id,
             "class_id": statement.excluded.class_id,
             "full_name": statement.excluded.full_name,
+            "is_active": statement.excluded.is_active,
             "updated_at": statement.excluded.updated_at,
         },
     )

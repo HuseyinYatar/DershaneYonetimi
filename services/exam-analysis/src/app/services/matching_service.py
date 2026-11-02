@@ -58,6 +58,10 @@ def match_row(  session: Session, user: CurrentUser, row_id: uuid.UUID, student_
         raise NotFoundError(
             "STUDENT_NOT_FOUND", "Student is unknown to this service", student_id=str(student_id)
         )
+    if not replica.is_active:
+        raise BusinessRuleError(
+            "STUDENT_INACTIVE", "Only active students can be matched", student_id=str(student_id)
+        )
     if replica.branch_id != exam.branch_id:
         raise BusinessRuleError(
             "STUDENT_NOT_IN_EXAM_BRANCH",
