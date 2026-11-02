@@ -36,13 +36,33 @@ subscribe() { # topic_arn queue_name -> queue_url
 
 EXAM_TOPIC_ARN=$(aws sns create-topic --name exam-analysis-events --query TopicArn --output text)
 EXAM_INSPECT_URL=$(subscribe "$EXAM_TOPIC_ARN" local-inspect-exam-analysis-events)
-# No filter policy yet: the consumer skips event types it does not handle.
-EXAM_USER_EVENTS_URL=$(subscribe "$TOPIC_ARN" exam-analysis-user-events)
+
+# Queue read by the exam-analysis worker, which keeps student_replica up to date.
+# After 5 receives without a delete a message moves to the DLQ. The filter keeps the other user
+# events out of the queue.
+EXAM_DLQ_URL=$(aws sqs create-queue --queue-name exam-analysis-user-events-dlq --query QueueUrl --output text)
+EXAM_DLQ_ARN=$(aws sqs get-queue-attributes --queue-url "$EXAM_DLQ_URL" \
+  --attribute-names QueueArn --query Attributes.QueueArn --output text)
+cat > /tmp/exam-analysis-queue.json <<JSON
+{"VisibilityTimeout": "60",
+ "RedrivePolicy": "{\"deadLetterTargetArn\":\"$EXAM_DLQ_ARN\",\"maxReceiveCount\":\"5\"}"}
+JSON
+EXAM_USER_EVENTS_URL=$(aws sqs create-queue --queue-name exam-analysis-user-events \
+  --attributes file:///tmp/exam-analysis-queue.json --query QueueUrl --output text)
+EXAM_USER_EVENTS_ARN=$(aws sqs get-queue-attributes --queue-url "$EXAM_USER_EVENTS_URL" \
+  --attribute-names QueueArn --query Attributes.QueueArn --output text)
+cat > /tmp/exam-analysis-subscription.json <<'JSON'
+{"RawMessageDelivery": "true",
+ "FilterPolicy": "{\"eventType\":[\"UserUpdated\",\"StudentAddedToClassroom\",\"StudentRemovedFromClassroom\"]}"}
+JSON
+aws sns subscribe --topic-arn "$TOPIC_ARN" --protocol sqs --notification-endpoint "$EXAM_USER_EVENTS_ARN" \
+  --attributes file:///tmp/exam-analysis-subscription.json >/dev/null
 
 echo "Bucket: $BUCKET"
 echo "Topic:  $EXAM_TOPIC_ARN"
 echo "Queue:  $EXAM_INSPECT_URL (read it to see published events)"
-echo "Queue:  $EXAM_USER_EVENTS_URL (user events for exam-analysis)"
+echo "Queue:  $EXAM_USER_EVENTS_URL (user events for exam-analysis [filtered])"
+echo "Queue:  $EXAM_DLQ_URL (exam-analysis dead letters)"
 
 # notification: one queue for both topics, with a dead-letter queue. The service only reads and
 # deletes messages; these subscriptions are what bring the events into its queue.

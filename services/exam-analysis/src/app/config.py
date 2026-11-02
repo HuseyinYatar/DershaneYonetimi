@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     outbox_relay_enabled: bool = False
     outbox_batch_size: int = 50
 
+    # Queue subscribed to user-events (local/floci/init.sh, Terraform on AWS), read by the worker.
+    # Looked up by name, so the same value works on Floci and AWS. Empty value disables consuming.
+    sqs_queue_name: str | None = "exam-analysis-user-events"
+    sqs_max_messages: int = 10
+    # 0: an empty queue answers at once. Waiting here would delay new import jobs in the same loop,
+    # which sleeps worker_poll_interval_seconds when it finds no work.
+    sqs_wait_seconds: int = 0
+
     worker_poll_interval_seconds: float = 2.0
     worker_stale_job_timeout_seconds: int = 900
     worker_reaper_interval_seconds: float = 30.0
@@ -51,7 +59,9 @@ class Settings(BaseSettings):
     # Exporter endpoint and headers come from the standard OTEL_EXPORTER_OTLP_* variables.
     otel_enabled: bool = False
 
-    @field_validator("redis_url", "aws_endpoint_url", "oidc_audience", "sns_topic_arn", mode="before")
+    @field_validator(
+        "redis_url", "aws_endpoint_url", "oidc_audience", "sns_topic_arn", "sqs_queue_name", mode="before"
+    )
     @classmethod
     def _empty_string_is_none(cls, value: object) -> object:
         return None if value == "" else value

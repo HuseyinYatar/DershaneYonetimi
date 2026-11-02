@@ -155,6 +155,8 @@ services:
       OIDC_AUDIENCE: dershane-api
       SNS_TOPIC_ARN: arn:aws:sns:eu-central-1:000000000000:exam-analysis-events
       OUTBOX_RELAY_ENABLED: "true"
+      # Created by floci-init (local/floci/init.sh), subscribed to user-events.
+      SQS_QUEUE_NAME: exam-analysis-user-events
     depends_on:
       postgres:
         condition: service_healthy

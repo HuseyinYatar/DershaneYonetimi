@@ -58,7 +58,7 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 | api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama, CORS | Java (Spring Cloud Gateway); ileride AWS API Gateway olabilir | — | — |
 | identity | Giriş, token, roller | **Keycloak** | PostgreSQL | — |
 | user | Öğrenci/öğretmen/veli/yönetici profilleri, sınıf, şube, ders kataloğu, veli–öğrenci eşleşmesi; Keycloak hesaplarını açar | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAddedToClassroom`, `StudentRemovedFromClassroom`, `UserUpdated`, `GuardianLinked`, `GuardianUnlinked` |
-| exam-analysis | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `ExamResultsPublished`, `StudentResultAdded`; Dinler: `StudentAddedToClassroom`, `UserUpdated` |
+| exam-analysis | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `ExamResultsPublished`, `StudentResultAdded`; Dinler: `UserUpdated`, `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
 | messaging | WebSocket sohbet, fotoğraflı soru, okundu bilgisi | Java (Spring Boot) | PostgreSQL, Redis Pub/Sub | Yayınlar: `NewMessage` (alıcı çevrimdışıysa) |
 | task | Görev/ödev atama, tekrarlı görevler, teslim ve değerlendirme | Java (Spring Boot) | PostgreSQL | Yayınlar: `TaskAssigned`, `TaskDueSoon`, `TaskOverdue`, `SubmissionGraded`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
 | attendance | Derse katılım, devamsızlık | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAbsent`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
@@ -196,7 +196,13 @@ com.dershane.<servis>
 - Bağlama sonrası öğrencinin sonucu üretilir, `INSTITUTIONAL` istatistik, tüm puan ve sıralar yeniden hesaplanır.
 - Sonuçlar açıklanmış denemede de geç bağlama yapılabilir. Bu durumda `ExamResultsPublished` yeniden yayınlanmaz; yalnızca o öğrenci için `StudentResultAdded` yayınlanır ve notification servisi öğrenciye (ve velisine) haber verir. Açıklanmış denemeye yeni dosya yüklenemez.
 - İptal edilen soru (`AnswerStatus.CANCELLED`) ÖSYM uygulamasındaki gibi doğru/yanlış/boş ve konu toplamlarına girmez. Sonuçlar saklanan cevaplardan yeniden puanlanır; olay yeniden yayınlanmaz.
-- Servisler arası iletişim (4. hafta) gelene kadar geçici adaptörler kullanılır: `StudentReplica` yönetici endpoint'iyle doldurulur, optik dosya doğrudan exam-analysis'e yüklenir.
+- Servisler arası iletişim tamamlanana kadar optik dosya doğrudan exam-analysis'e yüklenir. `StudentReplica`'yı elle dolduran yönetici endpoint'i ve `seed-students`, olay yolu uçtan uca doğrulanınca kaldırılır.
+
+### Öğrenci kopyası (`StudentReplica`)
+
+- Kopya user servisinin olaylarıyla dolar; worker döngüsü `exam-analysis-user-events` kuyruğunu da okur. Büyük bir optik dosya işlenirken olaylar kuyrukta bekler, kaybolmaz; birden çok worker aynı kuyruğu güvenle okur. 5 başarısız teslimden sonra mesaj `exam-analysis-user-events-dlq`'ya gider. Mesaj başına tek transaction: `processed_event` → handler → commit → silme.
+- `UserUpdated` numara, şube, ad ve aktifliğin sahibidir; öğrenci olmayanlar atlanır, eski `recordVersion` yok sayılır. `StudentAddedToClassroom` `class_id`'yi yazar, satır yoksa oluşturur. `StudentRemovedFromClassroom` `class_id`'yi yalnızca aynı sınıfsa boşaltır.
+- Pasif öğrenci optik satırla eşleşmez ve elle de bağlanamaz (`STUDENT_INACTIVE`), sonuçları silinmez. Şube içinde numara tekilliği yalnızca aktif öğrenciler için geçerlidir.
 
 ## Depo yapısı
 

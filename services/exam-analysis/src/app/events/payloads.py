@@ -41,8 +41,22 @@ class StudentResultAdded(ApiModel):
     exam_date: date | None = None
 
 
+class UserUpdated(ApiModel):
+    """Full current state of a user (user service). Students feed student_replica; e-mail and phone
+    in the event are not needed here and are not read."""
+
+    user_id: uuid.UUID
+    role: str
+    branch_id: uuid.UUID
+    first_name: str = Field(min_length=1)
+    last_name: str = Field(min_length=1)
+    active: bool
+    student_number: str | None
+    record_version: int = Field(ge=0)
+
+
 class StudentAddedToClassroom(ApiModel):
-    """Produced by the user service; consumed here to maintain student_replica (week 4)."""
+    """A student joined a classroom (user service). Sets class_id in student_replica."""
     membership_id: uuid.UUID
     student_id: uuid.UUID
     classroom_id: uuid.UUID
@@ -52,8 +66,22 @@ class StudentAddedToClassroom(ApiModel):
     start_date: date
 
 
+class StudentRemovedFromClassroom(ApiModel):
+    """A student left a classroom (user service). Clears class_id in student_replica."""
+
+    membership_id: uuid.UUID
+    student_id: uuid.UUID
+    classroom_id: uuid.UUID
+    branch_id: uuid.UUID
+    end_date: date
+
+
 PUBLISHED_EVENTS: dict[str, type[ApiModel]] = {
     "ExamResultsPublished": ExamResultsPublished,
     "StudentResultAdded": StudentResultAdded,
 }
-CONSUMED_EVENTS: dict[str, type[ApiModel]] = {"StudentAddedToClassroom": StudentAddedToClassroom}
+CONSUMED_EVENTS: dict[str, type[ApiModel]] = {
+    "UserUpdated": UserUpdated,
+    "StudentAddedToClassroom": StudentAddedToClassroom,
+    "StudentRemovedFromClassroom": StudentRemovedFromClassroom,
+}

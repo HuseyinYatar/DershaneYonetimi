@@ -64,7 +64,7 @@ shared/events/
 | Event | Producer | Consumers | When |
 |---|---|---|---|
 | `StudentAddedToClassroom` | user | exam-analysis, task, attendance | A student joins a classroom |
-| `StudentRemovedFromClassroom` | user | task, attendance | A student leaves a classroom (moved, removed, deactivated) |
+| `StudentRemovedFromClassroom` | user | exam-analysis, task, attendance | A student leaves a classroom (moved, removed, deactivated) |
 | `UserUpdated` | user | notification, exam-analysis | A user is created or changed (full current state) |
 | `GuardianLinked` | user | notification | A guardian is linked to a student, or the relationship changes |
 | `GuardianUnlinked` | user | notification | A guardian link is removed or replaced |

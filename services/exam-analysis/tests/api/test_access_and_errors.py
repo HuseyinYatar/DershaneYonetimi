@@ -123,6 +123,51 @@ def test_matching_rejects_students_of_another_branch(client, actors, catalog, pr
     assert (response.status_code, response.json()["code"]) == (422, "STUDENT_NOT_IN_EXAM_BRANCH")
 
 
+def test_inactive_students_are_not_matched_by_number_or_by_hand(client, actors, catalog, processor) -> None:
+    from sqlalchemy import select
+
+    from app.db import get_session_factory
+    from app.models import StudentReplica, UnmatchedRow
+    from app.models.enums import UnmatchedReason
+
+    departed = uuid.uuid4()
+    with get_session_factory()() as session:
+        session.add(
+            StudentReplica(
+                student_id=departed,
+                student_no="ST0001",
+                branch_id=actors.branch_id,
+                full_name="X",
+                is_active=False,
+            )
+        )
+        session.commit()
+    exam_id = client.post(
+        f"{API}/mock-exams", headers=actors.admin, json=exam_payload(catalog, actors.branch_id)
+    ).json()["id"]
+    client.put(
+        f"{API}/mock-exams/{exam_id}/answer-key", headers=actors.admin, json={"items": catalog.answer_key()}
+    )
+    client.post(
+        f"{API}/mock-exams/{exam_id}/import-jobs",
+        headers=actors.admin,
+        data={"opticalFormatId": str(catalog.optical_format_id)},
+        files={"file": ("f.txt", b"ST0001AABCDEA\n", "text/plain")},
+    )
+    processor.process_next()
+
+    with get_session_factory()() as session:
+        row = session.scalars(select(UnmatchedRow)).one()
+        row_id, reason = row.id, row.reason
+    assert reason == UnmatchedReason.STUDENT_NOT_FOUND
+
+    response = client.post(
+        f"{API}/unmatched-rows/{row_id}/match", headers=actors.admin, json={"studentId": str(departed)}
+    )
+
+    assert (response.status_code, response.json()["code"]) == (422, "STUDENT_INACTIVE")
+
+
 def test_validation_errors_do_not_echo_submitted_values_into_logs(client, actors, caplog) -> None:
     response = client.put(
         f"{API}/admin/student-replicas",
