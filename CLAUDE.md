@@ -55,13 +55,13 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 
 | Servis | Sorumluluk | Dil | Veri | Olaylar |
 |---|---|---|---|---|
-| api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama, CORS | Java (Spring Cloud Gateway); ileride AWS API Gateway olabilir | — | — |
+| api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama, CORS | Java (Spring Cloud Gateway, WebFlux); ileride AWS API Gateway olabilir | Redis (hız sınırı sayaçları) | — |
 | identity | Giriş, token, roller | **Keycloak** | PostgreSQL | — |
 | user | Öğrenci/öğretmen/veli/yönetici profilleri, sınıf, şube, ders kataloğu, veli–öğrenci eşleşmesi; Keycloak hesaplarını açar | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAddedToClassroom`, `StudentRemovedFromClassroom`, `UserUpdated`, `GuardianLinked`, `GuardianUnlinked` |
 | exam-analysis | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `ExamResultsPublished`, `StudentResultAdded`; Dinler: `StudentAddedToClassroom`, `UserUpdated` |
 | messaging | WebSocket sohbet, fotoğraflı soru, okundu bilgisi | Java (Spring Boot) | PostgreSQL, Redis Pub/Sub | Yayınlar: `NewMessage` (alıcı çevrimdışıysa) |
 | task | Görev/ödev atama, tekrarlı görevler, teslim ve değerlendirme | Java (Spring Boot) | PostgreSQL | Yayınlar: `TaskAssigned`, `TaskDueSoon`, `TaskOverdue`, `SubmissionGraded`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
-| attendance | Derse katılım, devamsızlık | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAbsent`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
+| attendance | Öğretmenin web'den aldığı yoklama, devamsızlık, mazeret | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAbsent`, `StudentExcusedByTeacher`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom`, `GuardianLinked`, `GuardianUnlinked` |
 | notification | Olayları dinleyip e-posta, SMS, uygulama içi bildirim gönderir | Python (FastAPI) | PostgreSQL | Dinler: yukarıdaki olaylar (iletişim bilgisi için `UserUpdated`, veli için `GuardianLinked`/`GuardianUnlinked`) |
 | file | Fotoğraf, ödev, materyal yükleme/indirme | Java (Spring Boot) | S3 | — |
 
@@ -99,6 +99,9 @@ Frontend: Next.js (React, TypeScript).
 | Veli | `Guardian` | | Yakinlik | `Relationship` |
 | VeliOgrenci | `StudentGuardian` | | SinavHedefi | `TargetExam` |
 | GidenOlay | `OutboxEvent` | | Rol (YONETICI) | `Role` (ADMIN) |
+| DersProgrami | `ClassSchedule` | | DersOturumu | `ClassSession` |
+| YoklamaKaydi | `AttendanceRecord` | | Mazeret | `Excuse` |
+| SinifUyeligiKopya | `MembershipReplica` | | OturumDurumu / YoklamaDurumu | `SessionStatus` / `AttendanceStatus` |
 
 **Java yığını (tüm Java servisleri):** Spring Boot 4, Java 25, Maven wrapper, Lombok, MapStruct, springdoc-openapi (Swagger UI), Spotless (google-java-format) + Checkstyle, JaCoCo, CycloneDX (SBOM), ArchUnit + Spring Modulith (mimari testleri).
 
@@ -110,7 +113,7 @@ Frontend: Next.js (React, TypeScript).
 
 ### Java servislerinin yapısı (hexagonal)
 
-Tüm Java servisleri (user, task, attendance, messaging, file) aynı iskeleti kullanır: ports & adapters, use case başına arayüz. `services/user` bu yapının şablonudur.
+Tüm Java servisleri (user, task, attendance, messaging, file) aynı iskeleti kullanır: ports & adapters, use case başına arayüz. `services/user` bu yapının şablonudur. **api-gateway bunun dışındadır:** domain'i yoktur, düz paket yapısı kullanır (aşağıdaki "Gateway servisi kuralları"); MapStruct, ArchUnit ve Spring Modulith kullanmaz.
 
 ```
 com.dershane.<servis>
@@ -131,6 +134,16 @@ com.dershane.<servis>
 - **Uygulama içi olaylar** (`UserDeactivated`, Spring `ApplicationEventPublisher`, aynı transaction'da) entegrasyon olaylarından (outbox → SNS) ayrıdır ve servisten dışarı çıkmaz.
 - **Her build'de denetlenir:** `ArchitectureTest` (ArchUnit) katman kurallarını, `ModularityTest` (Spring Modulith) modül sınırlarını ve döngüleri doğrular; modül diyagramlarını `target/spring-modulith-docs` altına yazar (rapor için). Yeni modül `package-info.java`'da `@ApplicationModule(allowedDependencies = ...)` ile izin verilen bağımlılıkları bildirir; başkasının kullandığı paketler `@NamedInterface` ile işaretlenir.
 
+## Gateway servisi kuralları
+
+- **Varyant:** Spring Cloud Gateway **WebFlux** (`spring-cloud-starter-gateway-server-webflux`, ayarlar `spring.cloud.gateway.server.webflux.*`). Gerekçe: hazır Redis `RequestRateLimiter`, YAML ile rota ve CORS, messaging'in WebSocket trafiği için olgun proxy. Düz paket yapısı: `security/`, `web/`, `ratelimit/`.
+- **Yalnızca kimlik doğrular, yetkilendirmez.** Token'ı JWKS ile (imza, issuer, `aud=dershane-api`) doğrular; rollere bakmaz ve **hiçbir kimlik başlığı eklemez**. `Authorization` ve `traceparent` başlıkları servise olduğu gibi gider. `/api/**` dışındaki yollar sunulmaz; yönetim uç noktaları 8081'de, ingress'e kapalıdır.
+- **Rotalar:** Her servis üst düzey kaynak adlarını `Path` listesinde **tek tek** yazar; `/api/v1/**` gibi toptan bir kural yoktur. Yeni servis kendi rotasını ekler, mevcutlara dokunmaz. Yol öneki soyulmaz (servisler zaten `/api/v1/...` sunar). İki servis aynı kaynak adını paylaşacaksa daha özel yol önce gelen rotada yazılır.
+- **Hız sınırı:** Redis tabanlı, kullanıcı başına (`sub`), varsayılan saniyede 20 istek ve en çok 40'lık ani artış; tüm rotalara `default-filters` ile uygulanır. Redis'e ulaşılamazsa sınırlayıcı isteği geçirir (fail-open) ve readiness'a Redis girmez; pod trafikten çıkmaz. Geçiş ancak Redis zaman aşımından sonra olur (`REDIS_TIMEOUT`, varsayılan 500 ms; Lettuce'un 60 sn'lik varsayılanı her isteği bir dakika bekletir). Her başarısız Redis çağrısını Spring Cloud Gateway kendisi ERROR olarak loglar (`RedisRateLimiter`: "Error calling rate limiter lua"); bu uyarı için alarm kurulmalıdır. Sınır aşılırsa 429 döner. Kimliksiz trafik JWT'de reddedildiği için sınırlanmaz.
+- **Hatalar:** Gateway'in kendi ürettiği hatalar (401, 403, 404 rota yok, 429, 503, 504, 500) servislerle aynı RFC 9457 ProblemDetail biçimindedir: `errorCode` + Türkçe `detail` (`Accept-Language: en` → İngilizce). Servislerin kendi hata yanıtlarına dokunulmaz. Bağlantı reddi 503, zaman aşımı 504'tür. Her ret sebebiyle loglanır (WARN; beklenmeyen hata ERROR).
+- **CORS yalnızca burada** yanıtlanır (`CORS_ALLOWED_ORIGINS`). Preflight (`OPTIONS`) token istemez.
+- **Yerelde** gateway `:8000`, yönetim `:8002`dir (`:8001` exam-analysis container'ının); servislere doğrudan erişim sürer ama servis yine JWT ister.
+
 ## User servisi kuralları
 
 - **Hesap açma:** Kullanıcıyı user servisi Keycloak Admin API ile açar; Keycloak'ın `sub` değeri `User.id` olur. Keycloak çağrısı veritabanı transaction'ının dışında yapılır. Veritabanı adımı başarısız olursa Keycloak hesabı silinerek telafi edilir; telafi de başarısız olursa ERROR logu düşülür ve `identity.compensations{outcome=failure}` metriği artar.
@@ -143,6 +156,26 @@ com.dershane.<servis>
 - **Pasife alma:** Kayıtlar silinmez. Kullanıcı pasife alınınca önce Keycloak girişi kapatılır, sonra profil pasif olur; öğrencinin aktif sınıf üyeliği kapanır. Üyelik, `user` modülünün aynı transaction'da yayınladığı `UserDeactivated` olayını `enrollment` dinleyerek kapanır. Aktif sınıfı olan şube, aktif öğrencisi olan sınıf pasife alınamaz. Kullanıcı kendini pasife alamaz.
 - **Görünürlük:** Bir kullanıcıyı kendisi, şubesinin yöneticisi, super-admin, (öğrenciyse) aktif sınıfının öğretmeni ve velisi görebilir.
 - **Öğrenci listesi:** `GET /api/v1/students` sınıfa göre süzülmez (`user` modülü sınıf verisini bilmez). Bir sınıfın öğrencileri `GET /api/v1/classrooms/{id}/students` ile alınır.
+
+## Attendance servisi kuralları
+
+- **Yoklamayı öğretmen web sitesinden alır.** Öğrenci ve veli yalnızca görüntüler. QR, cihaz kaydı/kotası ve mobil uygulama kapsam dışıdır (mobil gelince `method` sütunu ve tarama uç noktaları eklenir); kullanıcı istediği kadar cihazdan girebilir, serviste oturum/cihaz sınırı yoktur.
+- **Oturum:** Durumları `PLANNED → COMPLETED` (yoklama alındı), `CANCELLED` ve `EXPIRED` (oturum günü bitti, yoklama alınmadı: kayıt ve devamsızlık oluşmaz, yöneticiye "yoklama alınmadı" olarak görünür). Haftalık program (`ClassSchedule`) Kubernetes CronJob ile ileri 7 gün oturum üretir (idempotent: `UNIQUE(schedule_id, session_date)`); programsız (telafi/etüt) oturumu yalnızca yönetici açar. Yalnızca `PLANNED` oturum iptal edilir veya yerine giren öğretmene verilir. Aynı sınıfın oturumları çakışamaz; aynı öğretmen aynı anda iki oturum yürütemez (`CANCELLED`/`EXPIRED` sayılmaz); üretimde çakışan gün uyarı loguyla atlanır.
+- **Yoklamayı** oturumun öğretmeni veya şube yöneticisi alır. Öğrenci listesi (roster), oturum tarihinde sınıf üyeliği aktif olanlardır (`startDate ≤ tarih ≤ endDate|∞`).
+- **Tam liste (`POST /class-sessions/{id}/attendance`):** Roster'daki her öğrenci için tam bir kayıt gönderilir (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`). Eksik, fazla veya yinelenen öğrenci `ROSTER_MISMATCH` olur; sunucu hiçbir öğrenciye varsayılan durum atamaz (unutulan öğrenci sessizce "var/yok" olmaz). Gönderimden sonra oturum `COMPLETED` olur; tekrar gönderim `ATTENDANCE_ALREADY_TAKEN` (düzeltme ayrı uç noktayla).
+- **Zaman:** İlk gönderim `başlangıç − 15 dk`'dan (`attendance.session.take-early-minutes`) oturum gününün sonuna (kurum saatiyle 23:59) kadar. Gün bitince CronJob `PLANNED` oturumu `EXPIRED` yapar. `EXPIRED` (veya günü geçmiş) oturuma yalnızca yönetici yoklama alabilir ve gerekçe zorunludur.
+- **Mazeret ve öğretmen izni:** Öğretmen `EXCUSED` da verebilir (öğretmen izni). Öğrenci için o tarihi kapsayan **onaylı mazeret** varsa öğretmenin `ABSENT` veya `EXCUSED` işareti `EXCUSED` olarak `excuse_id` ile saklanır ve bildirim gitmez (veli mazereti zaten kendisi bildirdi); `PRESENT`/`LATE` olduğu gibi kalır. Onaylı mazeret yoksa `EXCUSED` kaydın `excuse_id`'si boş kalır. Canlı listede öğrencinin "mazeretli" bilgisi görünür.
+- **Olaylar** (outbox, yoklama transaction'ında, kaydın **sonuçtaki** haline göre): mazeretsiz `ABSENT` → `StudentAbsent`; `excuse_id` boş `EXCUSED` → `StudentExcusedByTeacher` (veliye ve öğrenciye "öğretmeniniz izin verdi" bildirimi; bildirim metni genel kalır, gerekçe ve öğretmen adı yükte yoktur). `LATE`, `PRESENT` ve onaylı mazeretten türeyen `EXCUSED` için olay yoktur.
+- **Düzeltme (`PUT /class-sessions/{id}/records/{studentId}`):** Tamamlanmış oturumda tek öğrencinin durumunu değiştirir veya (sonradan sınıfa eklenmiş, o tarihte üyeliği aktif öğrenci için) kayıt ekler. Gerekçe zorunlu; her değişiklik `attendance_record_change` tablosuna eski/yeni durumla yazılır (yalnızca ekleme). Öğretmen için süre oturum tarihinden itibaren 7 gün (`attendance.correction-window-days`); sonrası yalnızca yönetici. Olaylar yukarıdaki kuralla **yeni** duruma göre yayınlanır; durum bu iki olaydan birinden başka bir duruma geçerse **geri çekme olayı yoktur** (gitmiş bildirim kalır; `ABSENT` → öğretmen `EXCUSED` geçişinde veli iki bildirim alır).
+- **Kayıtlar silinmez.** Sınıftan çıkan öğrencinin eski kayıtları kalır.
+- **Mazeret akışı:** Veli (yalnızca bağlı olduğu öğrenci için) tarih aralığı ve neden ile mazeret bildirir (`PENDING`); yönetici (kendi şubesinde) onaylar veya reddeder. Karar verilmiş mazeret değiştirilemez. Onay, aralıktaki **tamamlanmış** oturumların `ABSENT` kayıtlarını `EXCUSED` yapar (uygulama içi olay `ExcuseApproved`, aynı transaction, değişiklik kaydı yazılır, entegrasyon olayı yayınlanmaz); gelecek oturumlar yoklama alınırken `EXCUSED` olur.
+- **Görünürlük:** Öğrenci kendi kaydını, veli çocuğunun, öğretmen yürüttüğü oturumların, şube yöneticisi şubesinin, super-admin hepsinin kayıtlarını görür. Yetkilendirme serviste yapılır.
+- **Roster ve veli bağı kopyası:** `StudentAddedToClassroom`/`StudentRemovedFromClassroom` ve `GuardianLinked`/`GuardianUnlinked` olaylarından kendi kopyasını tutar (`MembershipReplica`, `GuardianLinkReplica`). Servisler arası iletişim (4. hafta) gelene kadar bunu yönetici endpoint'i doldurur (`/api/v1/attendance-replicas/...`); SQS tüketicisi aynı use case'lere bağlanacak.
+- **Zamanlanmış işler:** Aynı imaj `--attendance.job=generate-sessions|expire-sessions` ile tek seferlik koşar (web ve outbox yayıncısı yok, bitince çıkar; iş başarısızsa çıkış kodu 0 değildir). İş bulamayan çalışma DEBUG loglar. Helm CronJob manifestleri GitOps haftalarında yazılır.
+- **Yerelde** attendance `:8082`, yönetim `:8083`'tür; veritabanı ve rol `attendance_service`tir.
+- **Modül bağımlılığı** (döngü yok): `schedule` → `session`; `attendance` → `session`, `roster`, `excuse`; `excuse` → `roster`; `job` → `schedule`, `session`; hepsi → `shared`. `excuse` onayı kapanmış kayıtları değiştirmek için attendance'ı çağıramaz; `ExcuseApproved` uygulama içi olayını attendance dinler.
+- **Kapsam dışı (bilinçli):** QR, cihaz kaydı, mobil uygulama, öğrencinin kendi yoklamasını vermesi, konum/Wi-Fi kontrolü, "N devamsızlıkta uyarı", `LATE`'i devamsızlığa çevirme, yöneticinin doğrudan mazeret girmesi, şube bazlı yoklama ayarları (eşikler yml'de), `StudentAbsent`/`StudentExcusedByTeacher` geri çekme olayı, velinin öğretmen iznine itiraz akışı.
+- **Bilinen sınırlar (raporda yazılacak):** Tek doğruluk kaynağı öğretmendir; hileye karşı teknik önlem yoktur, caydırıcı denetim kaydıdır (`marked_by`, `attendance_record_change`). Öğretmen resmi mazeret olmadan `EXCUSED` verebilir; veli ve öğrenci "öğretmen izin verdi" bildirimi alır ama itiraz mekanizması yoktur. Düzeltmeden sonra gitmiş "devamsız"/"izinli" bildirimi geri alınmaz. Sınıf–öğretmen ataması için olay olmadığından oturumun öğretmenini yönetici programda belirler; servis sınıf–öğretmen ilişkisini doğrulamaz.
 
 ## Messaging servisi kuralları
 

@@ -11,3 +11,5 @@ CREATE DATABASE exam_analysis OWNER exam_analysis;
 
 CREATE USER notification WITH PASSWORD 'notification';
 CREATE DATABASE notification OWNER notification;
+CREATE USER attendance_service WITH PASSWORD 'attendance_service';
+CREATE DATABASE attendance_service OWNER attendance_service;

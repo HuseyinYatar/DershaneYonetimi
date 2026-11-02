@@ -76,3 +76,12 @@ aws sns subscribe --topic-arn "$EXAM_TOPIC_ARN" --protocol sqs --notification-en
 
 echo "Queue:  $NOTIF_URL (user-events [filtered] + exam-analysis-events for notification)"
 echo "Queue:  $NOTIF_DLQ_URL (notification dead letters)"
+# attendance: its own topic with an inspection queue. It will consume user events (memberships,
+# guardian links) from a queue of its own in week 4; until then a temporary REST adapter feeds it.
+ATTENDANCE_TOPIC_ARN=$(aws sns create-topic --name attendance-events --query TopicArn --output text)
+ATTENDANCE_INSPECT_URL=$(subscribe "$ATTENDANCE_TOPIC_ARN" local-inspect-attendance-events)
+ATTENDANCE_USER_EVENTS_URL=$(subscribe "$TOPIC_ARN" attendance-user-events)
+
+echo "Topic:  $ATTENDANCE_TOPIC_ARN"
+echo "Queue:  $ATTENDANCE_INSPECT_URL (read it to see published events)"
+echo "Queue:  $ATTENDANCE_USER_EVENTS_URL (user events for attendance)"
