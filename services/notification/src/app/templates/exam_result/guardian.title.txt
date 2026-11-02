@@ -1,0 +1,1 @@
+{{ student_full_name }}: {{ exam_name }} sonucu açıklandı

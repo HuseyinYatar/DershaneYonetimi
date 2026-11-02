@@ -103,7 +103,14 @@ def match_row(  session: Session, user: CurrentUser, row_id: uuid.UUID, student_
     if published:
         # Results were already announced: notify only this student, never re-announce the exam.
         add_event(
-            session, StudentResultAdded(mock_exam_id=exam.id, branch_id=exam.branch_id, student_id=student_id)
+            session,
+            StudentResultAdded(
+                mock_exam_id=exam.id,
+                branch_id=exam.branch_id,
+                student_id=student_id,
+                mock_exam_name=exam.name,
+                exam_date=exam.exam_date,
+            ),
         )
         weak_topic_service.recompute_for_students(session, exam.branch_id, [student_id])
     session.commit()

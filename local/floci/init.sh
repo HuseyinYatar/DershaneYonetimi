@@ -2,7 +2,6 @@
 # Creates the SNS topics, queues and buckets of the services, plus inspection queues for the topics.
 # Will be replaced by Terraform (same resources on Floci and AWS) in the infrastructure weeks.
 set -eu
-
 until aws sns list-topics >/dev/null 2>&1; do
   echo "Waiting for Floci at ${AWS_ENDPOINT_URL}..."
   sleep 1
@@ -44,3 +43,36 @@ echo "Bucket: $BUCKET"
 echo "Topic:  $EXAM_TOPIC_ARN"
 echo "Queue:  $EXAM_INSPECT_URL (read it to see published events)"
 echo "Queue:  $EXAM_USER_EVENTS_URL (user events for exam-analysis)"
+
+# notification: one queue for both topics, with a dead-letter queue. The service only reads and
+# deletes messages; these subscriptions are what bring the events into its queue.
+NOTIF_DLQ_URL=$(aws sqs create-queue --queue-name notification-queue-dlq --query QueueUrl --output text)
+NOTIF_DLQ_ARN=$(aws sqs get-queue-attributes --queue-url "$NOTIF_DLQ_URL" \
+  --attribute-names QueueArn --query Attributes.QueueArn --output text)
+
+# VisibilityTimeout: a received message stays hidden this long; not deleted by then, it comes back.
+# RedrivePolicy: after 5 receives without a delete (invalid or failing message) it moves to the DLQ.
+cat > /tmp/notification-queue.json <<JSON
+{"VisibilityTimeout": "60",
+ "RedrivePolicy": "{\"deadLetterTargetArn\":\"$NOTIF_DLQ_ARN\",\"maxReceiveCount\":\"5\"}"}
+JSON
+NOTIF_URL=$(aws sqs create-queue --queue-name notification-queue \
+  --attributes file:///tmp/notification-queue.json --query QueueUrl --output text)
+NOTIF_ARN=$(aws sqs get-queue-attributes --queue-url "$NOTIF_URL" \
+  --attribute-names QueueArn --query Attributes.QueueArn --output text)
+
+# Subscription 1: user-events, filtered on the eventType message attribute. StudentAddedToClassroom
+# and the other user events never reach this queue.
+cat > /tmp/notification-user-subscription.json <<'JSON'
+{"RawMessageDelivery": "true",
+ "FilterPolicy": "{\"eventType\":[\"UserUpdated\",\"GuardianLinked\",\"GuardianUnlinked\"]}"}
+JSON
+aws sns subscribe --topic-arn "$TOPIC_ARN" --protocol sqs --notification-endpoint "$NOTIF_ARN" \
+  --attributes file:///tmp/notification-user-subscription.json >/dev/null
+
+# Subscription 2: exam-analysis-events, no filter (both of its events are needed).
+aws sns subscribe --topic-arn "$EXAM_TOPIC_ARN" --protocol sqs --notification-endpoint "$NOTIF_ARN" \
+  --attributes RawMessageDelivery=true >/dev/null
+
+echo "Queue:  $NOTIF_URL (user-events [filtered] + exam-analysis-events for notification)"
+echo "Queue:  $NOTIF_DLQ_URL (notification dead letters)"

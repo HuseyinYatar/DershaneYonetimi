@@ -153,6 +153,16 @@ com.dershane.<servis>
 - **Düzenleme ve silme.** `duzenlenme` kullanıcıya "düzenlendi" göstermek içindir. `guncellenmeZamani` ise düzenleme veya silme dahil her değişiklikte güncellenir ve önbelleği eşitlemek için kullanılır. Silinen mesaj önbellekten de kaldırılır.
 - **KVKK ve önbellek.** Çıkış yapılınca önbellek silinir. Fotoğraflar önbelleğe alınmaz, her seferinde `file` servisinden istenir. Mesaj içeriği hiçbir logda geçmez.
 
+## Notification servisi kuralları
+
+- **Kuyruk:** `notification-queue`, `user-events` (filtre: `UserUpdated`, `GuardianLinked`, `GuardianUnlinked`) ve `exam-analysis-events` (filtresiz) topic'lerine abonedir; 5 başarısız teslimden sonra mesaj `notification-queue-dlq`'ya gider. Kuyruğu ve abonelikleri yerelde `local/floci/init.sh`, AWS'de Terraform açar; servis yalnızca mesaj okur ve siler. Kuyruk adıyla bulunur (`SQS_QUEUE_NAME`).
+- **Tüketme:** Mesaj başına tek transaction: zarf doğrulama → `processed_event` (tekrar gelen olay atlanır) → handler → commit → mesajı silme. Geçersiz veya hata veren mesaj silinmez, DLQ'ya düşer.
+- **Yerel kopyalar:** `contact_replica` (`UserUpdated`, eski `recordVersion` yok sayılır) ve `guardian_link_replica` (öğrenci başına tek veli; `GuardianUnlinked` yalnızca veli eşleşirse siler) yalnızca olaylarla değişir. Servis başka bir servise REST isteği atmaz.
+- **Alıcılar:** Olaydaki öğrenciler (`studentIds`) ve velileri. Sınava girenler tablosu tutulmaz. Kopyada olmayan alıcı WARN ile atlanır, olayın geri kalanı işlenir. Pasif kullanıcıya bildirim yazılmaz.
+- **Kanallar:** `IN_APP` her zaman yazılır (`SENT`) ve kapatılamaz. `EMAIL` ve `SMS` adres varsa ve kullanıcı kapatmadıysa `PENDING` yazılır. `notification_preference`'ta yalnızca kapatılan kanallar satır olur; `StudentResultAdded`, `ExamResultsPublished` tercihini kullanır.
+- **Gönderim:** Worker aynı döngüde önce tüketir, sonra bekleyenleri gönderir (`FOR UPDATE SKIP LOCKED`). Adres gönderim anında kopyadan okunur. Geçici hata 1, 5, 15, 60 dakika sonra tekrar denenir; kalıcı hata veya 5. deneme `FAILED`. E-posta SMTP ile gider: yerelde Mailpit, AWS'de SES SMTP ucu. SMS için sağlayıcı yok; `LoggingSmsSender` gönderim yapmaz.
+- **Metinler:** Türkçe Jinja2 dosyaları `src/app/templates/` altında (tablo yok, `StrictUndefined`). Metinde puan ve net yazmaz, yalnızca bağlantı verilir. Adres, ad ve metin loglanmaz.
+
 ## Exam-analysis servisi kuralları
 
 - Her deneme için soru → ders → konu → doğru cevap eşleştirmesi (cevap anahtarı) önceden yüklenir. Konular müfredata göre sabit bir katalogdan seçilir.
