@@ -1,0 +1,31 @@
+name: python-service
+
+# Reusable: Ruff lint, pytest with coverage. Database tests use Testcontainers (Docker is on the runner).
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/${{ inputs.service }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: services/${{ inputs.service }}/uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run pytest --cov=app --cov-report=term --cov-report=xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ inputs.service }}-reports
+          path: services/${{ inputs.service }}/coverage.xml
