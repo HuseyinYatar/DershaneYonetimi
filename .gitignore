@@ -21,6 +21,11 @@ Thumbs.db
 *.local.env
 local/data/
 
+# Terraform (the lock file is committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+
 # Python
 .venv/
 __pycache__/

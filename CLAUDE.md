@@ -230,9 +230,10 @@ dershane-app/
 ├── services/<servis-adi>/     her servis kendi Dockerfile'ı ve testleriyle
 ├── frontend/
 ├── shared/events/             olay şemaları (JSON Schema) ve kuralları
-├── infra/terraform/           AWS ve Floci altyapısı
+├── infra/terraform/           AWS ve Floci altyapısı: tek kök modül, `modules/events` (SNS/SQS),
+│                              ortam farkları `environments/*.tfvars`'ta. Yerelde `floci-init` uygular
 ├── local/                     yerel ortam: docker-compose.yml (PostgreSQL, Keycloak, Floci,
-│                              Mailpit), keycloak/ realm tanımı, postgres/ ve floci/ init betikleri
+│                              Mailpit), keycloak/ realm tanımı, postgres/ init betiği
 └── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar
 
 dershane-gitops/               ArgoCD bu depoyu izler

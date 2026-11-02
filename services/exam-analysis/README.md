@@ -20,7 +20,7 @@ uv run uvicorn app.main:create_app --factory --reload      # API on :8000, docs 
 uv run python -m app.worker                                # import worker + outbox relay
 ```
 
-`floci-init` (`local/floci/init.sh`) creates the bucket, the `exam-analysis-events` topic and the
+`floci-init` (Terraform, `infra/terraform`) creates the bucket, the `exam-analysis-events` topic and the
 `exam-analysis-user-events` queue, so `.env.example` can name the topic ARN directly. The service
 can also run in containers: `docker compose -f ../../local/docker-compose.yml --profile services up -d`
 (API on :8001).

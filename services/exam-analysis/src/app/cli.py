@@ -3,8 +3,8 @@
 seed-catalog [PATH]     load exam types, subjects, topics, score types and optical formats (idempotent)
 seed-students PATH      load the local student copy from a JSON list (development only)
 
-AWS resources (bucket, topic, queues) are infrastructure: local/floci/init.sh creates them in Floci,
-Terraform on AWS.
+AWS resources (bucket, topic, queues) are infrastructure: infra/terraform creates them, in Floci
+locally and on AWS.
 """
 
 import argparse
