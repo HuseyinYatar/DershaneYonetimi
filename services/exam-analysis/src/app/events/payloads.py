@@ -27,6 +27,9 @@ class ExamResultsPublished(ApiModel):
     branch_id: uuid.UUID
     exam_type_code: str
     student_ids: list[uuid.UUID] = Field(min_length=1)
+    # Shown in the notification texts (notification service).
+    mock_exam_name: str | None = None
+    exam_date: date | None = None
 
 
 class StudentResultAdded(ApiModel):
@@ -34,6 +37,8 @@ class StudentResultAdded(ApiModel):
     mock_exam_id: uuid.UUID
     branch_id: uuid.UUID
     student_id: uuid.UUID
+    mock_exam_name: str | None = None
+    exam_date: date | None = None
 
 
 class StudentAddedToClassroom(ApiModel):

@@ -99,6 +99,8 @@ def publish(session: Session, user: CurrentUser, mock_exam_id: uuid.UUID, cache:
             branch_id=exam.branch_id,
             exam_type_code=exam_type.code,
             student_ids=student_ids,
+            mock_exam_name=exam.name,
+            exam_date=exam.exam_date,
         ),
     )
     weak_topic_service.recompute_for_students(session, exam.branch_id, student_ids)

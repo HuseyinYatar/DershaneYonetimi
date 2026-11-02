@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
 
+
 # it is used for db connection
 @lru_cache
 def get_engine() -> Engine:

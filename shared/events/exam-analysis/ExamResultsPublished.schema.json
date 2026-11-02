@@ -15,7 +15,12 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/uuid" }
-    }
+    },
+    "mockExamName": {
+      "description": "Name of the mock exam, shown in notification texts. Optional, added later (schemaVersion unchanged).",
+      "type": ["string", "null"], "minLength": 1, "maxLength": 200
+    },
+    "examDate": { "description": "Date the exam was taken. Optional.", "type": ["string", "null"], "format": "date" }
   },
   "$defs": {
     "uuid": {

@@ -1,0 +1,4 @@
+Merhaba {{ recipient_first_name }},
+
+{{ exam_name }}{% if exam_date %} ({{ exam_date }}){% endif %} sonucun açıklandı. Netlerini ve konu analizini görmek için:
+{{ link }}

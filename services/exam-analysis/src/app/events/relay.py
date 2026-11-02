@@ -36,6 +36,7 @@ class OutboxRelay:
             ).all()
             for event in events:
                 try:
+                    # mesajin kuyruga gönderilmesi burada gerçekleşiyor.
                     self._publisher.publish(event.envelope, event.traceparent)
                 except Exception as exc:  # broker errors vary by adapter; every failure is recorded
                     event.attempts += 1

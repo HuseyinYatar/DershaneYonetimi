@@ -186,6 +186,8 @@ class TestEventContracts:
                 branch_id=uuid.uuid4(),
                 exam_type_code="TYT",
                 student_ids=[uuid.uuid4()],
+                mock_exam_name="TYT Deneme 3",
+                exam_date=date(2026, 10, 12),
             )
         )
 
