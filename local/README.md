@@ -1,7 +1,7 @@
 # Yerel geliştirme ortamı
 
 AWS servisleri Floci ile, kimlik Keycloak ile yerelde çalışır. Gereken: Docker; user ve attendance için JDK 25,
-exam-analysis için Python 3.12+ ve [uv](https://docs.astral.sh/uv/).
+exam-analysis için Python 3.14+ ve [uv](https://docs.astral.sh/uv/).
 
 ## Başlatma
 

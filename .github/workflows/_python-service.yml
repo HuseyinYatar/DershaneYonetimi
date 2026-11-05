@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           enable-cache: true
           cache-dependency-glob: services/${{ inputs.service }}/uv.lock
       - run: uv sync --frozen

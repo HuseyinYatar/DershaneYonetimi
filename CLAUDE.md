@@ -63,7 +63,7 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 | task | Görev/ödev atama, tekrarlı görevler, teslim ve değerlendirme | Java (Spring Boot) | PostgreSQL | Yayınlar: `TaskAssigned`, `TaskDueSoon`, `TaskOverdue`, `SubmissionGraded`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
 | attendance | Öğretmenin web'den aldığı yoklama, devamsızlık, mazeret | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAbsent`, `StudentExcusedByTeacher`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom`, `GuardianLinked`, `GuardianUnlinked` |
 | notification | Olayları dinleyip e-posta, SMS, uygulama içi bildirim gönderir | Python (FastAPI) | PostgreSQL | Dinler: yukarıdaki olaylar (iletişim bilgisi için `UserUpdated`, veli için `GuardianLinked`/`GuardianUnlinked`) |
-| file | Fotoğraf, ödev, materyal yükleme/indirme | Java (Spring Boot) | S3 | — |
+| file | Fotoğraf, ödev, materyal yükleme/indirme | Python | S3 | — |
 
 Frontend: Next.js (React, TypeScript).
 
@@ -111,9 +111,11 @@ Frontend: Next.js (React, TypeScript).
 - Swagger UI yalnızca `local` ve `dev` profillerinde açıktır. Swagger, Keycloak'a `dershane-swagger` istemcisiyle (PKCE) bağlanır.
 - Oluşturma yapan POST uç noktaları isteğe bağlı `Idempotency-Key` başlığını destekler: aynı anahtar ve gövdeyle gelen tekrar istek ilk yanıtı döner, yeni kayıt açmaz.
 
+**Python yığını (tüm Python servisleri):** Python 3.14, uv, FastAPI, SQLAlchemy 2, Alembic, Ruff, pytest. Sürüm `.python-version`, `pyproject.toml`, `Dockerfile` ve `_python-service.yml`'de aynı tutulur; yama sürümü yazılmaz (`3.14.7` değil `3.14`), yamalar kendiliğinden gelir.
+
 ### Java servislerinin yapısı (hexagonal)
 
-Tüm Java servisleri (user, task, attendance, messaging, file) aynı iskeleti kullanır: ports & adapters, use case başına arayüz. `services/user` bu yapının şablonudur. **api-gateway bunun dışındadır:** domain'i yoktur, düz paket yapısı kullanır (aşağıdaki "Gateway servisi kuralları"); MapStruct, ArchUnit ve Spring Modulith kullanmaz.
+Tüm Java servisleri (user, task, attendance, messaging) aynı iskeleti kullanır: ports & adapters, use case başına arayüz. `services/user` bu yapının şablonudur. **api-gateway bunun dışındadır:** domain'i yoktur, düz paket yapısı kullanır (aşağıdaki "Gateway servisi kuralları"); MapStruct, ArchUnit ve Spring Modulith kullanmaz.
 
 ```
 com.dershane.<servis>

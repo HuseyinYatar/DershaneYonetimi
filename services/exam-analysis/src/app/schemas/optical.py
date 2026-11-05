@@ -56,7 +56,7 @@ class OpticalFieldDefinition(BaseModel):
         return value.upper()
 
     @model_validator(mode="after")
-    def _single_char_booklet(self) -> "OpticalFieldDefinition":
+    def _single_char_booklet(self) -> OpticalFieldDefinition:
         if self.booklet is not None and self.booklet.length != 1:
             raise ValueError("booklet field must be exactly one character wide")
         return self
