@@ -86,6 +86,10 @@ public final class EventQueue {
     return sns;
   }
 
+  public String queueName() {
+    return queueUrl.substring(queueUrl.lastIndexOf('/') + 1);
+  }
+
   /** Polls until {@code count} messages arrived or the timeout passed. */
   public List<Received> receive(int count, Duration timeout) {
     List<Received> received = new ArrayList<>();

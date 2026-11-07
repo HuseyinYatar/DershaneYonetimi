@@ -18,14 +18,16 @@ public class AttendanceServiceApplication {
 
   /**
    * Started with {@code --attendance.job=<name>} (a Kubernetes CronJob of the same image), the
-   * application runs that one job without a web server or outbox publisher and exits.
+   * application runs that one job without a web server, outbox publisher or event consumer and
+   * exits.
    */
   public static void main(String[] args) {
     SpringApplication application = new SpringApplication(AttendanceServiceApplication.class);
     boolean jobRun = Arrays.stream(args).anyMatch(arg -> arg.startsWith(JOB_ARGUMENT_PREFIX));
     if (jobRun) {
       application.setWebApplicationType(WebApplicationType.NONE);
-      application.setDefaultProperties(Map.of("attendance.outbox.enabled", "false"));
+      application.setDefaultProperties(
+          Map.of("attendance.outbox.enabled", "false", "attendance.inbox.enabled", "false"));
     }
     ConfigurableApplicationContext context = application.run(args);
     if (jobRun) {

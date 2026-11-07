@@ -113,6 +113,10 @@
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sns</artifactId>
     </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sqs</artifactId>
+    </dependency>
 
     <!-- API documentation -->
     <dependency>
@@ -180,11 +184,6 @@
       <groupId>io.floci</groupId>
       <artifactId>testcontainers-floci</artifactId>
       <version>${testcontainers-floci.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>software.amazon.awssdk</groupId>
-      <artifactId>sqs</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

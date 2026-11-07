@@ -68,6 +68,7 @@ class AttendanceServiceIT {
     registry.add("spring.datasource.url", () -> TestContainers.postgres().getJdbcUrl());
     registry.add("spring.datasource.username", () -> TestContainers.postgres().getUsername());
     registry.add("spring.datasource.password", () -> TestContainers.postgres().getPassword());
+    registry.add("attendance.inbox.enabled", () -> "false");
     registry.add("attendance.aws.region", () -> TestContainers.REGION);
     registry.add("attendance.aws.endpoint-url", () -> TestContainers.floci().getEndpoint());
     registry.add(
