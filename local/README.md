@@ -89,9 +89,8 @@ cd services/task
 
 Yerel profil `db/local/R__local_seed.sql` ile `local/dev-students.json`'daki üç öğrencinin sınıf üyeliğini
 ekler (sınıf `22222222-2222-4222-8222-222222222222`); üyelik ve veli bağı kopyaları normalde
-`task-user-events` kuyruğundan dolar, eski kayıtlar için yönetici
-`PUT /api/v1/task-replicas/memberships/{id}` ve `/guardian-links/{studentId}` kullanılabilir. Tekrarlı
-görevlerin günlük atamaları ve gecikme/hatırlatma işlemi CronJob ile yapılır; yerelde aynı imaj tek
+`task-user-events` kuyruğundan dolar; elle doldurma endpoint'i yoktur. Yerelde yeni öğrenci, sınıf ve
+veli user servisinden (`:8080`) açılır. Tekrarlı görevlerin günlük atamaları ve gecikme/hatırlatma işlemi CronJob ile yapılır; yerelde aynı imaj tek
 seferlik çalıştırılır:
 
 ```bash

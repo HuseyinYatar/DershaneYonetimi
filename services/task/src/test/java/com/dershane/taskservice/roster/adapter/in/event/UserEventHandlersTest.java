@@ -1,7 +1,6 @@
 package com.dershane.taskservice.roster.adapter.in.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.verify;
 
 import com.dershane.taskservice.roster.application.port.in.LinkGuardianUseCase;
@@ -9,6 +8,7 @@ import com.dershane.taskservice.roster.application.port.in.RecordMembershipAdded
 import com.dershane.taskservice.roster.application.port.in.RecordMembershipAddedUseCase;
 import com.dershane.taskservice.roster.application.port.in.RecordMembershipRemovedUseCase;
 import com.dershane.taskservice.roster.application.port.in.UnlinkGuardianUseCase;
+import com.dershane.taskservice.shared.adapter.in.event.EventHandler;
 import com.dershane.taskservice.shared.application.Actor;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,11 +29,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
-class UserEventHandlerTest {
+class UserEventHandlersTest {
 
   /** Tests run with the module directory (services/task) as working directory. */
   private static final Path USER_EVENTS_DIR = Path.of("..", "..", "shared", "events", "user");
@@ -75,15 +75,24 @@ class UserEventHandlerTest {
   @Mock private UnlinkGuardianUseCase unlinkGuardian;
 
   private final JsonMapper json = JsonMapper.builder().build();
-  private UserEventHandler handler;
+  private List<EventHandler> handlers;
 
   @BeforeEach
   void setUp() {
-    handler = new UserEventHandler(recordAdded, recordRemoved, linkGuardian, unlinkGuardian, json);
+    handlers =
+        List.of(
+            new StudentAddedToClassroomHandler(recordAdded, json),
+            new StudentRemovedFromClassroomHandler(recordRemoved, json),
+            new GuardianLinkedHandler(linkGuardian, json),
+            new GuardianUnlinkedHandler(unlinkGuardian, json));
   }
 
   private void handle(String eventType) {
-    handler.handle(eventType, json.readTree(SAMPLES.get(eventType)));
+    handlers.stream()
+        .filter(handler -> handler.eventType().equals(eventType))
+        .findFirst()
+        .orElseThrow()
+        .handle(eventType, json.readTree(SAMPLES.get(eventType)));
   }
 
   @Test
@@ -128,17 +137,9 @@ class UserEventHandlerTest {
   }
 
   @Test
-  void anUnsupportedEventTypeIsRejected() {
-    JsonNode data = json.readTree("{}");
-
-    assertThatIllegalArgumentException()
-        .isThrownBy(() -> handler.handle("UserUpdated", data))
-        .withMessageContaining("UserUpdated");
-  }
-
-  @Test
   void handlesExactlyTheSampledEventTypes() {
-    assertThat(handler.eventTypes()).containsExactlyInAnyOrderElementsOf(SAMPLES.keySet());
+    assertThat(handlers.stream().map(EventHandler::eventType))
+        .containsExactlyInAnyOrderElementsOf(SAMPLES.keySet());
   }
 
   /**

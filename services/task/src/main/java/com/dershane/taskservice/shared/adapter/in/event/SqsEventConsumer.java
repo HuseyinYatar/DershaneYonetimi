@@ -80,10 +80,9 @@ public class SqsEventConsumer implements SmartLifecycle {
     this.propagator = propagator;
     Map<String, EventHandler> byType = new HashMap<>();
     for (EventHandler handler : handlers) {
-      for (String eventType : handler.eventTypes()) {
-        if (byType.putIfAbsent(eventType, handler) != null) {
-          throw new IllegalStateException("More than one handler for event type " + eventType);
-        }
+      if (byType.putIfAbsent(handler.eventType(), handler) != null) {
+        throw new IllegalStateException(
+            "More than one handler for event type " + handler.eventType());
       }
     }
     this.handlers = Map.copyOf(byType);

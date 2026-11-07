@@ -5,9 +5,6 @@ import java.util.UUID;
 
 public interface UnlinkGuardianUseCase {
 
-  /** Removes the student's guardian link; same access as {@link LinkGuardianUseCase}. */
-  void unlink(Actor actor, UUID studentId);
-
   /**
    * Removes the link only while the student is still linked to {@code guardianId}. An event about a
    * guardian who was already replaced changes nothing.

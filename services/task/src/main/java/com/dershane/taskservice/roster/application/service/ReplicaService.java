@@ -132,21 +132,6 @@ class ReplicaService
   @Override
   @Transactional
   @Observed(name = "roster.guardian.unlink")
-  public void unlink(Actor actor, UUID studentId) {
-    requireBranchAdminOfStudent(actor, studentId, "roster.guardian.unlink");
-    if (loadLinks.findByStudentId(studentId).isEmpty()) {
-      log.atDebug()
-          .addKeyValue("studentId", studentId)
-          .log("Student has no guardian link; repeated event ignored");
-      return;
-    }
-    saveLinks.deleteByStudentId(studentId);
-    log.atInfo().addKeyValue("studentId", studentId).log("Guardian link removed");
-  }
-
-  @Override
-  @Transactional
-  @Observed(name = "roster.guardian.unlink")
   public void unlink(Actor actor, UUID studentId, UUID guardianId) {
     requireBranchAdminOfStudent(actor, studentId, "roster.guardian.unlink");
     Optional<GuardianLinkReplica> existing = loadLinks.findByStudentId(studentId);

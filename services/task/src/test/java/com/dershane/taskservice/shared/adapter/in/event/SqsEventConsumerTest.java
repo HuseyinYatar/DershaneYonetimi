@@ -16,7 +16,6 @@ import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
 import java.time.Duration;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,7 +58,7 @@ class SqsEventConsumerTest {
 
   @BeforeEach
   void setUp() {
-    when(handler.eventTypes()).thenReturn(Set.of(TYPE));
+    when(handler.eventType()).thenReturn(TYPE);
     consumer = newConsumer(List.of(handler));
   }
 
@@ -174,7 +173,7 @@ class SqsEventConsumerTest {
   @Test
   void refusesTwoHandlersForOneEventType() {
     EventHandler other = org.mockito.Mockito.mock(EventHandler.class);
-    when(other.eventTypes()).thenReturn(Set.of(TYPE));
+    when(other.eventType()).thenReturn(TYPE);
 
     assertThatIllegalStateException()
         .isThrownBy(() -> newConsumer(List.of(handler, other)))
