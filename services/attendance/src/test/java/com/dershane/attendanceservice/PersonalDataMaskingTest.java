@@ -21,7 +21,6 @@ import com.dershane.attendanceservice.excuse.application.port.in.ExcuseView;
 import com.dershane.attendanceservice.excuse.application.port.in.RequestExcuseCommand;
 import com.dershane.attendanceservice.excuse.domain.Excuse;
 import com.dershane.attendanceservice.excuse.domain.ExcuseStatus;
-import com.dershane.attendanceservice.roster.adapter.in.web.dto.MembershipReplicaRequest;
 import com.dershane.attendanceservice.roster.application.port.in.RecordMembershipAddedCommand;
 import com.dershane.attendanceservice.roster.application.port.in.RosterEntryView;
 import com.dershane.attendanceservice.roster.domain.MembershipReplica;
@@ -59,7 +58,6 @@ class PersonalDataMaskingTest {
     assertMasked(new RosterRowResponse(id, NUMBER, NAME, AttendanceStatus.PRESENT, false, null));
     assertMasked(MembershipReplica.open(id, id, id, id, day, NUMBER, NAME));
     assertMasked(new RecordMembershipAddedCommand(id, id, id, id, NUMBER, NAME, day));
-    assertMasked(new MembershipReplicaRequest(id, id, id, NUMBER, NAME, day));
   }
 
   @Test

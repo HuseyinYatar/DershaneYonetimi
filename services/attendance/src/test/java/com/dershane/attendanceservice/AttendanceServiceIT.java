@@ -124,52 +124,41 @@ class AttendanceServiceIT {
 
   @Test
   @Order(1)
-  void adminFeedsTheLocalCopiesOfMembershipsAndGuardianLinks() {
+  void theLocalCopiesOfMembershipsAndGuardianLinksAreInPlace() {
+    // Normally filled from the user service's events (see UserEventsInboxIT).
     int number = 0;
     for (UUID student : List.of(ali, ayse, can)) {
       number++;
-      ResponseEntity<JsonNode> response =
-          call(
-              "PUT",
-              "/api/v1/attendance-replicas/memberships/" + UUID.randomUUID(),
-              admin(),
-              Map.of(
-                  "studentId",
-                  student,
-                  "classroomId",
-                  classroomId,
-                  "branchId",
-                  branchId,
-                  "studentNumber",
-                  "ST" + number,
-                  "fullName",
-                  "Student " + number,
-                  "startDate",
-                  today.minusDays(30).toString()),
-              null);
-      assertThat(response.getStatusCode().value()).isEqualTo(204);
+      jdbc.update(
+          """
+          insert into membership_replica (id, classroom_id, student_id, branch_id, start_date,
+                                          student_number, full_name,
+                                          created_at, updated_at, version)
+          values (?, ?, ?, ?, ?, ?, ?, now(), now(), 0)
+          """,
+          UUID.randomUUID(),
+          classroomId,
+          student,
+          branchId,
+          today.minusDays(30),
+          "ST" + number,
+          "Student " + number);
     }
-    assertThat(
-            call(
-                    "PUT",
-                    "/api/v1/attendance-replicas/guardian-links/" + ayse,
-                    admin(),
-                    Map.of("guardianId", aysesGuardian),
-                    null)
-                .getStatusCode()
-                .value())
-        .isEqualTo(204);
-    assertThat(
-            call(
-                    "PUT",
-                    "/api/v1/attendance-replicas/guardian-links/" + ali,
-                    teacher(),
-                    Map.of("guardianId", alisGuardian),
-                    null)
-                .getStatusCode()
-                .value())
-        .as("a teacher may not feed the copies")
-        .isEqualTo(403);
+    linkGuardian(ayse, aysesGuardian);
+
+    assertThat(jdbc.queryForObject("select count(*) from membership_replica", Long.class))
+        .isEqualTo(3L);
+  }
+
+  private void linkGuardian(UUID student, UUID guardian) {
+    jdbc.update(
+        """
+        insert into guardian_link_replica (student_id, guardian_id, created_at, updated_at, version)
+        values (?, ?, now(), now(), 0)
+        on conflict (student_id) do update set guardian_id = excluded.guardian_id
+        """,
+        student,
+        guardian);
   }
 
   @Test
@@ -392,12 +381,7 @@ class AttendanceServiceIT {
   @Test
   @Order(9)
   void aLaterApprovedExcuseTurnsARecordedAbsenceIntoExcusedWithoutAnEvent() {
-    call(
-        "PUT",
-        "/api/v1/attendance-replicas/guardian-links/" + ali,
-        admin(),
-        Map.of("guardianId", alisGuardian),
-        null);
+    linkGuardian(ali, alisGuardian);
     UUID excuseId =
         UUID.fromString(
             call(

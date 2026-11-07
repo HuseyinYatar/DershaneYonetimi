@@ -167,19 +167,6 @@ class ReplicaServiceTest {
   }
 
   @Test
-  void unlinkingDeletesTheLinkOnlyWhenThereIsOne() {
-    when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
-    when(loadLinks.findByStudentId(studentId))
-        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, guardianId)))
-        .thenReturn(Optional.empty());
-
-    service.unlink(admin, studentId);
-    service.unlink(admin, studentId);
-
-    verify(saveLinks, org.mockito.Mockito.times(1)).deleteByStudentId(studentId);
-  }
-
-  @Test
   void unlinkingANamedGuardianRemovesTheLinkWhileItIsTheirs() {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
     when(loadLinks.findByStudentId(studentId))
