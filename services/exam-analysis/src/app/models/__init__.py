@@ -4,6 +4,7 @@ from app.models.catalog import ExamType, OpticalFormat, ScoreType, ScoreTypeWeig
 from app.models.exam import AnswerKeyItem, MockExam
 from app.models.imports import ImportJob, UnmatchedRow
 from app.models.outbox import OutboxEvent
+from app.models.processed_event import ProcessedEvent
 from app.models.replica import StudentReplica
 from app.models.results import StudentAnswer, StudentResult, StudentScore, SubjectResult, TopicResult
 
@@ -16,6 +17,7 @@ __all__ = [
     "MockExam",
     "OpticalFormat",
     "OutboxEvent",
+    "ProcessedEvent",
     "ScoreType",
     "ScoreTypeWeight",
     "StudentAnswer",

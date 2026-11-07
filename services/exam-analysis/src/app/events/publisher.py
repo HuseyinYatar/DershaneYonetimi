@@ -13,7 +13,6 @@ class SnsEventPublisher:
     Message attributes: eventType, which subscriptions filter on, and traceparent, which carries the
     producer's trace to consumers (shared/events/README.md).
     """
-
     def __init__(self, sns_client: Any, topic_arn: str) -> None:
         self._client = sns_client
         self._topic_arn = topic_arn

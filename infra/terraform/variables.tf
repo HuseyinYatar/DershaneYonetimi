@@ -21,11 +21,11 @@ variable "topics" {
 }
 
 variable "subscriptions" {
-  description = "Consumer queues, keyed by queue name. Empty event_types means no filtering."
-  type = map(object({
+  description = "Consumer queues, keyed by queue name; each lists the topics it listens to. Empty event_types means no filtering."
+  type = map(list(object({
     topic       = string
     event_types = optional(list(string), [])
-  }))
+  })))
 }
 
 variable "buckets" {

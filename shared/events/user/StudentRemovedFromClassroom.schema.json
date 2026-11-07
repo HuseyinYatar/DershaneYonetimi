@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dershane.local/events/user/StudentRemovedFromClassroom.schema.json",
   "title": "StudentRemovedFromClassroom (schemaVersion 1)",
-  "description": "A student left a classroom (moved to another one, removed, or deactivated). When moving, it is published before the StudentAddedToClassroom of the new classroom. Consumers: task, attendance.",
+  "description": "A student left a classroom (moved to another one, removed, or deactivated). When moving, it is published before the StudentAddedToClassroom of the new classroom. Consumers: exam-analysis, task, attendance.",
   "type": "object",
   "additionalProperties": false,
   "required": ["membershipId", "studentId", "classroomId", "branchId", "endDate"],
