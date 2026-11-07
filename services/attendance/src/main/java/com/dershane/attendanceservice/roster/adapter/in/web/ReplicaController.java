@@ -27,10 +27,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Temporary adapter: an admin feeds the copies of memberships and guardian links by hand. It goes
- * away when the SQS consumer for the user service's events calls the same use cases.
+ * Manual path next to the SQS consumer ({@code EventHandler} implementations): an admin feeds or
+ * repairs the copies of memberships and guardian links by hand, e.g. for data created before the
+ * queue existed.
  */
-@Tag(name = "Replicas (temporary)")
+@Tag(name = "Replicas (manual)")
 @RestController
 @RequestMapping("/api/v1/attendance-replicas")
 @RequiredArgsConstructor

@@ -130,6 +130,32 @@ class ReplicaService
     log.atInfo().addKeyValue("studentId", studentId).log("Guardian link removed");
   }
 
+  @Override
+  @Transactional
+  @Observed(name = "roster.guardian.unlink")
+  public void unlink(Actor actor, UUID studentId, UUID guardianId) {
+    requireBranchAdminOfStudent(actor, studentId, "roster.guardian.unlink");
+    Optional<GuardianLinkReplica> existing = loadLinks.findByStudentId(studentId);
+    if (existing.isEmpty()) {
+      log.atDebug()
+          .addKeyValue("studentId", studentId)
+          .log("Student has no guardian link; repeated event ignored");
+      return;
+    }
+    if (!existing.get().getGuardianId().equals(guardianId)) {
+      log.atInfo()
+          .addKeyValue("studentId", studentId)
+          .addKeyValue("guardianId", guardianId)
+          .log("Student is linked to another guardian; stale unlink ignored");
+      return;
+    }
+    saveLinks.deleteByStudentId(studentId);
+    log.atInfo()
+        .addKeyValue("studentId", studentId)
+        .addKeyValue("guardianId", guardianId)
+        .log("Guardian link removed");
+  }
+
   /** A student's branch is known from their membership; without one only super admins may act. */
   private void requireBranchAdminOfStudent(Actor actor, UUID studentId, String action) {
     Optional<UUID> branchId = loadMemberships.findBranchIdOfStudent(studentId);

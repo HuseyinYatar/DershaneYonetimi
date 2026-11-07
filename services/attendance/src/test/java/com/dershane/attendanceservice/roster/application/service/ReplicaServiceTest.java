@@ -179,6 +179,38 @@ class ReplicaServiceTest {
     verify(saveLinks, org.mockito.Mockito.times(1)).deleteByStudentId(studentId);
   }
 
+  @Test
+  void unlinkingANamedGuardianRemovesTheLinkWhileItIsTheirs() {
+    when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
+    when(loadLinks.findByStudentId(studentId))
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, guardianId)));
+
+    service.unlink(admin, studentId, guardianId);
+
+    verify(saveLinks).deleteByStudentId(studentId);
+  }
+
+  @Test
+  void aStaleUnlinkOfAReplacedGuardianKeepsTheNewLink() {
+    when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
+    when(loadLinks.findByStudentId(studentId))
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, UUID.randomUUID())));
+
+    service.unlink(admin, studentId, guardianId);
+
+    verify(saveLinks, never()).deleteByStudentId(any());
+  }
+
+  @Test
+  void unlinkingANamedGuardianOfAStudentWithoutALinkChangesNothing() {
+    when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
+    when(loadLinks.findByStudentId(studentId)).thenReturn(Optional.empty());
+
+    service.unlink(admin, studentId, guardianId);
+
+    verify(saveLinks, never()).deleteByStudentId(any());
+  }
+
   private MembershipReplica open() {
     return new MembershipReplica(
         membershipId, 0L, UUID.randomUUID(), studentId, branchId, START, null, "1042", "Ali Kaya");

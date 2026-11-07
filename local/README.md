@@ -67,10 +67,10 @@ cd services/attendance
 ```
 
 Yerel profil `db/local/R__local_seed.sql` ile `local/dev-students.json`'daki üç öğrencinin sınıf üyeliğini
-ekler (sınıf `22222222-2222-4222-8222-222222222222`). Servisler arası iletişim (4. hafta) gelene kadar
-üyelik ve veli bağı kopyalarını yönetici `PUT /api/v1/attendance-replicas/memberships/{id}` ve
-`/guardian-links/{studentId}` ile doldurur. Oturumlar haftalık programdan CronJob ile üretilir; yerelde
-aynı imaj tek seferlik çalıştırılır:
+ekler (sınıf `22222222-2222-4222-8222-222222222222`). Üyelik ve veli bağı kopyaları user servisinin
+olaylarından (`attendance-user-events` kuyruğu) dolar; olay gelmeyen kayıtlar için yönetici
+`PUT /api/v1/attendance-replicas/memberships/{id}` ve `/guardian-links/{studentId}` ile elle doldurabilir.
+Oturumlar haftalık programdan CronJob ile üretilir; yerelde aynı imaj tek seferlik çalıştırılır:
 
 ```bash
 docker compose -f local/docker-compose.yml run --rm attendance --attendance.job=generate-sessions
