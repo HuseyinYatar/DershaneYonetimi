@@ -61,7 +61,7 @@ class ScoreType(Base):
     # decision (see CLAUDE.md); null means no constant is added.
     base_score: Mapped[Decimal | None] = mapped_column(Numeric(7, 3))
 
-    weights: Mapped[list["ScoreTypeWeight"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+    weights: Mapped[list[ScoreTypeWeight]] = relationship(cascade="all, delete-orphan", lazy="selectin")
 
     __table_args__ = (UniqueConstraint("exam_type_id", "code"),)
 
