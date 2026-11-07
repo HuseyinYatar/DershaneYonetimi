@@ -151,6 +151,13 @@ attendance:
     batch-size: 20
     retention: 7d
     cleanup-cron: "0 30 3 * * *"
+  inbox:
+    enabled: ${INBOX_ENABLED:true}
+    # Queue subscribed to the user service's topic; named in infra/terraform (subscriptions).
+    queue-name: ${ATTENDANCE_USER_EVENTS_QUEUE:attendance-user-events}
+    wait-time: 10s
+    batch-size: 10
+    error-backoff: 5s
   idempotency:
     retention: 24h
     cleanup-cron: "0 45 3 * * *"

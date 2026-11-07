@@ -22,6 +22,12 @@ public record Actor(UUID id, Set<String> roles, UUID branchId) {
   public static final String ADMIN = "ADMIN";
   public static final String SUPER_ADMIN = "SUPER_ADMIN";
 
+  /**
+   * The service itself, applying events that other services already authorized. Never built from a
+   * token, so no caller can obtain it.
+   */
+  public static final Actor SYSTEM = new Actor(new UUID(0, 0), Set.of(SUPER_ADMIN), null);
+
   public boolean hasRole(String role) {
     return roles.contains(role);
   }

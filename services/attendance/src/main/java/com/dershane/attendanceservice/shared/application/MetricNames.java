@@ -27,6 +27,11 @@ public final class MetricNames {
   public static final String OUTBOX_EVENTS_PENDING = "outbox.events.pending";
   public static final String OUTBOX_PUBLISH_LAG = "outbox.publish.lag";
 
+  /**
+   * Tags {@code eventType}, {@code result}: {@code processed}, {@code duplicate}, {@code failed}.
+   */
+  public static final String EVENTS_CONSUMED = "events.consumed";
+
   public static final String IDEMPOTENCY_REPLAYS = "idempotency.replays";
 
   private MetricNames() {}

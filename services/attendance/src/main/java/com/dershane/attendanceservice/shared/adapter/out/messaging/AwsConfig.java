@@ -14,10 +14,12 @@ import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.SnsClientBuilder;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.SqsClientBuilder;
 
 /**
- * SNS client. The endpoint comes from {@code AWS_ENDPOINT_URL}: set to Floci locally and in CI,
- * left empty in production so the SDK talks to real AWS. Never hard-coded.
+ * SNS and SQS clients. The endpoint comes from {@code AWS_ENDPOINT_URL}: set to Floci locally and
+ * in CI, left empty in production so the SDK talks to real AWS. Never hard-coded.
  *
  * <p>Credentials use the default AWS chain (IAM role in the cluster). Static credentials are only
  * meant for the local emulator, which accepts any value.
@@ -50,6 +52,36 @@ public class AwsConfig {
           .addKeyValue("region", region)
           .addKeyValue("endpoint", endpointUrl)
           .log("SNS client uses a custom endpoint (local emulator)");
+      builder.endpointOverride(URI.create(endpointUrl));
+    }
+    return builder.build();
+  }
+
+  /** Long polling holds a request open for the whole wait time, hence the longer timeouts. */
+  @Bean(destroyMethod = "close")
+  public SqsClient sqsClient(
+      @Value("${attendance.aws.region}") String region,
+      @Value("${attendance.aws.endpoint-url:}") String endpointUrl,
+      @Value("${attendance.aws.static-access-key-id:}") String accessKeyId,
+      @Value("${attendance.aws.static-secret-access-key:}") String secretAccessKey) {
+    SqsClientBuilder builder =
+        SqsClient.builder()
+            .region(Region.of(region))
+            .credentialsProvider(credentials(accessKeyId, secretAccessKey))
+            .overrideConfiguration(
+                ClientOverrideConfiguration.builder()
+                    .apiCallAttemptTimeout(Duration.ofSeconds(30))
+                    .apiCallTimeout(Duration.ofSeconds(60))
+                    .build());
+    if (endpointUrl == null || endpointUrl.isBlank()) {
+      log.atInfo()
+          .addKeyValue("region", region)
+          .log("SQS client uses the default AWS endpoint (AWS_ENDPOINT_URL not set)");
+    } else {
+      log.atInfo()
+          .addKeyValue("region", region)
+          .addKeyValue("endpoint", endpointUrl)
+          .log("SQS client uses a custom endpoint (local emulator)");
       builder.endpointOverride(URI.create(endpointUrl));
     }
     return builder.build();
