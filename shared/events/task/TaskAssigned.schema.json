@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/task/TaskAssigned.schema.json",
+  "title": "TaskAssigned (schemaVersion 1)",
+  "description": "An assignment was handed to a student (new task, daily job, or the student joined the classroom). dueAt is UTC. Consumers: notification (student and guardian). The title is the teacher's text; the payload has no names.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assignmentId",
+    "taskId",
+    "studentId",
+    "branchId",
+    "title",
+    "dueAt",
+    "recurrence"
+  ],
+  "properties": {
+    "assignmentId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "taskId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "studentId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "branchId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "dueAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "recurrence": {
+      "enum": [
+        "ONCE",
+        "DAILY",
+        "WEEKLY"
+      ]
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}

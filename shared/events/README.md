@@ -68,13 +68,13 @@ shared/events/
 | `StudentAddedToClassroom` | user | exam-analysis, task, attendance | A student joins a classroom |
 | `StudentRemovedFromClassroom` | user | exam-analysis, task, attendance | A student leaves a classroom (moved, removed, deactivated) |
 | `UserUpdated` | user | notification, exam-analysis | A user is created or changed (full current state) |
-| `GuardianLinked` | user | notification | A guardian is linked to a student, or the relationship changes |
-| `GuardianUnlinked` | user | notification | A guardian link is removed or replaced |
+| `GuardianLinked` | user | notification, attendance, task | A guardian is linked to a student, or the relationship changes |
+| `GuardianUnlinked` | user | notification, attendance, task | A guardian link is removed or replaced |
 | `ExamResultsPublished` | exam-analysis | notification | An admin published the results of a mock exam (once per exam). Optional `mockExamName`, `examDate` for the texts |
 | `StudentResultAdded` | exam-analysis | notification | A result was added to an already published exam (late matching). Optional `mockExamName`, `examDate` |
-| `GuardianLinked` | user | notification, attendance | A guardian is linked to a student, or the relationship changes |
-| `GuardianUnlinked` | user | notification, attendance | A guardian link is removed or replaced |
-| `ExamResultsPublished` | exam-analysis | notification | An admin published the results of a mock exam (once per exam) |
-| `StudentResultAdded` | exam-analysis | notification | A result was added to an already published exam (late matching) |
 | `StudentAbsent` | attendance | notification | A student ended up absent without an approved excuse (when attendance is taken or corrected) |
 | `StudentExcusedByTeacher` | attendance | notification | The teacher excused a student without an approved guardian excuse (when attendance is taken or corrected) |
+| `TaskAssigned` | task | notification | An assignment was handed to a student |
+| `TaskDueSoon` | task | notification | An open assignment entered its reminder window |
+| `TaskOverdue` | task | notification | The due time passed without a submission |
+| `SubmissionGraded` | task | notification | A submission was evaluated (or evaluated again) |

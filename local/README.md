@@ -1,6 +1,6 @@
 # Yerel geliştirme ortamı
 
-AWS servisleri Floci ile, kimlik Keycloak ile yerelde çalışır. Gereken: Docker; user ve attendance için JDK 25,
+AWS servisleri Floci ile, kimlik Keycloak ile yerelde çalışır. Gereken: Docker; user, attendance ve task için JDK 25,
 exam-analysis için Python 3.14+ ve [uv](https://docs.astral.sh/uv/).
 
 ## Başlatma
@@ -29,6 +29,8 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 | Metrikler, sağlık, build bilgisi (user) | http://localhost:8081/metrics, `/health/readiness`, `/info` | — |
 | attendance (API / Swagger UI) | http://localhost:8082, http://localhost:8082/swagger-ui.html | "Authorize" → Keycloak |
 | attendance metrik, sağlık, build bilgisi | http://localhost:8083/metrics, `/health/readiness`, `/info` | — |
+| task (API / Swagger UI) | http://localhost:8084, http://localhost:8084/swagger-ui.html | "Authorize" → Keycloak |
+| task metrik, sağlık, build bilgisi | http://localhost:8085/metrics, `/health/readiness`, `/info` | — |
 | Keycloak yönetim konsolu | http://localhost:8180 | `admin` / `admin` |
 | İlk super-admin (uygulama kullanıcısı) | Swagger'dan giriş | `superadmin@dershane.local` / `admin` |
 | Mailpit (şifre belirleme e-postaları) | http://localhost:8025 | — |
@@ -78,6 +80,30 @@ docker compose -f local/docker-compose.yml run --rm attendance --attendance.job=
 `floci-init` attendance için `attendance-events` topic'ini (inceleme kuyruğu
 `local-inspect-attendance-events`) ve `user-events`'e abone `attendance-user-events` kuyruğunu açar.
 Kuyruk yalnızca `infra/terraform/environments/local.tfvars`'ta listelenen olay tiplerini alır.
+
+## task
+
+```bash
+cd services/task
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local   # API :8080 (container: 8084)
+```
+
+Yerel profil `db/local/R__local_seed.sql` ile `local/dev-students.json`'daki üç öğrencinin sınıf üyeliğini
+ekler (sınıf `22222222-2222-4222-8222-222222222222`); üyelik ve veli bağı kopyaları normalde
+`task-user-events` kuyruğundan dolar, eski kayıtlar için yönetici
+`PUT /api/v1/task-replicas/memberships/{id}` ve `/guardian-links/{studentId}` kullanılabilir. Tekrarlı
+görevlerin günlük atamaları ve gecikme/hatırlatma işlemi CronJob ile yapılır; yerelde aynı imaj tek
+seferlik çalıştırılır:
+
+```bash
+docker compose -f local/docker-compose.yml run --rm task --task.job=generate-assignments   # günde bir (00:05)
+docker compose -f local/docker-compose.yml run --rm task --task.job=check-deadlines        # her 15 dk
+```
+
+`floci-init` task için `task-events` topic'ini (inceleme kuyruğu `local-inspect-task-events`) ve
+`user-events`'e abone `task-user-events` kuyruğunu açar. `local/postgres/init.sql` yalnızca boş
+volume'da çalışır: var olan bir ortamda `docker compose down -v` yap veya `task_service` kullanıcı ve
+veritabanını elle oluştur (`CREATE USER task_service ...; CREATE DATABASE task_service OWNER task_service;`).
 
 ## Port çakışması
 

@@ -13,3 +13,6 @@ CREATE USER notification WITH PASSWORD 'notification';
 CREATE DATABASE notification OWNER notification;
 CREATE USER attendance_service WITH PASSWORD 'attendance_service';
 CREATE DATABASE attendance_service OWNER attendance_service;
+
+CREATE USER task_service WITH PASSWORD 'task_service';
+CREATE DATABASE task_service OWNER task_service;
