@@ -72,6 +72,10 @@ spring:
               uri: ${ATTENDANCE_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/v1/class-schedules/**,/api/v1/class-sessions/**,/api/v1/attendance-records/**,/api/v1/attendance-summaries/**,/api/v1/attendance-replicas/**,/api/v1/excuses/**
+            - id: task
+              uri: ${TASK_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/v1/tasks/**,/api/v1/task-assignments/**,/api/v1/task-replicas/**
 
   lifecycle:
     timeout-per-shutdown-phase: 20s

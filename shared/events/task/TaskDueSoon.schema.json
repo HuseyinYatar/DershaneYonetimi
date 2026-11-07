@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/task/TaskDueSoon.schema.json",
+  "title": "TaskDueSoon (schemaVersion 1)",
+  "description": "An open assignment entered its reminder window (task.reminder.lead-time before dueAt) without a submission. Sent at most once per assignment. Consumers: notification (student).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assignmentId",
+    "taskId",
+    "studentId",
+    "branchId",
+    "title",
+    "dueAt"
+  ],
+  "properties": {
+    "assignmentId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "taskId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "studentId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "branchId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "dueAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}

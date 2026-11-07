@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dershane.local/events/task/SubmissionGraded.schema.json",
+  "title": "SubmissionGraded (schemaVersion 1)",
+  "description": "The teacher evaluated a submission, or evaluated it again (published again each time). score is null when only feedback was given; the feedback text is never in the payload. Consumers: notification (student and guardian).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assignmentId",
+    "taskId",
+    "studentId",
+    "branchId",
+    "title",
+    "dueAt",
+    "score"
+  ],
+  "properties": {
+    "assignmentId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "taskId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "studentId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "branchId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "dueAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "score": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}
