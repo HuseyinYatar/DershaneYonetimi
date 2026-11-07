@@ -30,10 +30,12 @@ shared/events/
 - Each producer publishes to its own SNS topic, named `<service>-events` (e.g. `user-events`).
 - Each consumer has its own SQS queue subscribed to the topics it needs. A subscription filter
   policy on the `eventType` message attribute can limit which events reach the queue.
+- Queues, topics and filter policies are defined in `infra/terraform` (`event_types` per queue in
+  `environments/*.tfvars`). A consumer that starts handling a new event type must add it there,
+  otherwise SNS drops the event before it reaches the queue, without a log line.
   Example: `notification-queue` is subscribed to `user-events` (filter: `UserUpdated`,
   `GuardianLinked`, `GuardianUnlinked`) and to `exam-analysis-events` (no filter), with
-  `notification-queue-dlq` after 5 receives. Locally `local/floci/init.sh` creates queues and
-  subscriptions, on AWS Terraform does; services only receive and delete messages.
+  `notification-queue-dlq` after 5 receives; services only receive and delete messages.
 - SNS message attributes:
   - `eventType`: same value as in the envelope
   - `traceparent`: W3C trace context of the request that caused the event (may be missing).

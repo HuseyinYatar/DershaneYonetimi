@@ -52,9 +52,10 @@ uv run uvicorn app.main:create_app --factory --reload                  # API :80
 uv run python -m app.worker                                            # optik dosya + outbox + user olayları
 ```
 
-`floci-init` exam-analysis için `exam-analysis-optical-files` bucket'ını, `exam-analysis-events`
-topic'ini (inceleme kuyruğu `local-inspect-exam-analysis-events`) ve `user-events`'e abone
-`exam-analysis-user-events` kuyruğunu (filtreli, DLQ: `exam-analysis-user-events-dlq`) açar.
+`floci-init` (`infra/terraform`) exam-analysis için `exam-analysis-optical-files` bucket'ını,
+`exam-analysis-events` topic'ini (inceleme kuyruğu `local-inspect-exam-analysis-events`) ve
+`user-events`'e abone `exam-analysis-user-events` kuyruğunu (filtreli, DLQ: `exam-analysis-user-events-dlq`)
+açar.
 
 ## attendance
 
@@ -76,6 +77,7 @@ docker compose -f local/docker-compose.yml run --rm attendance --attendance.job=
 
 `floci-init` attendance için `attendance-events` topic'ini (inceleme kuyruğu
 `local-inspect-attendance-events`) ve `user-events`'e abone `attendance-user-events` kuyruğunu açar.
+Kuyruk yalnızca `infra/terraform/environments/local.tfvars`'ta listelenen olay tiplerini alır.
 
 ## Port çakışması
 
@@ -89,13 +91,34 @@ Servislerin `.env` dosyasındaki veritabanı adresini de aynı porta çevir.
 
 ## Yayınlanan olayları görmek
 
-`floci-init`, `user-events` topic'ini ve ona bağlı `local-inspect-user-events` kuyruğunu açar:
+`floci-init`, her topic için bir `local-inspect-<topic>` kuyruğu açar (ör. `local-inspect-user-events`):
 
 ```bash
-docker compose -f local/docker-compose.yml run --rm --entrypoint aws floci-init \
+docker compose -f local/docker-compose.yml run --rm aws-cli \
   sqs receive-message --max-number-of-messages 10 --message-attribute-names All \
   --queue-url http://floci:4566/000000000000/local-inspect-user-events
 ```
+
+## Altyapıyı (Terraform) değiştirmek
+
+Topic, kuyruk ve bucket'lar `infra/terraform` ile yönetilir. `tfvars` değiştirdikten sonra:
+
+```bash
+docker compose -f local/docker-compose.yml run --rm floci-init
+```
+
+Aynı kod gerçek AWS'ye de uygulanır (`aws_endpoint_url` ve `emulator` verilmez). Terraform'u
+bilgisayarından çalıştırırsan Floci'nin `localhost` adresini ver. State bilgisayarında kalır ve
+container'ınkinden ayrıdır; ikisini karıştırma (kuyruk URL'leri state'te adres içerir):
+
+```bash
+cd infra/terraform
+AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test terraform apply \
+  -var-file=environments/local.tfvars -var=aws_endpoint_url=http://localhost:4566
+```
+
+`down -v` Floci'yi ve container state'ini birlikte sıfırlar. Yalnızca Floci yeniden başlarsa
+(`restart floci`) `floci-init`'i tekrar çalıştırman yeter; Terraform eksik kaynakları yeniden açar.
 
 ## Sıfırlama
 

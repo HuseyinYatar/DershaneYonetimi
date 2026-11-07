@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     outbox_relay_enabled: bool = False
     outbox_batch_size: int = 50
 
-    # Queue subscribed to user-events (local/floci/init.sh, Terraform on AWS), read by the worker.
+    # Queue subscribed to user-events (infra/terraform), read by the worker.
     # Looked up by name, so the same value works on Floci and AWS. Empty value disables consuming.
     sqs_queue_name: str | None = "exam-analysis-user-events"
     sqs_max_messages: int = 10

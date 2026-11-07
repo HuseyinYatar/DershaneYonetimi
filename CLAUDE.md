@@ -188,7 +188,7 @@ com.dershane.<servis>
 
 ## Notification servisi kuralları
 
-- **Kuyruk:** `notification-queue`, `user-events` (filtre: `UserUpdated`, `GuardianLinked`, `GuardianUnlinked`) ve `exam-analysis-events` (filtresiz) topic'lerine abonedir; 5 başarısız teslimden sonra mesaj `notification-queue-dlq`'ya gider. Kuyruğu ve abonelikleri yerelde `local/floci/init.sh`, AWS'de Terraform açar; servis yalnızca mesaj okur ve siler. Kuyruk adıyla bulunur (`SQS_QUEUE_NAME`).
+- **Kuyruk:** `notification-queue`, `user-events` (filtre: `UserUpdated`, `GuardianLinked`, `GuardianUnlinked`) ve `exam-analysis-events` (filtresiz) topic'lerine abonedir; 5 başarısız teslimden sonra mesaj `notification-queue-dlq`'ya gider. Kuyruğu ve abonelikleri Terraform açar (`infra/terraform`; yerelde floci-init uygular); servis yalnızca mesaj okur ve siler. Kuyruk adıyla bulunur (`SQS_QUEUE_NAME`).
 - **Tüketme:** Mesaj başına tek transaction: zarf doğrulama → `processed_event` (tekrar gelen olay atlanır) → handler → commit → mesajı silme. Geçersiz veya hata veren mesaj silinmez, DLQ'ya düşer.
 - **Yerel kopyalar:** `contact_replica` (`UserUpdated`, eski `recordVersion` yok sayılır) ve `guardian_link_replica` (öğrenci başına tek veli; `GuardianUnlinked` yalnızca veli eşleşirse siler) yalnızca olaylarla değişir. Servis başka bir servise REST isteği atmaz.
 - **Alıcılar:** Olaydaki öğrenciler (`studentIds`) ve velileri. Sınava girenler tablosu tutulmaz. Kopyada olmayan alıcı WARN ile atlanır, olayın geri kalanı işlenir. Pasif kullanıcıya bildirim yazılmaz.
@@ -246,9 +246,10 @@ dershane-app/
 ├── services/<servis-adi>/     her servis kendi Dockerfile'ı ve testleriyle
 ├── frontend/
 ├── shared/events/             olay şemaları (JSON Schema) ve kuralları
-├── infra/terraform/           AWS ve Floci altyapısı
+├── infra/terraform/           AWS ve Floci altyapısı: tek kök modül, `modules/events` (SNS/SQS),
+│                              ortam farkları `environments/*.tfvars`'ta. Yerelde `floci-init` uygular
 ├── local/                     yerel ortam: docker-compose.yml (PostgreSQL, Keycloak, Floci,
-│                              Mailpit), keycloak/ realm tanımı, postgres/ ve floci/ init betikleri
+│                              Mailpit), keycloak/ realm tanımı, postgres/ init betiği
 └── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar
 
 dershane-gitops/               ArgoCD bu depoyu izler

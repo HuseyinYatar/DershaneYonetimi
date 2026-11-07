@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Points to Floci locally; left empty in production so boto3 talks to real AWS.
     aws_endpoint_url: str | None = None
     aws_region: str = "eu-central-1"
-    # Queue subscribed to user-events and exam-analysis-events (local/floci/init.sh, Terraform on AWS).
+    # Queue subscribed to user-events and exam-analysis-events (infra/terraform).
     # Looked up by name, so the same value works on Floci and AWS. Empty value disables consuming;
     # the worker then only delivers notifications already stored.
     sqs_queue_name: str | None = "notification-queue"

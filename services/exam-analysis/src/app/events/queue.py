@@ -1,7 +1,7 @@
 """SQS adapter: the only place that talks to the queue.
 
 The service never subscribes to SNS itself. The queue and its subscription to user-events are created
-by local/floci/init.sh locally and by Terraform on AWS. Here the worker only reads messages and
+by Terraform (infra/terraform). Here the worker only reads messages and
 deletes the ones it has committed.
 """
 
