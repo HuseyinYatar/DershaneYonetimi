@@ -15,9 +15,8 @@ cp .env.example .env
 uv sync
 uv run alembic upgrade head
 uv run python -m app.cli seed-catalog                      # TYT / AYT / YDT / LGS catalog, optical formats
-uv run python -m app.cli seed-students ../../local/dev-students.json
 uv run uvicorn app.main:create_app --factory --reload      # API on :8000, docs on /docs
-uv run python -m app.worker                                # import worker + outbox relay
+uv run python -m app.worker                                # import jobs + outbox relay + user events
 ```
 
 `floci-init` (Terraform, `infra/terraform`) creates the bucket, the `exam-analysis-events` topic and the
@@ -45,7 +44,7 @@ without it. AWS calls are tested with moto; nothing reaches real AWS.
 | Process | Command | Scales on |
 |---|---|---|
 | API | `uvicorn app.main:create_app --factory` | requests |
-| Worker | `python -m app.worker` | queued import jobs (CPU-heavy pandas work; HPA target) |
+| Worker | `python -m app.worker` | queued import jobs (CPU-heavy pandas work; HPA target); also reads `exam-analysis-user-events` |
 | Migrations | `alembic upgrade head` | run once per release (Job / init container) |
 
 All three use the same image. The worker takes jobs from the `import_job` table with
@@ -108,11 +107,30 @@ from `realm_access.roles` (`student`, `teacher`, `guardian`, `admin`, `super-adm
 - **Traces:** OpenTelemetry (`OTEL_ENABLED=true`, standard `OTEL_EXPORTER_OTLP_*` variables);
   the `traceparent` is stored with each outbox event and sent as an SNS message attribute.
 
+## Student copy (`student_replica`)
+
+The worker fills it from the user service's events; nobody enters students by hand. Student events
+wait in the queue while a large optical file is processed. Per message,
+in one transaction: validate → `processed_event` (duplicates skipped) → handler → commit → delete the
+message. Invalid or failing messages are not deleted; SQS moves them to
+`exam-analysis-user-events-dlq` after 5 receives.
+
+| Event | Effect |
+|---|---|
+| `UserUpdated`, role `STUDENT` | upsert number, branch, name, `is_active`, `record_version`; an older `recordVersion` changes nothing |
+| `UserUpdated`, other roles | ignored (DEBUG log) |
+| `StudentAddedToClassroom` | sets `class_id`; creates the row if `UserUpdated` has not arrived yet |
+| `StudentRemovedFromClassroom` | clears `class_id` only if it is still that classroom |
+
+Only active students are matched to optical rows, and only they hold a number, so a departed
+student's number can be given to a new student. Their results stay. Students created before the
+queue existed need the user service to publish their events again (backfill, not written yet).
+
 ## Temporary adapters (until the other services exist)
 
 | Today | Later (week 4) |
 |---|---|
-| `PUT /admin/student-replicas` fills `student_replica` | `StudentAddedToClassroom` / `UserUpdated` consumer on `exam-analysis-user-events` + `processed_event`, same `replica_service.upsert` |
+| `PUT /admin/student-replicas` and `seed-students` can still fill `student_replica` | Removed once the event path below is verified end to end |
 | Multipart upload stored in this service's bucket | `file_id` from the file service, content via presigned URL (only `FileStorage` changes) |
 | — | `AnswerSheetsRecognized` from the omr service creates an `ImportJob` with `source=OMR` |
 

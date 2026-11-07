@@ -3,10 +3,10 @@ variable "topics" {
 }
 
 variable "subscriptions" {
-  type = map(object({
+  type = map(list(object({
     topic       = string
     event_types = optional(list(string), [])
-  }))
+  })))
 }
 
 variable "create_inspection_queues" {

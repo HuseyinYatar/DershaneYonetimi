@@ -48,14 +48,14 @@ cp .env.example .env
 uv sync
 uv run alembic upgrade head
 uv run python -m app.cli seed-catalog
-uv run python -m app.cli seed-students ../../local/dev-students.json   # user olayları gelene kadar
 uv run uvicorn app.main:create_app --factory --reload                  # API :8000
-uv run python -m app.worker                                            # optik dosya işleyici + outbox
+uv run python -m app.worker                                            # optik dosya + outbox + user olayları
 ```
 
 `floci-init` (`infra/terraform`) exam-analysis için `exam-analysis-optical-files` bucket'ını,
 `exam-analysis-events` topic'ini (inceleme kuyruğu `local-inspect-exam-analysis-events`) ve
-`user-events`'e abone `exam-analysis-user-events` kuyruğunu açar.
+`user-events`'e abone `exam-analysis-user-events` kuyruğunu (filtreli, DLQ: `exam-analysis-user-events-dlq`)
+açar.
 
 ## attendance
 

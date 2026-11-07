@@ -9,10 +9,10 @@ from app.models import StudentReplica
 
 
 def student_ids_by_no(session: Session, branch_id: uuid.UUID) -> pd.Series:
-    """Student number -> student id for one branch (student numbers are unique per branch)."""
+    """Student number -> student id of the active students of one branch (their numbers are unique)."""
     rows = session.execute(
         select(StudentReplica.student_no, StudentReplica.student_id).where(
-            StudentReplica.branch_id == branch_id
+            StudentReplica.branch_id == branch_id, StudentReplica.is_active
         )
     ).all()
     return pd.Series(dict(rows), dtype=object)
@@ -21,10 +21,11 @@ def student_ids_by_no(session: Session, branch_id: uuid.UUID) -> pd.Series:
 def number_holders(
     session: Session, numbers: Collection[tuple[uuid.UUID, str]]
 ) -> dict[tuple[uuid.UUID, str], uuid.UUID]:
-    """Current student of each (branch_id, student_no) pair that is already taken."""
+    """Active student of each (branch_id, student_no) pair that is already taken."""
     rows = session.execute(
         select(StudentReplica.branch_id, StudentReplica.student_no, StudentReplica.student_id).where(
-            tuple_(StudentReplica.branch_id, StudentReplica.student_no).in_(list(numbers))
+            tuple_(StudentReplica.branch_id, StudentReplica.student_no).in_(list(numbers)),
+            StudentReplica.is_active,
         )
     ).all()
     return {(branch_id, student_no): student_id for branch_id, student_no, student_id in rows}

@@ -1,7 +1,9 @@
 """Background worker: `python -m app.worker`.
 
 Same image as the API, separate Deployment (scaled by HPA). Each loop: claim and process one
-import job, requeue jobs of workers that died, relay outbox events to SNS.
+import job, requeue jobs of workers that died, relay outbox events to SNS, read user events from SQS
+into student_replica. Student events wait while a large optical file is processed; they stay in the
+queue, and several replicas reading it are safe because processed_event drops duplicates.
 """
 
 import signal
@@ -17,7 +19,10 @@ from app.aws import create_client
 from app.cache import build_cache
 from app.config import Settings, get_settings
 from app.db import get_engine, get_session_factory
+from app.events.consumer import EventConsumer
+from app.events.handlers import EventHandlers
 from app.events.publisher import SnsEventPublisher
+from app.events.queue import SqsQueue
 from app.events.relay import OutboxRelay
 from app.observability.logging import configure_logging
 from app.observability.metrics import WORKER_LAST_LOOP
@@ -39,6 +44,23 @@ def build_relay(settings: Settings) -> OutboxRelay | None:
     return OutboxRelay(get_session_factory(), publisher, settings.outbox_batch_size)
 
 
+def build_consumer(settings: Settings) -> EventConsumer | None:
+    if settings.sqs_queue_name is None:
+        logger.warning(
+            "consumer.disabled",
+            reason="sqs_queue_name_empty",
+            effect="student_replica is not updated from events",
+        )
+        return None
+    client = create_client("sqs", settings)
+    # Fails (and the container restarts) if the queue does not exist yet: floci-init / Terraform
+    # must have created it.
+    queue_url = client.get_queue_url(QueueName=settings.sqs_queue_name)["QueueUrl"]
+    logger.info("consumer.queue_resolved", queue_name=settings.sqs_queue_name)
+    queue = SqsQueue(client, queue_url, settings.sqs_max_messages, settings.sqs_wait_seconds)
+    return EventConsumer(get_session_factory(), queue, EventHandlers())
+
+
 def run(settings: Settings, stop: threading.Event) -> None:
     session_factory = get_session_factory()
     processor = ImportProcessor(
@@ -47,6 +69,7 @@ def run(settings: Settings, stop: threading.Event) -> None:
         build_cache(settings.redis_url, settings.cache_ttl_seconds),
     )
     relay = build_relay(settings)
+    consumer = build_consumer(settings)
     heartbeat = Path(settings.worker_heartbeat_file)
     next_reap = 0.0
 
@@ -62,6 +85,8 @@ def run(settings: Settings, stop: threading.Event) -> None:
             worked = processor.process_next()
             if relay is not None:
                 worked = relay.relay_batch() > 0 or worked
+            if consumer is not None:
+                worked = consumer.consume_batch() > 0 or worked
         except Exception:
             # e.g. the database is briefly unreachable; the loop keeps running and retries.
             logger.exception("worker.loop_failed")

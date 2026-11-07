@@ -1,5 +1,6 @@
 # Local development environment: the AWS services are emulated by Floci, identity by Keycloak.
 #   docker compose -f local/docker-compose.yml up -d                       # dependencies only
+#   docker compose -f local/docker-compose.yml --profile services up -d    # + user, exam-analysis, notification
 #   docker compose -f local/docker-compose.yml --profile services up -d    # + user, attendance, exam-analysis, api-gateway
 #   docker compose -f local/docker-compose.yml --profile tools up -d       # + pgAdmin
 # Host ports can be overridden in local/.env (gitignored), e.g. POSTGRES_PORT=5433.
@@ -129,7 +130,7 @@ services:
       postgres:
         condition: service_healthy
 
-  # Catches the e-mails Keycloak sends (password setup). UI: http://localhost:8025
+  # Catches the e-mails Keycloak and notification send. UI: http://localhost:8025
   mailpit:
     image: axllent/mailpit:v1.31.6
     ports:
@@ -238,6 +239,8 @@ services:
       OIDC_AUDIENCE: dershane-api
       SNS_TOPIC_ARN: arn:aws:sns:eu-central-1:000000000000:exam-analysis-events
       OUTBOX_RELAY_ENABLED: "true"
+      # Created by floci-init (infra/terraform), subscribed to user-events.
+      SQS_QUEUE_NAME: exam-analysis-user-events
     depends_on:
       postgres:
         condition: service_healthy
@@ -268,6 +271,56 @@ services:
         condition: service_completed_successfully
       floci-init:
         condition: service_completed_successfully
+
+  notification-migrate:
+    profiles: ["services"]
+    build: ../services/notification
+    command: ["alembic", "upgrade", "head"]
+    environment: &notification-env
+      ENVIRONMENT: local
+      DATABASE_URL: postgresql+psycopg://notification:notification@postgres:5432/notification
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: eu-central-1
+      # Created by floci-init (infra/terraform) with its two SNS subscriptions.
+      SQS_QUEUE_NAME: notification-queue
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      FRONTEND_BASE_URL: http://localhost:3000
+      OIDC_ISSUER: http://localhost:8180/realms/dershane
+      OIDC_JWKS_URL: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
+      OIDC_AUDIENCE: dershane-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-api:
+    profiles: ["services"]
+    build: ../services/notification
+    environment: *notification-env
+    ports:
+      - "8002:8000"
+    depends_on:
+      notification-migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+
+  notification-worker:
+    profiles: ["services"]
+    build: ../services/notification
+    command: ["python", "-m", "app.worker"]
+    environment: *notification-env
+    ports:
+      - "9102:9100"
+    depends_on:
+      notification-migrate:
+        condition: service_completed_successfully
+      floci-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
 
 volumes:
   postgres-data:

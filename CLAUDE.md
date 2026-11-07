@@ -58,7 +58,7 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 | api-gateway | Tek giriş noktası, yönlendirme, JWT doğrulama, hız sınırlama, CORS | Java (Spring Cloud Gateway, WebFlux); ileride AWS API Gateway olabilir | Redis (hız sınırı sayaçları) | — |
 | identity | Giriş, token, roller | **Keycloak** | PostgreSQL | — |
 | user | Öğrenci/öğretmen/veli/yönetici profilleri, sınıf, şube, ders kataloğu, veli–öğrenci eşleşmesi; Keycloak hesaplarını açar | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAddedToClassroom`, `StudentRemovedFromClassroom`, `UserUpdated`, `GuardianLinked`, `GuardianUnlinked` |
-| exam-analysis | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `ExamResultsPublished`, `StudentResultAdded`; Dinler: `StudentAddedToClassroom`, `UserUpdated` |
+| exam-analysis | Optik dosya içe aktarma, puanlama, konu analizi, gelişim raporları | Python (FastAPI + pandas) | PostgreSQL, Redis | Yayınlar: `ExamResultsPublished`, `StudentResultAdded`; Dinler: `UserUpdated`, `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
 | messaging | WebSocket sohbet, fotoğraflı soru, okundu bilgisi | Java (Spring Boot) | PostgreSQL, Redis Pub/Sub | Yayınlar: `NewMessage` (alıcı çevrimdışıysa) |
 | task | Görev/ödev atama, tekrarlı görevler, teslim ve değerlendirme | Java (Spring Boot) | PostgreSQL | Yayınlar: `TaskAssigned`, `TaskDueSoon`, `TaskOverdue`, `SubmissionGraded`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom` |
 | attendance | Öğretmenin web'den aldığı yoklama, devamsızlık, mazeret | Java (Spring Boot) | PostgreSQL | Yayınlar: `StudentAbsent`, `StudentExcusedByTeacher`; Dinler: `StudentAddedToClassroom`, `StudentRemovedFromClassroom`, `GuardianLinked`, `GuardianUnlinked` |
@@ -186,6 +186,16 @@ com.dershane.<servis>
 - **Düzenleme ve silme.** `duzenlenme` kullanıcıya "düzenlendi" göstermek içindir. `guncellenmeZamani` ise düzenleme veya silme dahil her değişiklikte güncellenir ve önbelleği eşitlemek için kullanılır. Silinen mesaj önbellekten de kaldırılır.
 - **KVKK ve önbellek.** Çıkış yapılınca önbellek silinir. Fotoğraflar önbelleğe alınmaz, her seferinde `file` servisinden istenir. Mesaj içeriği hiçbir logda geçmez.
 
+## Notification servisi kuralları
+
+- **Kuyruk:** `notification-queue`, `user-events` (filtre: `UserUpdated`, `GuardianLinked`, `GuardianUnlinked`) ve `exam-analysis-events` (filtresiz) topic'lerine abonedir; 5 başarısız teslimden sonra mesaj `notification-queue-dlq`'ya gider. Kuyruğu ve abonelikleri Terraform açar (`infra/terraform`; yerelde floci-init uygular); servis yalnızca mesaj okur ve siler. Kuyruk adıyla bulunur (`SQS_QUEUE_NAME`).
+- **Tüketme:** Mesaj başına tek transaction: zarf doğrulama → `processed_event` (tekrar gelen olay atlanır) → handler → commit → mesajı silme. Geçersiz veya hata veren mesaj silinmez, DLQ'ya düşer.
+- **Yerel kopyalar:** `contact_replica` (`UserUpdated`, eski `recordVersion` yok sayılır) ve `guardian_link_replica` (öğrenci başına tek veli; `GuardianUnlinked` yalnızca veli eşleşirse siler) yalnızca olaylarla değişir. Servis başka bir servise REST isteği atmaz.
+- **Alıcılar:** Olaydaki öğrenciler (`studentIds`) ve velileri. Sınava girenler tablosu tutulmaz. Kopyada olmayan alıcı WARN ile atlanır, olayın geri kalanı işlenir. Pasif kullanıcıya bildirim yazılmaz.
+- **Kanallar:** `IN_APP` her zaman yazılır (`SENT`) ve kapatılamaz. `EMAIL` ve `SMS` adres varsa ve kullanıcı kapatmadıysa `PENDING` yazılır. `notification_preference`'ta yalnızca kapatılan kanallar satır olur; `StudentResultAdded`, `ExamResultsPublished` tercihini kullanır.
+- **Gönderim:** Worker aynı döngüde önce tüketir, sonra bekleyenleri gönderir (`FOR UPDATE SKIP LOCKED`). Adres gönderim anında kopyadan okunur. Geçici hata 1, 5, 15, 60 dakika sonra tekrar denenir; kalıcı hata veya 5. deneme `FAILED`. E-posta SMTP ile gider: yerelde Mailpit, AWS'de SES SMTP ucu. SMS için sağlayıcı yok; `LoggingSmsSender` gönderim yapmaz.
+- **Metinler:** Türkçe Jinja2 dosyaları `src/app/templates/` altında (tablo yok, `StrictUndefined`). Metinde puan ve net yazmaz, yalnızca bağlantı verilir. Adres, ad ve metin loglanmaz.
+
 ## Exam-analysis servisi kuralları
 
 - Her deneme için soru → ders → konu → doğru cevap eşleştirmesi (cevap anahtarı) önceden yüklenir. Konular müfredata göre sabit bir katalogdan seçilir.
@@ -219,7 +229,13 @@ com.dershane.<servis>
 - Bağlama sonrası öğrencinin sonucu üretilir, `INSTITUTIONAL` istatistik, tüm puan ve sıralar yeniden hesaplanır.
 - Sonuçlar açıklanmış denemede de geç bağlama yapılabilir. Bu durumda `ExamResultsPublished` yeniden yayınlanmaz; yalnızca o öğrenci için `StudentResultAdded` yayınlanır ve notification servisi öğrenciye (ve velisine) haber verir. Açıklanmış denemeye yeni dosya yüklenemez.
 - İptal edilen soru (`AnswerStatus.CANCELLED`) ÖSYM uygulamasındaki gibi doğru/yanlış/boş ve konu toplamlarına girmez. Sonuçlar saklanan cevaplardan yeniden puanlanır; olay yeniden yayınlanmaz.
-- Servisler arası iletişim (4. hafta) gelene kadar geçici adaptörler kullanılır: `StudentReplica` yönetici endpoint'iyle doldurulur, optik dosya doğrudan exam-analysis'e yüklenir.
+- Servisler arası iletişim tamamlanana kadar optik dosya doğrudan exam-analysis'e yüklenir. `StudentReplica`'yı elle dolduran yönetici endpoint'i ve `seed-students`, olay yolu uçtan uca doğrulanınca kaldırılır.
+
+### Öğrenci kopyası (`StudentReplica`)
+
+- Kopya user servisinin olaylarıyla dolar; worker döngüsü `exam-analysis-user-events` kuyruğunu da okur. Büyük bir optik dosya işlenirken olaylar kuyrukta bekler, kaybolmaz; birden çok worker aynı kuyruğu güvenle okur. 5 başarısız teslimden sonra mesaj `exam-analysis-user-events-dlq`'ya gider. Mesaj başına tek transaction: `processed_event` → handler → commit → silme.
+- `UserUpdated` numara, şube, ad ve aktifliğin sahibidir; öğrenci olmayanlar atlanır, eski `recordVersion` yok sayılır. `StudentAddedToClassroom` `class_id`'yi yazar, satır yoksa oluşturur. `StudentRemovedFromClassroom` `class_id`'yi yalnızca aynı sınıfsa boşaltır.
+- Pasif öğrenci optik satırla eşleşmez ve elle de bağlanamaz (`STUDENT_INACTIVE`), sonuçları silinmez. Şube içinde numara tekilliği yalnızca aktif öğrenciler için geçerlidir.
 
 ## Depo yapısı
 

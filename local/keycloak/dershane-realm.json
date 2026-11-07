@@ -101,9 +101,10 @@
       "redirectUris": [
         "http://localhost:8080/swagger-ui/*",
         "http://localhost:8000/docs/*",
-        "http://localhost:8001/docs/*"
+        "http://localhost:8001/docs/*",
+        "http://localhost:8002/docs/*"
       ],
-      "webOrigins": ["http://localhost:8080", "http://localhost:8000", "http://localhost:8001"],
+      "webOrigins": ["http://localhost:8080", "http://localhost:8000", "http://localhost:8001", "http://localhost:8002"],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },

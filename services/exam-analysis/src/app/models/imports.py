@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, enum_column, utcnow
 from app.models.enums import ImportSource, JobStatus, MatchStatus, UnmatchedReason
 
+
 # txt dosyası yüklendi anında okunamadı bu bir job bu jobu tutmak için
 class ImportJob(Base):
     """An optical file import. The table doubles as the worker queue (FOR UPDATE SKIP LOCKED)."""

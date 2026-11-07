@@ -55,6 +55,7 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PL", "N", "C4", "PT", "LOG", "G"]
 ignore = [
+    "E501",
     "PLR0913",  # FastAPI endpoints and service functions take many injected dependencies
     "PLR0917",
     "PLR2004",

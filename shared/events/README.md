@@ -33,6 +33,9 @@ shared/events/
 - Queues, topics and filter policies are defined in `infra/terraform` (`event_types` per queue in
   `environments/*.tfvars`). A consumer that starts handling a new event type must add it there,
   otherwise SNS drops the event before it reaches the queue, without a log line.
+  Example: `notification-queue` is subscribed to `user-events` (filter: `UserUpdated`,
+  `GuardianLinked`, `GuardianUnlinked`) and to `exam-analysis-events` (no filter), with
+  `notification-queue-dlq` after 5 receives; services only receive and delete messages.
 - SNS message attributes:
   - `eventType`: same value as in the envelope
   - `traceparent`: W3C trace context of the request that caused the event (may be missing).
@@ -63,8 +66,12 @@ shared/events/
 | Event | Producer | Consumers | When |
 |---|---|---|---|
 | `StudentAddedToClassroom` | user | exam-analysis, task, attendance | A student joins a classroom |
-| `StudentRemovedFromClassroom` | user | task, attendance | A student leaves a classroom (moved, removed, deactivated) |
+| `StudentRemovedFromClassroom` | user | exam-analysis, task, attendance | A student leaves a classroom (moved, removed, deactivated) |
 | `UserUpdated` | user | notification, exam-analysis | A user is created or changed (full current state) |
+| `GuardianLinked` | user | notification | A guardian is linked to a student, or the relationship changes |
+| `GuardianUnlinked` | user | notification | A guardian link is removed or replaced |
+| `ExamResultsPublished` | exam-analysis | notification | An admin published the results of a mock exam (once per exam). Optional `mockExamName`, `examDate` for the texts |
+| `StudentResultAdded` | exam-analysis | notification | A result was added to an already published exam (late matching). Optional `mockExamName`, `examDate` |
 | `GuardianLinked` | user | notification, attendance | A guardian is linked to a student, or the relationship changes |
 | `GuardianUnlinked` | user | notification, attendance | A guardian link is removed or replaced |
 | `ExamResultsPublished` | exam-analysis | notification | An admin published the results of a mock exam (once per exam) |
