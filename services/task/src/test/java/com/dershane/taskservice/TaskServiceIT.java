@@ -99,7 +99,6 @@ class TaskServiceIT {
   private final LocalDate today = LocalDate.now(ISTANBUL);
   private final UUID branchId = UUID.randomUUID();
   private final UUID classroomId = UUID.randomUUID();
-  private final UUID adminId = UUID.randomUUID();
   private final UUID teacherId = UUID.randomUUID();
   private final UUID otherTeacherId = UUID.randomUUID();
   private final UUID ali = UUID.randomUUID();
@@ -119,52 +118,36 @@ class TaskServiceIT {
 
   @Test
   @Order(1)
-  void adminFeedsTheLocalCopiesOfMembershipsAndGuardianLinks() {
+  void theLocalCopiesOfMembershipsAndGuardianLinksAreInPlace() {
+    // Normally filled from the user service's events (see UserEventsInboxIT).
     int number = 0;
     for (UUID student : List.of(ali, ayse)) {
       number++;
-      ResponseEntity<JsonNode> response =
-          call(
-              "PUT",
-              "/api/v1/task-replicas/memberships/" + UUID.randomUUID(),
-              admin(),
-              Map.of(
-                  "studentId",
-                  student,
-                  "classroomId",
-                  classroomId,
-                  "branchId",
-                  branchId,
-                  "studentNumber",
-                  "ST" + number,
-                  "fullName",
-                  "Student " + number,
-                  "startDate",
-                  today.minusDays(30).toString()),
-              null);
-      assertThat(response.getStatusCode().value()).isEqualTo(204);
+      jdbc.update(
+          """
+          insert into membership_replica (id, classroom_id, student_id, branch_id, start_date,
+                                          student_number, full_name,
+                                          created_at, updated_at, version)
+          values (?, ?, ?, ?, ?, ?, ?, now(), now(), 0)
+          """,
+          UUID.randomUUID(),
+          classroomId,
+          student,
+          branchId,
+          today.minusDays(30),
+          "ST" + number,
+          "Student " + number);
     }
-    assertThat(
-            call(
-                    "PUT",
-                    "/api/v1/task-replicas/guardian-links/" + ali,
-                    admin(),
-                    Map.of("guardianId", alisGuardian),
-                    null)
-                .getStatusCode()
-                .value())
-        .isEqualTo(204);
-    assertThat(
-            call(
-                    "PUT",
-                    "/api/v1/task-replicas/guardian-links/" + ali,
-                    teacher(),
-                    Map.of("guardianId", alisGuardian),
-                    null)
-                .getStatusCode()
-                .value())
-        .as("a teacher may not feed the copies")
-        .isEqualTo(403);
+    jdbc.update(
+        """
+        insert into guardian_link_replica (student_id, guardian_id, created_at, updated_at, version)
+        values (?, ?, now(), now(), 0)
+        """,
+        ali,
+        alisGuardian);
+
+    assertThat(jdbc.queryForObject("select count(*) from membership_replica", Long.class))
+        .isEqualTo(2L);
   }
 
   @Test
@@ -370,10 +353,6 @@ class TaskServiceIT {
         .baseUrl(baseUrl)
         .defaultStatusHandler(status -> true, (request, response) -> {})
         .build();
-  }
-
-  private String admin() {
-    return token(adminId, "admin");
   }
 
   private String teacher() {

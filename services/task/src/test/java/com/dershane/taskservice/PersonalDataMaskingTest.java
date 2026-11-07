@@ -16,7 +16,6 @@ import com.dershane.taskservice.assignment.domain.Assignment;
 import com.dershane.taskservice.assignment.domain.AssignmentStatus;
 import com.dershane.taskservice.assignment.domain.Evaluation;
 import com.dershane.taskservice.assignment.domain.Submission;
-import com.dershane.taskservice.roster.adapter.in.web.dto.MembershipReplicaRequest;
 import com.dershane.taskservice.roster.application.port.in.RecordMembershipAddedCommand;
 import com.dershane.taskservice.roster.application.port.in.RosterEntryView;
 import com.dershane.taskservice.roster.domain.MembershipReplica;
@@ -64,7 +63,6 @@ class PersonalDataMaskingTest {
     assertMasked(new RosterEntryView(id, NUMBER, NAME));
     assertMasked(MembershipReplica.open(id, id, id, id, day, NUMBER, NAME));
     assertMasked(new RecordMembershipAddedCommand(id, id, id, id, NUMBER, NAME, day));
-    assertMasked(new MembershipReplicaRequest(id, id, id, NUMBER, NAME, day));
   }
 
   @Test
