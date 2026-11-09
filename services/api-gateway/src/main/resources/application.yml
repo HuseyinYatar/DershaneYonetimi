@@ -59,6 +59,10 @@ spring:
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
                 throw-on-limit: true
+                # Only the WebSocket handshake (GET /api/v1/chat/ws) has no authenticated subject
+                # (browsers cannot send a token there; messaging checks a one-time ticket). Every
+                # other /api/** request is authenticated before the limiter runs.
+                deny-empty-key: false
 
           # Each service owns its top-level resource names and lists them explicitly (no catch-all
           # /api/v1/**), so a new service adds its own route without touching this one. The path
@@ -76,6 +80,11 @@ spring:
               uri: ${TASK_SERVICE_URL:http://localhost:8084}
               predicates:
                 - Path=/api/v1/tasks/**,/api/v1/task-assignments/**,/api/v1/task-replicas/**
+            # Spring Cloud Gateway proxies the WebSocket upgrade on this route as well.
+            - id: messaging
+              uri: ${MESSAGING_SERVICE_URL:http://localhost:8086}
+              predicates:
+                - Path=/api/v1/conversations/**,/api/v1/message-reports/**,/api/v1/chat/**
 
   lifecycle:
     timeout-per-shutdown-phase: 20s

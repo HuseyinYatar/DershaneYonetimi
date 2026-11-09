@@ -1,0 +1,12 @@
+# Local development against local/docker-compose.yml (PostgreSQL, Keycloak, Floci).
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+messaging:
+  aws:
+    endpoint-url: ${AWS_ENDPOINT_URL:http://localhost:4566}
+    static-access-key-id: test
+    static-secret-access-key: test

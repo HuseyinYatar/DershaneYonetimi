@@ -1,6 +1,6 @@
 # Yerel geliştirme ortamı
 
-AWS servisleri Floci ile, kimlik Keycloak ile yerelde çalışır. Gereken: Docker; user, attendance ve task için JDK 25,
+AWS servisleri Floci ile, kimlik Keycloak ile yerelde çalışır. Gereken: Docker; user, attendance, task ve messaging için JDK 25,
 exam-analysis için Python 3.14+ ve [uv](https://docs.astral.sh/uv/).
 
 ## Başlatma
@@ -31,6 +31,8 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 | attendance metrik, sağlık, build bilgisi | http://localhost:8083/metrics, `/health/readiness`, `/info` | — |
 | task (API / Swagger UI) | http://localhost:8084, http://localhost:8084/swagger-ui.html | "Authorize" → Keycloak |
 | task metrik, sağlık, build bilgisi | http://localhost:8085/metrics, `/health/readiness`, `/info` | — |
+| messaging (API / Swagger UI) | http://localhost:8086, http://localhost:8086/swagger-ui.html | "Authorize" → Keycloak |
+| messaging metrik, sağlık, build bilgisi | http://localhost:8087/metrics, `/health/readiness`, `/info` | — |
 | Keycloak yönetim konsolu | http://localhost:8180 | `admin` / `admin` |
 | İlk super-admin (uygulama kullanıcısı) | Swagger'dan giriş | `superadmin@dershane.local` / `admin` |
 | Mailpit (şifre belirleme e-postaları) | http://localhost:8025 | — |
@@ -102,6 +104,22 @@ docker compose -f local/docker-compose.yml run --rm task --task.job=check-deadli
 `user-events`'e abone `task-user-events` kuyruğunu açar. `local/postgres/init.sql` yalnızca boş
 volume'da çalışır: var olan bir ortamda `docker compose down -v` yap veya `task_service` kullanıcı ve
 veritabanını elle oluştur (`CREATE USER task_service ...; CREATE DATABASE task_service OWNER task_service;`).
+
+## messaging
+
+```bash
+cd services/messaging
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local   # API :8080 (container: 8086), Redis gerekir
+```
+
+Öğrenci ve öğretmen kopyası `messaging-user-events` kuyruğundan (`UserUpdated`) dolar; yerelde kullanıcıları
+user servisinden (`:8080`) aynı şubede aç. Akış: öğrenci token'ıyla `POST /api/v1/conversations`, ardından
+`POST /api/v1/chat/tickets` ile bilet al ve `ws://localhost:8000/api/v1/chat/ws?ticket=…` adresine bağlan
+(örn. `websocat`); karşı taraf mesaj gönderince `MESSAGE` çerçevesi gelir. Soket kapalıyken (veya
+`presence:{id}` anahtarı yokken) gelen her mesaj `messaging-events` topic'ine bir `NewMessage` yazar
+(inceleme kuyruğu `local-inspect-messaging-events`). `local/postgres/init.sql` yalnızca boş volume'da
+çalışır: var olan bir ortamda `docker compose down -v` yap veya `messaging_service` kullanıcı ve veritabanını
+elle oluştur.
 
 ## Port çakışması
 
