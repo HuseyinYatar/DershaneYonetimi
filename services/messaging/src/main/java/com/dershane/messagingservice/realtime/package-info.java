@@ -5,7 +5,12 @@
  * except heartbeats.
  */
 @ApplicationModule(
-    allowedDependencies = {"shared", "conversation::port-in", "conversation::port-out"})
+    allowedDependencies = {
+      "shared",
+      "conversation::port-in",
+      "conversation::port-out",
+      "directory::port-in"
+    })
 package com.dershane.messagingservice.realtime;
 
 import org.springframework.modulith.ApplicationModule;

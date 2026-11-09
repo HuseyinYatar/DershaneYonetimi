@@ -1,5 +1,6 @@
 package com.dershane.messagingservice.realtime.application.service;
 
+import com.dershane.messagingservice.directory.application.port.in.UserDirectoryQuery;
 import com.dershane.messagingservice.realtime.application.port.in.IssueTicketUseCase;
 import com.dershane.messagingservice.realtime.application.port.in.RedeemTicketUseCase;
 import com.dershane.messagingservice.realtime.application.port.in.TicketView;
@@ -25,11 +26,25 @@ class TicketService implements IssueTicketUseCase, RedeemTicketUseCase {
   private static final int TICKET_BYTES = 32;
 
   private final TicketStorePort tickets;
+  private final UserDirectoryQuery directory;
   private final MessagingProperties properties;
   private final SecureRandom random = new SecureRandom();
 
   @Override
   public TicketView issue(Actor actor) {
+    // A deactivated account whose token has not expired yet gets no new socket.
+    directory
+        .find(actor.id())
+        .filter(entry -> !entry.active())
+        .ifPresent(
+            entry -> {
+              throw Rejections.reject(
+                  log,
+                  ErrorCode.ACCOUNT_INACTIVE,
+                  "The caller's account is inactive",
+                  "callerId",
+                  actor.id());
+            });
     byte[] bytes = new byte[TICKET_BYTES];
     random.nextBytes(bytes);
     String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);

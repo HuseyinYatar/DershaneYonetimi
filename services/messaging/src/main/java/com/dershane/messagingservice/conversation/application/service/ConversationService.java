@@ -36,10 +36,27 @@ class ConversationService implements OpenConversationUseCase, ConversationQuery 
   private final ConversationQueryPort queries;
   private final ConversationAccess access;
 
+  /** A deactivated account whose token has not expired yet must not write or open chats. */
+  private void requireActiveCaller(Actor actor) {
+    directory
+        .find(actor.id())
+        .filter(entry -> !entry.active())
+        .ifPresent(
+            entry -> {
+              throw Rejections.reject(
+                  log,
+                  ErrorCode.ACCOUNT_INACTIVE,
+                  "The caller's account is inactive",
+                  "callerId",
+                  actor.id());
+            });
+  }
+
   @Override
   @Transactional
   @Observed(name = "conversation.open")
   public OpenedConversation open(Actor actor, UUID participantId) {
+    requireActiveCaller(actor);
     PartyRole callerRole = roleOf(actor);
     DirectoryEntryView entry =
         directory
