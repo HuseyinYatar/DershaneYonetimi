@@ -238,6 +238,15 @@ class AssignmentServiceTest {
   }
 
   @Test
+  void anAdminOfAnotherBranchWhoIsAlsoTheLinkedGuardianMayView() {
+    Actor both = actor(UUID.randomUUID(), UUID.randomUUID(), "ADMIN", "GUARDIAN");
+    when(assignmentQuery.findDetailById(assignment.getId())).thenReturn(Optional.of(detail()));
+    when(guardians.isGuardianOf(both.id(), student.id())).thenReturn(true);
+
+    assertThat(service.get(both, assignment.getId()).id()).isEqualTo(assignment.getId());
+  }
+
+  @Test
   void strangersMayNotViewTheDetail() {
     when(assignmentQuery.findDetailById(assignment.getId())).thenReturn(Optional.of(detail()));
     when(guardians.isGuardianOf(guardian.id(), student.id())).thenReturn(false);

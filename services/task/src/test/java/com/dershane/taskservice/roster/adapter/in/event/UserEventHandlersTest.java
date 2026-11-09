@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,7 @@ class UserEventHandlersTest {
   /** Tests run with the module directory (services/task) as working directory. */
   private static final Path USER_EVENTS_DIR = Path.of("..", "..", "shared", "events", "user");
 
+  private static final Instant OCCURRED_AT = Instant.parse("2026-11-08T10:00:00Z");
   private static final UUID MEMBERSHIP = UUID.fromString("11111111-1111-4111-8111-111111111111");
   private static final UUID STUDENT = UUID.fromString("22222222-2222-4222-8222-222222222222");
   private static final UUID CLASSROOM = UUID.fromString("33333333-3333-4333-8333-333333333333");
@@ -92,7 +94,7 @@ class UserEventHandlersTest {
         .filter(handler -> handler.eventType().equals(eventType))
         .findFirst()
         .orElseThrow()
-        .handle(eventType, json.readTree(SAMPLES.get(eventType)));
+        .handle(eventType, OCCURRED_AT, json.readTree(SAMPLES.get(eventType)));
   }
 
   @Test
@@ -126,14 +128,14 @@ class UserEventHandlersTest {
   void guardianLinkedLinksTheGuardian() {
     handle("GuardianLinked");
 
-    verify(linkGuardian).link(Actor.SYSTEM, GUARDIAN, STUDENT);
+    verify(linkGuardian).link(Actor.SYSTEM, GUARDIAN, STUDENT, OCCURRED_AT);
   }
 
   @Test
   void guardianUnlinkedNamesTheGuardianSoAStaleEventCannotRemoveAnotherLink() {
     handle("GuardianUnlinked");
 
-    verify(unlinkGuardian).unlink(Actor.SYSTEM, STUDENT, GUARDIAN);
+    verify(unlinkGuardian).unlink(Actor.SYSTEM, STUDENT, GUARDIAN, OCCURRED_AT);
   }
 
   @Test

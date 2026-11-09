@@ -62,14 +62,19 @@ class AssignmentGenerator {
               .map(RosterEntryView::studentId)
               .toList();
       case STUDENT -> {
-        if (memberships.activeMembershipOf(task.getTargetId(), day).isPresent()) {
+        boolean inTaskBranch =
+            memberships
+                .activeMembershipOf(task.getTargetId(), day)
+                .filter(membership -> membership.branchId().equals(task.getBranchId()))
+                .isPresent();
+        if (inTaskBranch) {
           yield List.of(task.getTargetId());
         }
         log.atWarn()
             .addKeyValue("taskId", task.getId())
             .addKeyValue("studentId", task.getTargetId())
             .addKeyValue("day", day)
-            .log("Student has no active membership; the individual task is skipped");
+            .log("Student is not in the task's branch; the individual task is skipped");
         yield List.of();
       }
       default -> List.of();
