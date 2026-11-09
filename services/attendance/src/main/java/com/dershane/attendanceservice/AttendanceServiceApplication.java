@@ -1,7 +1,6 @@
 package com.dershane.attendanceservice;
 
 import java.util.Arrays;
-import java.util.Map;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -23,15 +22,32 @@ public class AttendanceServiceApplication {
    */
   public static void main(String[] args) {
     SpringApplication application = new SpringApplication(AttendanceServiceApplication.class);
-    boolean jobRun = Arrays.stream(args).anyMatch(arg -> arg.startsWith(JOB_ARGUMENT_PREFIX));
+    boolean jobRun = isJobRun(args);
     if (jobRun) {
       application.setWebApplicationType(WebApplicationType.NONE);
-      application.setDefaultProperties(
-          Map.of("attendance.outbox.enabled", "false", "attendance.inbox.enabled", "false"));
     }
-    ConfigurableApplicationContext context = application.run(args);
+    ConfigurableApplicationContext context = application.run(runArguments(args));
     if (jobRun) {
       System.exit(SpringApplication.exit(context));
     }
+  }
+
+  static boolean isJobRun(String[] args) {
+    return Arrays.stream(args).anyMatch(arg -> arg.startsWith(JOB_ARGUMENT_PREFIX));
+  }
+
+  /**
+   * In job mode the outbox publisher and the event consumer are switched off with command-line
+   * arguments. SpringApplication.setDefaultProperties ranks below application.yml, whose {@code
+   * ${INBOX_ENABLED:true}} would win and make a CronJob pod poll the queue; arguments rank above.
+   */
+  static String[] runArguments(String[] args) {
+    if (!isJobRun(args)) {
+      return args;
+    }
+    String[] extended = Arrays.copyOf(args, args.length + 2);
+    extended[args.length] = "--attendance.outbox.enabled=false";
+    extended[args.length + 1] = "--attendance.inbox.enabled=false";
+    return extended;
   }
 }

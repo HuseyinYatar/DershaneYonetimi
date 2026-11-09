@@ -71,18 +71,24 @@ public class RosterPersistenceAdapter
   }
 
   @Override
-  public List<RosterEntryView> findRosterOn(UUID classroomId, LocalDate date) {
+  public List<RosterEntryView> findRosterOn(UUID classroomId, UUID branchId, LocalDate date) {
     // Two memberships of the same student can cover the day they rejoined; list them once.
     Map<UUID, RosterEntryView> byStudent = new LinkedHashMap<>();
     memberships
-        .findRosterOn(classroomId, date)
+        .findRosterOn(classroomId, branchId, date)
         .forEach(e -> byStudent.putIfAbsent(e.studentId(), e));
     return List.copyOf(byStudent.values());
   }
 
   @Override
-  public boolean existsMembershipOn(UUID classroomId, UUID studentId, LocalDate date) {
-    return memberships.existsMembershipOn(classroomId, studentId, date);
+  public boolean existsMembershipOn(
+      UUID classroomId, UUID branchId, UUID studentId, LocalDate date) {
+    return memberships.existsMembershipOn(classroomId, branchId, studentId, date);
+  }
+
+  @Override
+  public boolean existsMembershipInOtherBranch(UUID classroomId, UUID branchId) {
+    return memberships.existsByClassroomIdAndBranchIdNot(classroomId, branchId);
   }
 
   @Override

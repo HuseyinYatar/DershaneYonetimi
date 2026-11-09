@@ -157,13 +157,15 @@ class RepositoryQueriesIT {
     UUID student = UUID.randomUUID();
     membership(classroomId, student, DAY, DAY.plusDays(5));
 
-    assertThat(rosterQuery.findRosterOn(classroomId, DAY.minusDays(1))).isEmpty();
-    assertThat(rosterQuery.findRosterOn(classroomId, DAY)).hasSize(1);
-    assertThat(rosterQuery.findRosterOn(classroomId, DAY.plusDays(5))).hasSize(1);
-    assertThat(rosterQuery.findRosterOn(classroomId, DAY.plusDays(6))).isEmpty();
-    assertThat(rosterQuery.existsMembershipOn(classroomId, student, DAY.plusDays(5))).isTrue();
-    assertThat(rosterQuery.existsMembershipOn(classroomId, student, DAY.plusDays(6))).isFalse();
-    assertThat(rosterQuery.existsMembershipOn(UUID.randomUUID(), student, DAY)).isFalse();
+    assertThat(rosterQuery.findRosterOn(classroomId, branchId, DAY.minusDays(1))).isEmpty();
+    assertThat(rosterQuery.findRosterOn(classroomId, branchId, DAY)).hasSize(1);
+    assertThat(rosterQuery.findRosterOn(classroomId, branchId, DAY.plusDays(5))).hasSize(1);
+    assertThat(rosterQuery.findRosterOn(classroomId, branchId, DAY.plusDays(6))).isEmpty();
+    assertThat(rosterQuery.existsMembershipOn(classroomId, branchId, student, DAY.plusDays(5)))
+        .isTrue();
+    assertThat(rosterQuery.existsMembershipOn(classroomId, branchId, student, DAY.plusDays(6)))
+        .isFalse();
+    assertThat(rosterQuery.existsMembershipOn(UUID.randomUUID(), branchId, student, DAY)).isFalse();
   }
 
   @Test
@@ -172,7 +174,7 @@ class RepositoryQueriesIT {
     membership(classroomId, student, DAY.minusDays(10), DAY);
     membership(classroomId, student, DAY, null);
 
-    List<RosterEntryView> roster = rosterQuery.findRosterOn(classroomId, DAY);
+    List<RosterEntryView> roster = rosterQuery.findRosterOn(classroomId, branchId, DAY);
 
     assertThat(roster).extracting(RosterEntryView::studentId).containsExactly(student);
   }
@@ -182,12 +184,14 @@ class RepositoryQueriesIT {
     UUID student = UUID.randomUUID();
     UUID first = UUID.randomUUID();
     UUID second = UUID.randomUUID();
-    saveLinks.save(GuardianLinkReplica.of(student, first));
+    saveLinks.save(GuardianLinkReplica.of(student, first, Instant.parse("2026-11-08T10:00:00Z")));
     entityManager.flush();
     entityManager.clear();
 
     GuardianLinkReplica loaded = loadLinks.findByStudentId(student).orElseThrow();
-    saveLinks.save(new GuardianLinkReplica(student, loaded.getVersion(), second));
+    saveLinks.save(
+        new GuardianLinkReplica(
+            student, loaded.getVersion(), second, Instant.parse("2026-11-08T10:05:00Z")));
     entityManager.flush();
 
     assertThat(loadLinks.existsByGuardianIdAndStudentId(second, student)).isTrue();
@@ -203,25 +207,39 @@ class RepositoryQueriesIT {
 
     assertThat(
             loadSession.existsClassroomOverlap(
-                classroomId, DAY, LocalTime.of(9, 30), LocalTime.of(10, 10), null))
+                branchId, classroomId, DAY, LocalTime.of(9, 30), LocalTime.of(10, 10), null))
         .isTrue();
     assertThat(
             loadSession.existsTeacherOverlap(
-                teacherId, DAY, LocalTime.of(8, 30), LocalTime.of(9, 10), null))
+                branchId, teacherId, DAY, LocalTime.of(8, 30), LocalTime.of(9, 10), null))
         .isTrue();
     // Back to back is not an overlap.
     assertThat(
             loadSession.existsClassroomOverlap(
-                classroomId, DAY, LocalTime.of(9, 40), LocalTime.of(10, 20), null))
+                branchId, classroomId, DAY, LocalTime.of(9, 40), LocalTime.of(10, 20), null))
         .isFalse();
     assertThat(
             loadSession.existsClassroomOverlap(
-                classroomId, DAY.plusDays(1), LocalTime.of(9, 0), LocalTime.of(9, 40), null))
+                branchId,
+                classroomId,
+                DAY.plusDays(1),
+                LocalTime.of(9, 0),
+                LocalTime.of(9, 40),
+                null))
+        .isFalse();
+    // Another branch's sessions never clash: the check is scoped to the branch.
+    assertThat(
+            loadSession.existsClassroomOverlap(
+                UUID.randomUUID(), classroomId, DAY, LocalTime.of(9, 0), LocalTime.of(9, 40), null))
+        .isFalse();
+    assertThat(
+            loadSession.existsTeacherOverlap(
+                UUID.randomUUID(), teacherId, DAY, LocalTime.of(9, 0), LocalTime.of(9, 40), null))
         .isFalse();
     // A session does not clash with itself (reassigning the teacher).
     assertThat(
             loadSession.existsTeacherOverlap(
-                teacherId, DAY, LocalTime.of(9, 0), LocalTime.of(9, 40), planned.getId()))
+                branchId, teacherId, DAY, LocalTime.of(9, 0), LocalTime.of(9, 40), planned.getId()))
         .isFalse();
 
     planned.cancel();
@@ -230,7 +248,7 @@ class RepositoryQueriesIT {
 
     assertThat(
             loadSession.existsClassroomOverlap(
-                classroomId, DAY, LocalTime.of(9, 0), LocalTime.of(9, 40), null))
+                branchId, classroomId, DAY, LocalTime.of(9, 0), LocalTime.of(9, 40), null))
         .isFalse();
   }
 

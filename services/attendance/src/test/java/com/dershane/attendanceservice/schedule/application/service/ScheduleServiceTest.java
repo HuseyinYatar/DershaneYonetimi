@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.dershane.attendanceservice.roster.application.port.in.ClassroomBranchQuery;
 import com.dershane.attendanceservice.schedule.application.port.in.GenerateSessionsResult;
 import com.dershane.attendanceservice.schedule.application.port.in.ScheduleView;
 import com.dershane.attendanceservice.schedule.application.port.in.UpdateScheduleCommand;
@@ -50,6 +51,7 @@ class ScheduleServiceTest {
   @Mock private SaveSchedulePort saveSchedule;
   @Mock private ScheduleQueryPort scheduleQuery;
   @Mock private CreateScheduledSessionUseCase createSession;
+  @Mock private ClassroomBranchQuery classrooms;
 
   private final UUID branchId = UUID.randomUUID();
   private final Actor admin = actor(UUID.randomUUID(), branchId, "ADMIN");
@@ -65,9 +67,35 @@ class ScheduleServiceTest {
             scheduleQuery,
             createSession,
             new BranchAccessPolicy(),
+            classrooms,
             new BusinessCalendar(
                 Clock.fixed(Instant.parse("2026-10-30T07:00:00Z"), ZoneOffset.UTC),
                 "Europe/Istanbul"));
+  }
+
+  @Test
+  void aClassroomOfAnotherBranchCannotGetASchedule() {
+    UUID classroomId = UUID.randomUUID();
+    when(classrooms.isKnownInOtherBranch(classroomId, branchId)).thenReturn(true);
+
+    assertThatExceptionOfType(DomainException.class)
+        .isThrownBy(
+            () ->
+                service.create(
+                    admin,
+                    new com.dershane.attendanceservice.schedule.application.port.in
+                        .CreateScheduleCommand(
+                        branchId,
+                        classroomId,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        DayOfWeek.MONDAY,
+                        LocalTime.of(9, 0),
+                        LocalTime.of(9, 40),
+                        TODAY,
+                        null)))
+        .satisfies(ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BRANCH_MISMATCH));
+    verify(saveSchedule, never()).save(any());
   }
 
   private ClassSchedule schedule(DayOfWeek day, LocalDate validFrom, LocalDate validTo) {

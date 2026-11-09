@@ -50,20 +50,26 @@ public class SessionPersistenceAdapter
 
   @Override
   public boolean existsClassroomOverlap(
+      UUID branchId,
       UUID classroomId,
       LocalDate date,
       LocalTime startsAt,
       LocalTime endsAt,
       UUID excludeSessionId) {
     return repository.existsClassroomOverlap(
-        classroomId, date, startsAt, endsAt, OCCUPYING, orNone(excludeSessionId));
+        branchId, classroomId, date, startsAt, endsAt, OCCUPYING, orNone(excludeSessionId));
   }
 
   @Override
   public boolean existsTeacherOverlap(
-      UUID teacherId, LocalDate date, LocalTime startsAt, LocalTime endsAt, UUID excludeSessionId) {
+      UUID branchId,
+      UUID teacherId,
+      LocalDate date,
+      LocalTime startsAt,
+      LocalTime endsAt,
+      UUID excludeSessionId) {
     return repository.existsTeacherOverlap(
-        teacherId, date, startsAt, endsAt, OCCUPYING, orNone(excludeSessionId));
+        branchId, teacherId, date, startsAt, endsAt, OCCUPYING, orNone(excludeSessionId));
   }
 
   @Override

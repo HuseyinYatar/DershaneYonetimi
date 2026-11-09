@@ -133,7 +133,7 @@ class AttendanceTakingServiceTest {
 
   private void givenSession(ClassSession session, List<UUID> roster) {
     when(sessions.require(sessionId)).thenReturn(session);
-    when(rosters.rosterOn(classroomId, session.getSessionDate()))
+    when(rosters.rosterOn(classroomId, branchId, session.getSessionDate()))
         .thenReturn(
             roster.stream().map(id -> new RosterEntryView(id, "no-" + id, "name-" + id)).toList());
   }
@@ -305,7 +305,7 @@ class AttendanceTakingServiceTest {
     ClassSession expired = session(SessionStatus.EXPIRED, TODAY.minusDays(1));
     when(sessions.require(sessionId)).thenReturn(expired);
     when(sessionAccess.actsAsAdmin(admin, expired)).thenReturn(true);
-    when(rosters.rosterOn(classroomId, expired.getSessionDate()))
+    when(rosters.rosterOn(classroomId, branchId, expired.getSessionDate()))
         .thenReturn(List.of(new RosterEntryView(ali, "1", "Ali")));
     givenSavedRecordsGetIds();
     when(excuses.coveredExcuses(anyCollection(), any())).thenReturn(Map.of());
@@ -373,7 +373,7 @@ class AttendanceTakingServiceTest {
     UUID excuseId = UUID.randomUUID();
     ClassSession planned = session(SessionStatus.PLANNED, TODAY);
     when(sessions.require(sessionId)).thenReturn(planned);
-    when(rosters.rosterOn(classroomId, TODAY))
+    when(rosters.rosterOn(classroomId, branchId, TODAY))
         .thenReturn(
             List.of(new RosterEntryView(ali, "1", "Ali"), new RosterEntryView(ayse, "2", "Ayse")));
     when(loadRecords.findBySessionId(sessionId))

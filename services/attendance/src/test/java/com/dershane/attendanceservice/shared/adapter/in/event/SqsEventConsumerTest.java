@@ -92,7 +92,8 @@ class SqsEventConsumerTest {
 
   private String envelope(String eventType) {
     return """
-        {"eventId":"%s","eventType":"%s","schemaVersion":1,"source":"user","data":{"k":"v"}}
+        {"eventId":"%s","eventType":"%s","schemaVersion":1,"occurredAt":"2026-11-08T10:00:00Z",
+         "source":"user","data":{"k":"v"}}
         """
         .formatted(eventId, eventType);
   }
@@ -113,6 +114,20 @@ class SqsEventConsumerTest {
   }
 
   @Test
+  void handsTheEnvelopeTimeToTheHandler() {
+    receive(envelope(TYPE));
+    when(processedEvents.markProcessed(eventId, TYPE)).thenReturn(true);
+
+    consumer.pollOnce();
+
+    verify(handler)
+        .handle(
+            org.mockito.ArgumentMatchers.eq(TYPE),
+            org.mockito.ArgumentMatchers.eq(java.time.Instant.parse("2026-11-08T10:00:00Z")),
+            any());
+  }
+
+  @Test
   void appliesANewEventAndDeletesItsMessage() {
     receive(envelope(TYPE));
     when(processedEvents.markProcessed(eventId, TYPE)).thenReturn(true);
@@ -120,7 +135,7 @@ class SqsEventConsumerTest {
     int received = consumer.pollOnce();
 
     assertThat(received).isEqualTo(1);
-    verify(handler).handle(any(), any());
+    verify(handler).handle(any(), any(), any());
     verifyDeleted();
     assertThat(count(TYPE, "processed")).isEqualTo(1.0);
   }
@@ -132,7 +147,7 @@ class SqsEventConsumerTest {
 
     consumer.pollOnce();
 
-    verify(handler, never()).handle(any(), any());
+    verify(handler, never()).handle(any(), any(), any());
     verifyDeleted();
     assertThat(count(TYPE, "duplicate")).isEqualTo(1.0);
   }
@@ -141,7 +156,7 @@ class SqsEventConsumerTest {
   void keepsTheMessageWhenTheHandlerFails() {
     receive(envelope(TYPE));
     when(processedEvents.markProcessed(eventId, TYPE)).thenReturn(true);
-    doThrow(new IllegalStateException("boom")).when(handler).handle(any(), any());
+    doThrow(new IllegalStateException("boom")).when(handler).handle(any(), any(), any());
 
     consumer.pollOnce();
 
@@ -166,7 +181,7 @@ class SqsEventConsumerTest {
 
     consumer.pollOnce();
 
-    verify(handler, never()).handle(any(), any());
+    verify(handler, never()).handle(any(), any(), any());
     verifyNothingDeleted();
     assertThat(count("unknown", "failed")).isEqualTo(1.0);
   }
