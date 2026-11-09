@@ -3,6 +3,7 @@ package com.dershane.attendanceservice.roster.adapter.in.event;
 import com.dershane.attendanceservice.roster.application.port.in.RecordMembershipRemovedUseCase;
 import com.dershane.attendanceservice.shared.adapter.in.event.EventHandler;
 import com.dershane.attendanceservice.shared.application.Actor;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +28,7 @@ class StudentRemovedFromClassroomHandler implements EventHandler {
   }
 
   @Override
-  public void handle(String eventType, JsonNode data) {
+  public void handle(String eventType, Instant occurredAt, JsonNode data) {
     MembershipEnded ended = json.treeToValue(data, MembershipEnded.class);
     recordRemoved.recordRemoved(Actor.SYSTEM, ended.membershipId(), ended.endDate());
   }

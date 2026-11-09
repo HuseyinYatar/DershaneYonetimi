@@ -19,11 +19,11 @@ public record CreateTaskRequest(
     @NotNull TargetType targetType,
     @NotNull UUID targetId,
     @NotNull Recurrence recurrence,
-    Set<DayOfWeek> recurrenceDays,
+    @Size(max = 7) Set<@NotNull DayOfWeek> recurrenceDays,
     @NotNull LocalDate startDate,
     LocalDate endDate,
     @NotNull LocalTime dueTime,
-    List<UUID> attachmentFileIds) {
+    @Size(max = 50) List<@NotNull UUID> attachmentFileIds) {
 
   @Override
   public String toString() {

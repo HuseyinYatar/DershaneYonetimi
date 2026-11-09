@@ -1,5 +1,6 @@
 package com.dershane.attendanceservice.roster.application.service;
 
+import com.dershane.attendanceservice.roster.application.port.in.ClassroomBranchQuery;
 import com.dershane.attendanceservice.roster.application.port.in.ClassroomRosterQuery;
 import com.dershane.attendanceservice.roster.application.port.in.GuardianAccessQuery;
 import com.dershane.attendanceservice.roster.application.port.in.MembershipQuery;
@@ -16,21 +17,28 @@ import org.springframework.transaction.annotation.Transactional;
 /** Read-only answers other modules ask about memberships and guardians. */
 @Component
 @RequiredArgsConstructor
-class RosterLookup implements ClassroomRosterQuery, MembershipQuery, GuardianAccessQuery {
+class RosterLookup
+    implements ClassroomRosterQuery, ClassroomBranchQuery, MembershipQuery, GuardianAccessQuery {
 
   private final RosterQueryPort rosterQuery;
   private final LoadGuardianLinkPort links;
 
   @Override
   @Transactional(readOnly = true)
-  public List<RosterEntryView> rosterOn(UUID classroomId, LocalDate date) {
-    return rosterQuery.findRosterOn(classroomId, date);
+  public List<RosterEntryView> rosterOn(UUID classroomId, UUID branchId, LocalDate date) {
+    return rosterQuery.findRosterOn(classroomId, branchId, date);
   }
 
   @Override
   @Transactional(readOnly = true)
-  public boolean wasMemberOn(UUID classroomId, UUID studentId, LocalDate date) {
-    return rosterQuery.existsMembershipOn(classroomId, studentId, date);
+  public boolean isKnownInOtherBranch(UUID classroomId, UUID branchId) {
+    return rosterQuery.existsMembershipInOtherBranch(classroomId, branchId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public boolean wasMemberOn(UUID classroomId, UUID branchId, UUID studentId, LocalDate date) {
+    return rosterQuery.existsMembershipOn(classroomId, branchId, studentId, date);
   }
 
   @Override

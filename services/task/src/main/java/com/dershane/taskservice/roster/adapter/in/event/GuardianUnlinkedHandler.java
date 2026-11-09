@@ -3,6 +3,7 @@ package com.dershane.taskservice.roster.adapter.in.event;
 import com.dershane.taskservice.roster.application.port.in.UnlinkGuardianUseCase;
 import com.dershane.taskservice.shared.adapter.in.event.EventHandler;
 import com.dershane.taskservice.shared.application.Actor;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -27,9 +28,9 @@ class GuardianUnlinkedHandler implements EventHandler {
   }
 
   @Override
-  public void handle(String eventType, JsonNode data) {
+  public void handle(String eventType, Instant occurredAt, JsonNode data) {
     GuardianLink link = json.treeToValue(data, GuardianLink.class);
-    unlinkGuardian.unlink(Actor.SYSTEM, link.studentId(), link.guardianId());
+    unlinkGuardian.unlink(Actor.SYSTEM, link.studentId(), link.guardianId(), occurredAt);
   }
 
   private record GuardianLink(UUID guardianId, UUID studentId) {}

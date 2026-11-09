@@ -175,6 +175,16 @@ class AssignmentGeneratorTest {
   }
 
   @Test
+  void anIndividualTaskIsSkippedWhenTheStudentNowStudiesInAnotherBranch() {
+    Task task = task(TargetType.STUDENT, ali, Recurrence.DAILY, null);
+    when(memberships.activeMembershipOf(ali, TODAY))
+        .thenReturn(Optional.of(new ActiveMembershipView(classroomId, UUID.randomUUID())));
+    when(loadAssignment.findStudentIdsWithAssignment(task.getId(), TODAY)).thenReturn(Set.of());
+
+    assertThat(generator.generateForTask(task, TODAY)).isZero();
+  }
+
+  @Test
   void anIndividualTaskIsSkippedWhenTheStudentHasNoMembership() {
     Task task = task(TargetType.STUDENT, ali, Recurrence.DAILY, null);
     when(memberships.activeMembershipOf(ali, TODAY)).thenReturn(Optional.empty());

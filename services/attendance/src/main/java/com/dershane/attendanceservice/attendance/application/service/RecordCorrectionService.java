@@ -176,7 +176,8 @@ class RecordCorrectionService implements CorrectRecordUseCase, ApplyExcuseUseCas
   }
 
   private void requireWasMember(ClassSession session, UUID studentId) {
-    if (!memberships.wasMemberOn(session.getClassroomId(), studentId, session.getSessionDate())) {
+    if (!memberships.wasMemberOn(
+        session.getClassroomId(), session.getBranchId(), studentId, session.getSessionDate())) {
       throw Rejections.reject(
           log,
           ErrorCode.STUDENT_NOT_IN_ROSTER,

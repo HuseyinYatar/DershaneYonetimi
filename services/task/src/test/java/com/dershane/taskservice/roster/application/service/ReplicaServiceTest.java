@@ -21,6 +21,7 @@ import com.dershane.taskservice.shared.application.Actor;
 import com.dershane.taskservice.shared.application.BranchAccessPolicy;
 import com.dershane.taskservice.shared.domain.DomainException;
 import com.dershane.taskservice.shared.domain.ErrorCode;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
@@ -149,35 +150,48 @@ class ReplicaServiceTest {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
     when(loadLinks.findByStudentId(studentId)).thenReturn(Optional.empty());
 
-    service.link(admin, guardianId, studentId);
+    service.link(admin, guardianId, studentId, at(1));
 
     ArgumentCaptor<GuardianLinkReplica> saved = ArgumentCaptor.forClass(GuardianLinkReplica.class);
     verify(saveLinks).save(saved.capture());
     assertThat(saved.getValue().getGuardianId()).isEqualTo(guardianId);
     assertThat(saved.getValue().getVersion()).isNull();
+    assertThat(saved.getValue().getLinkedAt()).isEqualTo(at(1));
   }
 
   @Test
   void anotherGuardianReplacesTheLinkKeepingItsVersion() {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
     when(loadLinks.findByStudentId(studentId))
-        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 4L, UUID.randomUUID())));
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 4L, UUID.randomUUID(), at(1))));
 
-    service.link(admin, guardianId, studentId);
+    service.link(admin, guardianId, studentId, at(2));
 
     ArgumentCaptor<GuardianLinkReplica> saved = ArgumentCaptor.forClass(GuardianLinkReplica.class);
     verify(saveLinks).save(saved.capture());
     assertThat(saved.getValue().getGuardianId()).isEqualTo(guardianId);
     assertThat(saved.getValue().getVersion()).isEqualTo(4L);
+    assertThat(saved.getValue().getLinkedAt()).isEqualTo(at(2));
+  }
+
+  @Test
+  void aLateLinkOfAGuardianThatWasReplacedKeepsTheNewerLink() {
+    when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
+    when(loadLinks.findByStudentId(studentId))
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 4L, UUID.randomUUID(), at(5))));
+
+    service.link(admin, guardianId, studentId, at(3));
+
+    verify(saveLinks, never()).save(any());
   }
 
   @Test
   void theSameGuardianLinkAgainChangesNothing() {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
     when(loadLinks.findByStudentId(studentId))
-        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 4L, guardianId)));
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 4L, guardianId, at(1))));
 
-    service.link(admin, guardianId, studentId);
+    service.link(admin, guardianId, studentId, at(2));
 
     verify(saveLinks, never()).save(any());
   }
@@ -187,11 +201,11 @@ class ReplicaServiceTest {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.empty());
 
     assertRejected(
-        () -> service.link(admin, guardianId, studentId), ErrorCode.BRANCH_SCOPE_VIOLATION);
+        () -> service.link(admin, guardianId, studentId, at(1)), ErrorCode.BRANCH_SCOPE_VIOLATION);
 
     Actor superAdmin = actor(UUID.randomUUID(), branchId, "ADMIN", "SUPER_ADMIN");
     when(loadLinks.findByStudentId(studentId)).thenReturn(Optional.empty());
-    service.link(superAdmin, guardianId, studentId);
+    service.link(superAdmin, guardianId, studentId, at(1));
     verify(saveLinks).save(any());
   }
 
@@ -199,9 +213,9 @@ class ReplicaServiceTest {
   void unlinkingANamedGuardianRemovesTheLinkWhileItIsTheirs() {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
     when(loadLinks.findByStudentId(studentId))
-        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, guardianId)));
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, guardianId, at(1))));
 
-    service.unlink(admin, studentId, guardianId);
+    service.unlink(admin, studentId, guardianId, at(2));
 
     verify(saveLinks).deleteByStudentId(studentId);
   }
@@ -210,21 +224,38 @@ class ReplicaServiceTest {
   void aStaleUnlinkOfAReplacedGuardianKeepsTheNewLink() {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
     when(loadLinks.findByStudentId(studentId))
-        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, UUID.randomUUID())));
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, UUID.randomUUID(), at(3))));
 
-    service.unlink(admin, studentId, guardianId);
+    service.unlink(admin, studentId, guardianId, at(2));
 
     verify(saveLinks, never()).deleteByStudentId(any());
   }
 
   @Test
-  void unlinkingANamedGuardianOfAStudentWithoutALinkChangesNothing() {
+  void anUnlinkOlderThanTheLinkBeingUnlinkedKeepsIt() {
+    when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
+    when(loadLinks.findByStudentId(studentId))
+        .thenReturn(Optional.of(new GuardianLinkReplica(studentId, 1L, guardianId, at(5))));
+
+    service.unlink(admin, studentId, guardianId, at(3));
+
+    verify(saveLinks, never()).deleteByStudentId(any());
+  }
+
+  @Test
+  void anUnlinkThatOvertakesItsLinkIsRejectedSoTheQueueRedeliversIt() {
     when(loadMemberships.findBranchIdOfStudent(studentId)).thenReturn(Optional.of(branchId));
     when(loadLinks.findByStudentId(studentId)).thenReturn(Optional.empty());
 
-    service.unlink(admin, studentId, guardianId);
+    assertRejected(
+        () -> service.unlink(admin, studentId, guardianId, at(2)),
+        ErrorCode.GUARDIAN_LINK_NOT_FOUND);
 
     verify(saveLinks, never()).deleteByStudentId(any());
+  }
+
+  private static Instant at(int minute) {
+    return Instant.parse("2026-11-08T10:00:00Z").plusSeconds(60L * minute);
   }
 
   private MembershipReplica open() {

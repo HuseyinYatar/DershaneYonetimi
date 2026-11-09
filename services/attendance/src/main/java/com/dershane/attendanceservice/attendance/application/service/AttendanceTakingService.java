@@ -81,7 +81,7 @@ class AttendanceTakingService implements TakeAttendanceUseCase, SessionRosterQue
     ClassSession session = sessions.require(sessionId);
     sessionAccess.requireStaffOf(actor, session, "attendance.roster");
     List<RosterEntryView> roster =
-        rosters.rosterOn(session.getClassroomId(), session.getSessionDate());
+        rosters.rosterOn(session.getClassroomId(), session.getBranchId(), session.getSessionDate());
     Map<UUID, AttendanceRecord> records =
         loadRecords.findBySessionId(sessionId).stream()
             .collect(Collectors.toMap(AttendanceRecord::getStudentId, Function.identity()));
@@ -118,7 +118,9 @@ class AttendanceTakingService implements TakeAttendanceUseCase, SessionRosterQue
         session.checkTakeable(calendar.localNow(), properties.takeEarly(), admin, reasonGiven);
 
     Set<UUID> rosterIds =
-        rosters.rosterOn(session.getClassroomId(), session.getSessionDate()).stream()
+        rosters
+            .rosterOn(session.getClassroomId(), session.getBranchId(), session.getSessionDate())
+            .stream()
             .map(RosterEntryView::studentId)
             .collect(Collectors.toSet());
     AttendancePolicy.requireExactRoster(

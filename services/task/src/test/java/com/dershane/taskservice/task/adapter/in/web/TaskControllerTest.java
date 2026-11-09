@@ -107,6 +107,18 @@ class TaskControllerTest {
   }
 
   @Test
+  void aNullAttachmentIdIsABadRequestNotAServerError() throws Exception {
+    mvc.perform(
+            post("/api/v1/tasks")
+                .with(token(UUID.randomUUID(), branchId, "teacher"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body().replace("}", ",\"attachmentFileIds\":[null]}")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    verifyNoInteractions(createTask);
+  }
+
+  @Test
   void aMissingTitleIsABadRequest() throws Exception {
     mvc.perform(
             post("/api/v1/tasks")

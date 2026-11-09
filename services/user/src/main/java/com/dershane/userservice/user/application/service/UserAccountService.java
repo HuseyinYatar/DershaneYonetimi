@@ -208,17 +208,34 @@ class UserAccountService {
 
   @SuppressWarnings("unchecked")
   private <T extends User> T reload(T current) {
-    return (T)
-        loadUser
-            .findById(current.getId())
-            .orElseThrow(
-                () ->
-                    Rejections.reject(
-                        log,
-                        ErrorCode.USER_NOT_FOUND,
-                        "User disappeared during update",
-                        "userId",
-                        current.getId()));
+    T stored =
+        (T)
+            loadUser
+                .findById(current.getId())
+                .orElseThrow(
+                    () ->
+                        Rejections.reject(
+                            log,
+                            ErrorCode.USER_NOT_FOUND,
+                            "User disappeared during update",
+                            "userId",
+                            current.getId()));
+    // The caller decided on the copy it loaded before the Keycloak call. If the row moved on since,
+    // saving would overwrite the other change and skip the optimistic lock, which compares the
+    // freshly reloaded version with itself.
+    if (!Objects.equals(current.getVersion(), stored.getVersion())) {
+      throw Rejections.reject(
+          log,
+          ErrorCode.CONCURRENT_MODIFICATION,
+          "Update rejected: the user was modified after it was loaded",
+          "userId",
+          current.getId(),
+          "loadedVersion",
+          current.getVersion(),
+          "storedVersion",
+          stored.getVersion());
+    }
+    return stored;
   }
 
   private static boolean identityFieldsChanged(PersonalInfo oldInfo, PersonalInfo newInfo) {

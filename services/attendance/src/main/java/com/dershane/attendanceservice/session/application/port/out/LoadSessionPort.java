@@ -15,6 +15,7 @@ public interface LoadSessionPort {
 
   /** A planned or completed session of the classroom overlaps the time range. */
   boolean existsClassroomOverlap(
+      UUID branchId,
       UUID classroomId,
       LocalDate date,
       LocalTime startsAt,
@@ -23,7 +24,12 @@ public interface LoadSessionPort {
 
   /** A planned or completed session of the teacher overlaps the time range. */
   boolean existsTeacherOverlap(
-      UUID teacherId, LocalDate date, LocalTime startsAt, LocalTime endsAt, UUID excludeSessionId);
+      UUID branchId,
+      UUID teacherId,
+      LocalDate date,
+      LocalTime startsAt,
+      LocalTime endsAt,
+      UUID excludeSessionId);
 
   /** Planned sessions on days before {@code date}. */
   List<ClassSession> findPlannedBefore(LocalDate date);

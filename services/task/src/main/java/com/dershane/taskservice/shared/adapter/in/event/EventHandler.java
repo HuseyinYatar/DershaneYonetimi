@@ -1,5 +1,6 @@
 package com.dershane.taskservice.shared.adapter.in.event;
 
+import java.time.Instant;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -12,8 +13,10 @@ public interface EventHandler {
   String eventType();
 
   /**
-   * Applies the {@code data} part of an event. Runs in the same transaction that records the event
-   * as processed; an exception rolls both back and leaves the message in the queue to be retried.
+   * Applies the {@code data} part of an event. {@code occurredAt} is the producer's time of the
+   * change (envelope {@code occurredAt}); handlers of state that events overwrite use it to drop an
+   * older event that arrives late. Runs in the same transaction that records the event as
+   * processed; an exception rolls both back and leaves the message in the queue to be retried.
    */
-  void handle(String eventType, JsonNode data);
+  void handle(String eventType, Instant occurredAt, JsonNode data);
 }

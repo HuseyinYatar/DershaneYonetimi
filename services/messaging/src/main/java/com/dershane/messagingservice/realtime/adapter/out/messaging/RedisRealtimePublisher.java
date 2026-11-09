@@ -60,7 +60,10 @@ class RedisRealtimePublisher implements RealtimePublisherPort {
     } catch (RuntimeException e) {
       meters.counter(MetricNames.REALTIME_PUBLISH, "outcome", "failure").increment();
       // The data is stored; the client catches up with its sync query after reconnecting.
-      log.atWarn().setCause(e).log("realtime.publish_failed");
+      log.atWarn()
+          .addKeyValue("exception", e.getClass().getSimpleName())
+          .log("realtime.publish_failed");
+      log.atDebug().setCause(e).log("realtime.publish_failed.cause");
     }
   }
 
