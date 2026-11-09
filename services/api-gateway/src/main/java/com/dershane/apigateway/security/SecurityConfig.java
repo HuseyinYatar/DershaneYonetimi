@@ -9,6 +9,10 @@ import org.springframework.security.config.annotation.web.reactive.EnableWebFlux
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
+import org.springframework.web.cors.reactive.CorsUtils;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 /**
  * The gateway only authenticates (signature via JWKS, issuer, audience). It does not look at roles
@@ -33,7 +37,10 @@ public class SecurityConfig {
                     .matchers(EndpointRequest.toAnyEndpoint())
                     .permitAll()
                     // CORS preflight carries no token; the gateway's CORS handling answers it.
-                    .pathMatchers(HttpMethod.OPTIONS)
+                    // Any other OPTIONS request is an ordinary request and needs a token like the
+                    // rest; a blanket OPTIONS rule would also skip the rate limiter and reach the
+                    // services unauthenticated.
+                    .matchers(SecurityConfig::isCorsPreflight)
                     .permitAll()
                     // Browsers cannot send an Authorization header on a WebSocket handshake. The
                     // messaging service authenticates it with a one-time ticket from the query
@@ -56,5 +63,12 @@ public class SecurityConfig {
                     .authenticationEntryPoint(authenticationEntryPoint)
                     .accessDeniedHandler(accessDeniedHandler))
         .build();
+  }
+
+  /** A CORS preflight is an OPTIONS request with both Origin and Access-Control-Request-Method. */
+  static Mono<ServerWebExchangeMatcher.MatchResult> isCorsPreflight(ServerWebExchange exchange) {
+    return CorsUtils.isPreFlightRequest(exchange.getRequest())
+        ? ServerWebExchangeMatcher.MatchResult.match()
+        : ServerWebExchangeMatcher.MatchResult.notMatch();
   }
 }
