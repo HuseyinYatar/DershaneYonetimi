@@ -62,6 +62,9 @@ class GatewayIT {
     registry.add(routes + "[1].id", () -> "down");
     registry.add(routes + "[1].uri", () -> "http://localhost:" + unusedPort());
     registry.add(routes + "[1].predicates[0]", () -> "Path=/api/v1/down/**");
+    registry.add(routes + "[2].id", () -> "messaging");
+    registry.add(routes + "[2].uri", USER_UPSTREAM::url);
+    registry.add(routes + "[2].predicates[0]", () -> "Path=/api/v1/chat/**");
   }
 
   @AfterAll
@@ -302,6 +305,12 @@ class GatewayIT {
         .expectBody()
         .jsonPath("$.errorCode")
         .isEqualTo("ROUTE_NOT_FOUND");
+  }
+
+  @Test
+  void theWebSocketHandshakeNeedsNoTokenButOtherChatPathsDo() {
+    client.get().uri("/api/v1/chat/ws?ticket=abc").exchange().expectStatus().isOk();
+    client.get().uri("/api/v1/chat/tickets").exchange().expectStatus().isUnauthorized();
   }
 
   @Test

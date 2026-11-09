@@ -1,0 +1,36 @@
+name: messaging
+
+on:
+  pull_request:
+    paths:
+      - services/messaging/**
+      - shared/events/**
+      - .github/workflows/messaging.yml
+      - .github/workflows/_java-service.yml
+      - .github/workflows/_image.yml
+  push:
+    branches: [main]
+    paths:
+      - services/messaging/**
+      - shared/events/**
+      - .github/workflows/messaging.yml
+      - .github/workflows/_java-service.yml
+      - .github/workflows/_image.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    uses: ./.github/workflows/_java-service.yml
+    with:
+      service: messaging
+  image:
+    needs: test
+    uses: ./.github/workflows/_image.yml
+    with:
+      service: messaging

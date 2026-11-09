@@ -2,7 +2,7 @@ aws_endpoint_url         = "http://floci:4566"
 emulator                 = true
 create_inspection_queues = true
 
-topics  = ["user", "attendance", "task", "exam-analysis"]
+topics  = ["user", "attendance", "task", "exam-analysis", "messaging"]
 buckets = ["exam-analysis-optical-files"]
 
 # Event lists follow the table in shared/events/README.md. A consumer that starts handling a new
@@ -28,5 +28,9 @@ subscriptions = {
   "task-user-events" = [{
     topic       = "user"
     event_types = ["StudentAddedToClassroom", "StudentRemovedFromClassroom", "GuardianLinked", "GuardianUnlinked"]
+  }]
+  "messaging-user-events" = [{
+    topic       = "user"
+    event_types = ["UserUpdated"]
   }]
 }

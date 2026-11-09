@@ -8,7 +8,9 @@ import reactor.core.publisher.Mono;
 
 /**
  * Limits per user: the JWT principal name is the token's {@code sub}. Every {@code /api/**} request
- * is authenticated before the limiter runs, so the key is never empty.
+ * is authenticated before the limiter runs, so the key is empty only for the WebSocket handshake
+ * ({@code GET /api/v1/chat/ws}), which is permitted without a token; the limiter lets an empty key
+ * through (see {@code deny-empty-key} in application.yml).
  */
 @Component
 public class SubjectKeyResolver implements KeyResolver {

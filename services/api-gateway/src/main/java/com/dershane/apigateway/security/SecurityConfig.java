@@ -35,6 +35,11 @@ public class SecurityConfig {
                     // CORS preflight carries no token; the gateway's CORS handling answers it.
                     .pathMatchers(HttpMethod.OPTIONS)
                     .permitAll()
+                    // Browsers cannot send an Authorization header on a WebSocket handshake. The
+                    // messaging service authenticates it with a one-time ticket from the query
+                    // string (obtained with a JWT from POST /api/v1/chat/tickets).
+                    .pathMatchers(HttpMethod.GET, "/api/v1/chat/ws")
+                    .permitAll()
                     .pathMatchers("/api/**")
                     .authenticated()
                     .anyExchange()
