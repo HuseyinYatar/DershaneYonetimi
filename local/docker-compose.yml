@@ -24,7 +24,13 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1
-    command: ["start-dev", "--import-realm"]
+    # Theme caches are off so edits to keycloak/themes/dershane show on reload without a rebuild.
+    command:
+      - start-dev
+      - --import-realm
+      - --spi-theme--static-max-age=-1
+      - --spi-theme--cache-themes=false
+      - --spi-theme--cache-templates=false
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
@@ -42,6 +48,7 @@ services:
       - "8180:8080"
     volumes:
       - ./keycloak/dershane-realm.json:/opt/keycloak/data/import/dershane-realm.json:ro
+      - ./keycloak/themes/dershane:/opt/keycloak/themes/dershane:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -271,6 +278,8 @@ services:
       ATTENDANCE_SERVICE_URL: http://attendance:8080
       TASK_SERVICE_URL: http://task:8080
       MESSAGING_SERVICE_URL: http://messaging:8080
+      EXAM_ANALYSIS_SERVICE_URL: http://exam-analysis-api:8000
+      NOTIFICATION_SERVICE_URL: http://notification-api:8000
       KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/dershane
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
       REDIS_HOST: redis
@@ -288,6 +297,10 @@ services:
       task:
         condition: service_started
       messaging:
+        condition: service_started
+      exam-analysis-api:
+        condition: service_started
+      notification-api:
         condition: service_started
 
   exam-analysis-migrate:
@@ -367,7 +380,7 @@ services:
     build: ../services/notification
     environment: *notification-env
     ports:
-      - "8002:8000"
+      - "8003:8000"
     depends_on:
       notification-migrate:
         condition: service_completed_successfully

@@ -65,6 +65,18 @@ class GatewayIT {
     registry.add(routes + "[2].id", () -> "messaging");
     registry.add(routes + "[2].uri", USER_UPSTREAM::url);
     registry.add(routes + "[2].predicates[0]", () -> "Path=/api/v1/chat/**");
+    // Mirrors the task-submission route of application.yml with a tiny bucket (2 requests).
+    registry.add(routes + "[3].id", () -> "task-submission");
+    registry.add(routes + "[3].uri", USER_UPSTREAM::url);
+    registry.add(routes + "[3].predicates[0]", () -> "Path=/api/v1/task-assignments/*/submission");
+    registry.add(routes + "[3].predicates[1]", () -> "Method=PUT");
+    registry.add(routes + "[3].filters[0].name", () -> "RequestRateLimiter");
+    String limiter = routes + "[3].filters[0].args.";
+    registry.add(limiter + "key-resolver", () -> "#{@submissionKeyResolver}");
+    registry.add(limiter + "redis-rate-limiter.replenishRate", () -> "1");
+    registry.add(limiter + "redis-rate-limiter.burstCapacity", () -> "2");
+    registry.add(limiter + "redis-rate-limiter.requestedTokens", () -> "1");
+    registry.add(limiter + "throw-on-limit", () -> "true");
   }
 
   @AfterAll
@@ -250,6 +262,36 @@ class GatewayIT {
         .get()
         .uri("/api/v1/me")
         .headers(h -> h.setBearerAuth(JWTS.token(subject())))
+        .exchange()
+        .expectStatus()
+        .isOk();
+  }
+
+  @Test
+  void submissionsHaveTheirOwnStricterLimitAndLeaveOtherRequestsAlone() {
+    String token = JWTS.token(subject());
+    String uri = "/api/v1/task-assignments/" + UUID.randomUUID() + "/submission";
+
+    // Burst 2 on the submission bucket is below the default burst of 5.
+    for (int i = 0; i < 2; i++) {
+      client.put().uri(uri).headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk();
+    }
+    client
+        .put()
+        .uri(uri)
+        .headers(h -> h.setBearerAuth(token))
+        .exchange()
+        .expectStatus()
+        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+        .expectBody()
+        .jsonPath("$.errorCode")
+        .isEqualTo("RATE_LIMITED");
+
+    // Same caller, other request: the default bucket still has tokens.
+    client
+        .get()
+        .uri("/api/v1/me")
+        .headers(h -> h.setBearerAuth(token))
         .exchange()
         .expectStatus()
         .isOk();

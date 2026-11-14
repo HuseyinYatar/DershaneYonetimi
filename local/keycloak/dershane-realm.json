@@ -11,8 +11,9 @@
   "resetPasswordAllowed": true,
   "verifyEmail": false,
   "accessTokenLifespan": 300,
+  "loginTheme": "dershane",
   "internationalizationEnabled": true,
-  "supportedLocales": ["tr", "en"],
+  "supportedLocales": ["tr"],
   "defaultLocale": "tr",
   "smtpServer": {
     "host": "mailpit",

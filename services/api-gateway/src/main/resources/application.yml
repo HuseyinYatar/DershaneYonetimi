@@ -68,6 +68,11 @@ spring:
           # /api/v1/**), so a new service adds its own route without touching this one. The path
           # prefix is kept: the services already serve /api/v1/...
           routes:
+            # Before user: exam-analysis serves sub-paths of /students, /branches and /subjects.
+            - id: exam-analysis
+              uri: ${EXAM_ANALYSIS_SERVICE_URL:http://localhost:8001}
+              predicates:
+                - Path=/api/v1/mock-exams/**,/api/v1/exam-types/**,/api/v1/score-types/**,/api/v1/optical-formats/**,/api/v1/import-jobs/**,/api/v1/unmatched-rows/**,/api/v1/students/*/results/**,/api/v1/students/*/progress,/api/v1/students/*/weak-topics,/api/v1/subjects/*/topics,/api/v1/branches/*/weak-topic-setting
             - id: user
               uri: ${USER_SERVICE_URL:http://localhost:8080}
               predicates:
@@ -76,6 +81,23 @@ spring:
               uri: ${ATTENDANCE_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/v1/class-schedules/**,/api/v1/class-sessions/**,/api/v1/attendance-records/**,/api/v1/attendance-summaries/**,/api/v1/attendance-replicas/**,/api/v1/excuses/**
+            # Before task: a stricter per-user limit on submissions, on top of the default one. The
+            # bucket is 10 requests that refill at one request per 6 s (replenishRate 10 tokens/s,
+            # each request costs 60, burst 600); the limiter cannot express "per minute" otherwise.
+            # submissionKeyResolver prefixes the key, so this bucket is separate from the default.
+            - id: task-submission
+              uri: ${TASK_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/v1/task-assignments/*/submission
+                - Method=PUT
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@submissionKeyResolver}"
+                    redis-rate-limiter.replenishRate: 10
+                    redis-rate-limiter.burstCapacity: 600
+                    redis-rate-limiter.requestedTokens: 60
+                    throw-on-limit: true
             - id: task
               uri: ${TASK_SERVICE_URL:http://localhost:8084}
               predicates:
@@ -85,6 +107,10 @@ spring:
               uri: ${MESSAGING_SERVICE_URL:http://localhost:8086}
               predicates:
                 - Path=/api/v1/conversations/**,/api/v1/message-reports/**,/api/v1/chat/**
+            - id: notification
+              uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8003}
+              predicates:
+                - Path=/api/v1/notifications/**,/api/v1/notification-preferences/**
 
   lifecycle:
     timeout-per-shutdown-phase: 20s

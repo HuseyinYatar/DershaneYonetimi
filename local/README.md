@@ -21,6 +21,8 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 
 | Ne | Adres | Giriş |
 |---|---|---|
+| Frontend (`cd frontend && npm run dev`) | http://localhost:3000 | Keycloak'a yönlendirir |
+| notification (API / Swagger UI) | http://localhost:8003, http://localhost:8003/docs | "Authorize" → Keycloak |
 | API gateway (tek giriş noktası) | http://localhost:8000/api/v1/... | `Authorization: Bearer <token>` |
 | Gateway metrik, sağlık, build bilgisi | http://localhost:8002/metrics, `/health/readiness`, `/info` | — |
 | Swagger UI (user) | http://localhost:8080/swagger-ui.html | "Authorize" → Keycloak |
@@ -34,6 +36,7 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 | messaging (API / Swagger UI) | http://localhost:8086, http://localhost:8086/swagger-ui.html | "Authorize" → Keycloak |
 | messaging metrik, sağlık, build bilgisi | http://localhost:8087/metrics, `/health/readiness`, `/info` | — |
 | Keycloak yönetim konsolu | http://localhost:8180 | `admin` / `admin` |
+| Giriş sayfası teması | `local/keycloak/themes/dershane` (compose'ta bağlı, önbellek kapalı) | CSS/şablon düzenle, sayfayı yenile |
 | İlk super-admin (uygulama kullanıcısı) | Swagger'dan giriş | `superadmin@dershane.local` / `admin` |
 | Mailpit (şifre belirleme e-postaları) | http://localhost:8025 | — |
 | Floci (AWS uç noktası) | http://localhost:4566 | herhangi bir anahtar |
@@ -162,7 +165,48 @@ AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test terraform apply \
 `down -v` Floci'yi ve container state'ini birlikte sıfırlar. Yalnızca Floci yeniden başlarsa
 (`restart floci`) `floci-init`'i tekrar çalıştırman yeter; Terraform eksik kaynakları yeniden açar.
 
-## Sıfırlama
+## Mock veri
+
+Öğrenci panelini gerçek içerikle görmek için yerel yığını örnek veriyle doldurur (yalnızca yerel; uzak hiçbir
+şeye dokunmaz). Gereken: Node 22+ (bağımlılık yok) ve `--profile services` ile çalışan yığın.
+
+```bash
+node local/seed/seed.mjs
+```
+
+Betik tekrar çalıştırılabilir: her adım önce var olanı arar (işaret: "Demo 12-A" sınıfı, "Demo TYT Deneme N"
+sınavları, görev başlıkları). Veriyi sıfırlamak için `docker compose ... down -v` yap, yığını yeniden kaldır
+ve betiği çalıştır. Veri gerçek API'lerle (gateway `:8000`) açıldığı için olaylar akar ve diğer servislerin
+kopyaları (`StudentReplica`, `MembershipReplica`, iletişim kopyaları) dolar; betik kopyalar dolana kadar bekler.
+
+**Yalnızca yerel hesaplar** (şifreler Keycloak admin API'siyle bilinen değere ayarlanır):
+
+| Rol | Kullanıcı adı | Şifre |
+|---|---|---|
+| Ana öğrenci (Ayşe Yılmaz) | `mrkz-1001` | `Demo1234!` |
+| Geçici şifreli öğrenci (Merve Koç; ilk girişte "şifre belirle" sayfası) | `mrkz-1010` | `Gecici123!` |
+| Diğer öğrenciler (1002–1009) | `mrkz-1002` ... `mrkz-1009` | `Demo1234!` |
+| Öğretmen (Kemal Aksoy) | `ogretmen@dershane.local` | `Demo1234!` |
+| Veli (Fatma Yılmaz, Ayşe'nin velisi) | `05551234567` | `Demo1234!` |
+| Super-admin | `superadmin@dershane.local` | `admin` |
+
+Şube olarak var olan `MRKZ` kullanılır (yoksa "Demo Şube" / `DMO` açılır); kullanıcı adı `{şubekodu}-{öğrencino}`
+kuralıyla `mrkz-1001` olur.
+
+Ne oluşur:
+- **API ile:** ders kataloğu (Matematik, Türkçe), `Demo 12-A` (12. sınıf), öğretmen ve atamaları, 10 öğrenci
+  (üyelik 2026-09-01'den), veli bağı; exam-analysis: şube zayıf konu ayarı (son 3 deneme, eşik 0,5), 4 TYT
+  denemesi (kurum içi puanlama, cevap anahtarı, optik dosya yükleme, açıklama; Ayşe'nin neti denemeden denemeye
+  artar, bazı konularda zayıf kalır; açıklama bildirimlerini üretir); attendance: pazartesi/çarşamba/cuma haftalık
+  program, son 4 haftanın oturumları (yönetici geçmiş tarihli oturum açıp gerekçeyle yoklama alır; Ayşe: 8 var,
+  2 geç, 1 yok, 1 izinli) ve `generate-sessions` işiyle gelecek 7 günün oturumları; task: 7 görev (tek seferlik,
+  günlük), Ayşe 3 teslim yapar, öğretmen 2'sini notlar.
+- **Doğrudan işlemle (API'nin yapamadıkları):**
+  - Şifreler Keycloak admin API'siyle (master `admin`/`admin`) ayarlanır.
+  - Katalog (`seed-catalog`) exam-analysis container'ında çalıştırılır.
+  - `OVERDUE` (Gecikti) durumu zamanla oluştuğu için "Limit çalışma kağıdı" ve "Fizik: Vektörler tekrar testi" atamalarının
+    `due_at` değeri `task_service` veritabanında SQL ile 2 gün geriye alınır, ardından task servisinin gerçek
+    `check-deadlines` işi çalıştırılır ve atamaları `OVERDUE` yapar (olay yolu da çalışır).
 
 ```bash
 docker compose -f local/docker-compose.yml down -v   # veritabanı dahil her şeyi siler
