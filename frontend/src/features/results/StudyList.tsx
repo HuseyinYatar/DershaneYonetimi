@@ -32,10 +32,7 @@ export function StudyList({
       {loading ? (
         <ul className="mt-4" role="status" aria-label="Yükleniyor">
           {[0, 1, 2].map((i) => (
-            <li
-              key={i}
-              className="border-t border-dashed border-[#dadde3] py-3.5 first:border-t-0"
-            >
+            <li key={i} className="border-t border-dashed border-[#dadde3] py-3.5 first:border-t-0">
               <div className="flex items-baseline justify-between gap-3">
                 <Skeleton className="h-4 w-40 rounded-full" />
                 <Skeleton className="h-3.5 w-9 rounded-full" />
@@ -45,7 +42,7 @@ export function StudyList({
           ))}
         </ul>
       ) : topics.length === 0 ? (
-        <p className="mt-4 text-[13px] text-dim">Bu denemede zayıf konun görünmüyor.</p>
+        <p className="mt-4 text-[13px] text-dim">Bu denemede zayıf konu görünmüyor.</p>
       ) : (
         <ul className="mt-4">
           {topics.map((topic) => (

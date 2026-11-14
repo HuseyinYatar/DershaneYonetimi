@@ -104,3 +104,49 @@ export function useSubjectTopicIds(subjectIds: string[]) {
   );
   return { bySubject, isPending: results.some((r) => r.isPending) };
 }
+
+// Mock exams of a branch (teachers may read them; uploads and publishing are admin-only).
+export function useMockExams(branchId: string | undefined) {
+  return useQuery({
+    queryKey: ["exam", "mock-exams", branchId],
+    enabled: !!branchId,
+    queryFn: () =>
+      unwrap(examApi.GET("/api/v1/mock-exams", { params: { query: { branchId: branchId! } } })),
+  });
+}
+
+export function useMockExam(mockExamId: string) {
+  return useQuery({
+    queryKey: ["exam", "mock-exam", mockExamId],
+    queryFn: () =>
+      unwrap(
+        examApi.GET("/api/v1/mock-exams/{mock_exam_id}", {
+          params: { path: { mock_exam_id: mockExamId } },
+        }),
+      ),
+  });
+}
+
+export function useExamResults(mockExamId: string) {
+  return useQuery({
+    queryKey: ["exam", "exam-results", mockExamId],
+    queryFn: () =>
+      unwrap(
+        examApi.GET("/api/v1/mock-exams/{mock_exam_id}/results", {
+          params: { path: { mock_exam_id: mockExamId } },
+        }),
+      ),
+  });
+}
+
+export function useTopicAnalysis(mockExamId: string) {
+  return useQuery({
+    queryKey: ["exam", "topic-analysis", mockExamId],
+    queryFn: () =>
+      unwrap(
+        examApi.GET("/api/v1/mock-exams/{mock_exam_id}/topic-analysis", {
+          params: { path: { mock_exam_id: mockExamId } },
+        }),
+      ),
+  });
+}

@@ -3,6 +3,7 @@ import {
   countByStatus,
   deadlineDayKeys,
   deadlinesOn,
+  studentLabel,
   upcomingOrOverdue,
   type Assignment,
 } from "./assignments";
@@ -47,5 +48,13 @@ describe("assignment helpers", () => {
       "2026-11-13",
       "2026-11-15",
     ]);
+  });
+});
+
+describe("studentLabel", () => {
+  it("uses the known name, else a short id", () => {
+    const names = new Map([["s-1", "Ayşe Yılmaz"]]);
+    expect(studentLabel(names, "s-1")).toBe("Ayşe Yılmaz");
+    expect(studentLabel(names, "1234567890abcdef")).toBe("Öğrenci 12345678");
   });
 });

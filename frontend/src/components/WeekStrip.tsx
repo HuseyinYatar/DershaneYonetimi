@@ -8,12 +8,15 @@ export function WeekStrip({
   marked,
   onSelect,
   label,
+  markedText = "son teslim var",
 }: {
   days: Date[];
   selected?: string;
   marked: Set<string>;
   onSelect?: (key: string) => void;
   label: string;
+  // Screen-reader text for a marked day.
+  markedText?: string;
 }) {
   const todayKey = dateKey(new Date());
   return (
@@ -45,7 +48,7 @@ export function WeekStrip({
             key={key}
             type="button"
             aria-pressed={isSelected}
-            aria-label={`${day.getDate()}. gün${marked.has(key) ? ", son teslim var" : ""}`}
+            aria-label={`${day.getDate()}. gün${marked.has(key) ? `, ${markedText}` : ""}`}
             onClick={() => onSelect(key)}
             className={cn(base, "cursor-pointer hover:[&>span:nth-child(2)]:bg-[#f1f2f5]")}
           >

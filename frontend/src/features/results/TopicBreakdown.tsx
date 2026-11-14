@@ -1,13 +1,13 @@
 import { ChartNoAxesColumn, Hash } from "lucide-react";
 import { useState } from "react";
 import type { components } from "@/api/schema/exam-analysis";
+import { Bar } from "@/components/ui/Bar";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SegButton } from "@/components/ui/Pill";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TableHead, TableRow, Td, Th } from "@/components/ui/Table";
 import { formatNet, formatPercent, ratioToPercent } from "@/lib/format";
-import { Bar } from "./SubjectTable";
 
 type Subject = components["schemas"]["SubjectResultRead"];
 type Topic = components["schemas"]["TopicResultRead"];

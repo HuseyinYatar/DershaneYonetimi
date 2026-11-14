@@ -1,6 +1,7 @@
 import { useAssignment, useAssignments } from "@/api/queries/task";
 import { useActor } from "@/auth/useActor";
 import { StatusBadge } from "@/components/StatusBadge";
+import { StatusFilter } from "@/components/StatusFilter";
 import { WeekStrip } from "@/components/WeekStrip";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
@@ -22,7 +23,6 @@ import {
   Star,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
-import { StatusFilter } from "./StatusFilter";
 
 const COLS = "grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_130px_170px_90px]";
 const STATUSES = ["ASSIGNED", "OVERDUE", "SUBMITTED", "GRADED", "CANCELLED"] as const;

@@ -4,6 +4,7 @@ import {
   FileText,
   LayoutDashboard,
   ListChecks,
+  School,
   MessageCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -21,8 +22,18 @@ export interface NavItem {
   prefix?: boolean;
 }
 
-// Menu only; the services decide what a role may actually do. Roles other than student get no items yet.
+// Menu only; the services decide what a role may actually do. Guardians and admins get no items yet.
 export function navForRoles(roles: Role[], userId: string): NavItem[] {
+  if (roles.includes("teacher") && !roles.includes("student")) {
+    return [
+      { label: "Özet", to: "/", icon: LayoutDashboard, tab: true },
+      { label: "Yoklama", to: "/sessions", icon: CalendarCheck, tab: true, prefix: true },
+      { label: "Görevler", to: "/given-tasks", icon: ListChecks, tab: true, prefix: true },
+      { label: "Sınıflarım", to: "/classrooms", icon: School, tab: true, prefix: true },
+      { label: "Denemeler", to: "/exams", icon: FileText, tab: false, prefix: true },
+      { label: "Mesajlar", to: "/messages", icon: MessageCircle, tab: false },
+    ];
+  }
   if (!roles.includes("student")) return [];
   return [
     { label: "Özet", to: `/students/${userId}`, icon: LayoutDashboard, tab: true },

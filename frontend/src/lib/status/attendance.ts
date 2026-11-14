@@ -2,7 +2,7 @@ import type { components } from "@/api/schema/attendance";
 import type { StatusTone } from "@/components/StatusBadge";
 
 type Badge = { tone: StatusTone; label: string };
-type AttendanceStatus = components["schemas"]["CorrectRecordRequest"]["status"];
+export type AttendanceStatus = components["schemas"]["CorrectRecordRequest"]["status"];
 type ExcuseStatus = NonNullable<components["schemas"]["ExcuseResponse"]["status"]>;
 
 // Record keys keep both mappings exhaustive: a new enum value fails the type check.

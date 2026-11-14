@@ -9,9 +9,11 @@ export function useNotifications() {
   });
 }
 
-export function useUnreadCount() {
+// Only students are notified; other roles must not ask.
+export function useUnreadCount(enabled = true) {
   return useQuery({
     queryKey: ["notification", "unread-count"],
+    enabled,
     queryFn: () => unwrap(notificationApi.GET("/api/v1/notifications/unread-count")),
     refetchInterval: 60_000,
     select: (data) => data.count,

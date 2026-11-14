@@ -38,3 +38,8 @@ export function deadlinesOn(list: Assignment[], days: Date[]): Assignment[] {
 export function deadlineDayKeys(list: Assignment[], days: Date[]): Set<string> {
   return new Set(deadlinesOn(list, days).map((a) => dateKey(due(a)!)));
 }
+
+// Assignments only carry the student id; the name comes from the teacher's classroom lists, else a short id.
+export function studentLabel(names: Map<string, string>, studentId: string | undefined): string {
+  return (studentId && names.get(studentId)) || `Öğrenci ${(studentId ?? "").slice(0, 8)}`.trim();
+}

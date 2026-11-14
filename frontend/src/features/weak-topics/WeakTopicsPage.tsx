@@ -32,7 +32,7 @@ export function WeakTopicsPage() {
             <SkeletonRows rows={4} />
           </div>
         ) : topics.length === 0 ? (
-          <EmptyState text="Şu an zayıf konun yok." />
+          <EmptyState text="Şu an zayıf konu yok." />
         ) : (
           <ol>
             {topics.map((topic) => {

@@ -4,6 +4,7 @@ import { useAttendanceSummary } from "@/api/queries/attendance";
 import { useStudentResults } from "@/api/queries/exam";
 import { useAssignments } from "@/api/queries/task";
 import { useMe } from "@/api/queries/user";
+import { useActor } from "@/auth/useActor";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatStrip } from "@/components/ui/StatStrip";
 import { attendanceRate } from "@/lib/attendance";
@@ -14,10 +15,21 @@ import { LastExamCard } from "./LastExamCard";
 import { ProgressCard } from "./ProgressCard";
 import { TasksCard } from "./TasksCard";
 import { WeakTopicsCard } from "./WeakTopicsCard";
+import { StudentExamView } from "./StudentExamView";
 import { WeekCard } from "./WeekCard";
 
+// A teacher opening a student sees the exam side only: the task and attendance services may refuse them.
 export function DashboardPage() {
   const { studentId = "" } = useParams();
+  const actor = useActor();
+  return actor?.id === studentId ? (
+    <OwnDashboard studentId={studentId} />
+  ) : (
+    <StudentExamView studentId={studentId} />
+  );
+}
+
+function OwnDashboard({ studentId }: { studentId: string }) {
   const me = useMe();
   const assignments = useAssignments(studentId);
   const results = useStudentResults(studentId);

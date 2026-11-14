@@ -26,9 +26,22 @@ describe("navForRoles", () => {
     ]);
   });
 
+  it("gives teachers their own overview, four tabs and no notifications", () => {
+    const items = navForRoles(["teacher"], "t-1");
+    expect(items.map((item) => [item.label, item.to, item.tab])).toEqual([
+      ["Özet", "/", true],
+      ["Yoklama", "/sessions", true],
+      ["Görevler", "/given-tasks", true],
+      ["Sınıflarım", "/classrooms", true],
+      ["Denemeler", "/exams", false],
+      ["Mesajlar", "/messages", false],
+    ]);
+    expect(items.some((item) => item.badge)).toBe(false);
+  });
+
   it("returns nothing for roles without screens yet", () => {
-    expect(navForRoles(["teacher"], "t-1")).toEqual([]);
     expect(navForRoles(["admin", "super-admin"], "a-1")).toEqual([]);
+    expect(navForRoles(["guardian"], "g-1")).toEqual([]);
     expect(navForRoles([], "x")).toEqual([]);
   });
 });

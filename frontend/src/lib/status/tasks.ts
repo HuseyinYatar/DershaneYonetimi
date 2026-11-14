@@ -17,3 +17,10 @@ const ASSIGNMENT_BADGES: Record<AssignmentStatus, { tone: StatusTone; label: str
 export function assignmentBadge(status: AssignmentStatus) {
   return ASSIGNMENT_BADGES[status];
 }
+
+// Teachers see whether a task still hands out assignments.
+export function taskActiveBadge(active: boolean | undefined): { tone: StatusTone; label: string } {
+  return active === false
+    ? { tone: "neutral", label: "Pasif" }
+    : { tone: "success", label: "Aktif" };
+}

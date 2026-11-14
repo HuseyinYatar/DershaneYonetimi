@@ -16,7 +16,7 @@ export function ProgressCard({ studentId }: { studentId: string }) {
   const delta = netDelta(points);
 
   return (
-    <Card className="p-5 lg:col-span-2 wide:col-span-3 wide:row-start-3">
+    <Card className="p-5 lg:col-span-2 wide:col-span-3">
       <div className="flex flex-col wide:flex-row wide:gap-6">
         <div className="flex shrink-0 flex-col wide:w-[250px]">
           <CardTitle>Net gelişimi</CardTitle>

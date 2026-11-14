@@ -30,7 +30,7 @@ export function WeakTopicsCard({ studentId }: { studentId: string }) {
             {isUnavailable(weak.error) ? "Bu içerik görüntülenemiyor." : "Veri alınamadı."}
           </p>
         ) : top.length === 0 ? (
-          <p className="py-8 text-center text-[13px] text-white/85">Şu an zayıf konun yok.</p>
+          <p className="py-8 text-center text-[13px] text-white/85">Şu an zayıf konu yok.</p>
         ) : (
           <ul>
             {top.map((topic) => {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { useExamTypes, useProgress, useStudentResults } from "@/api/queries/exam";
 import { NetProgress } from "@/components/NetProgress";
+import { ScoreInline } from "@/components/ScoreInline";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,7 +11,6 @@ import { LineSkeleton } from "@/components/ui/ChartSkeletons";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { TableHead, TableRow, Td, Th } from "@/components/ui/Table";
 import { formatFullDate, formatInt, formatNet, parseDateOnly } from "@/lib/format";
-import { ScoreInline } from "./ScoreChip";
 
 const COLS =
   "grid-cols-[minmax(0,1fr)_72px] md:grid-cols-[minmax(0,1.3fr)_130px_80px_minmax(0,1.4fr)_70px]";

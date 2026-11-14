@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignmentBadge } from "./tasks";
+import { assignmentBadge, taskActiveBadge } from "./tasks";
 
 describe("assignmentBadge", () => {
   it.each([
@@ -10,5 +10,12 @@ describe("assignmentBadge", () => {
     ["CANCELLED", "neutral", "İptal edildi"],
   ] as const)("%s -> %s %s", (status, tone, label) => {
     expect(assignmentBadge(status)).toEqual({ tone, label });
+  });
+});
+
+describe("taskActiveBadge", () => {
+  it("labels active and deactivated tasks", () => {
+    expect(taskActiveBadge(true)).toEqual({ tone: "success", label: "Aktif" });
+    expect(taskActiveBadge(false)).toEqual({ tone: "neutral", label: "Pasif" });
   });
 });

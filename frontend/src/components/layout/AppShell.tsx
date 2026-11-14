@@ -162,7 +162,7 @@ function TabBar({
 export function AppShell() {
   const actor = useActor();
   const logout = useLogout();
-  const unread = useUnreadCount().data ?? 0;
+  const unread = useUnreadCount(!!actor?.roles.includes("student")).data ?? 0;
   const items = actor ? navForRoles(actor.roles, actor.id) : [];
   const home = actor && items.length > 0 ? items[0].to : "/";
 
