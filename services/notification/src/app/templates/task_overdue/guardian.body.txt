@@ -1,0 +1,4 @@
+Merhaba {{ recipient_first_name }},
+
+{{ student_full_name }}, "{{ task_title }}" ödevini son teslim zamanına ({{ due_at }}) kadar teslim etmedi. Ayrıntılar için:
+{{ link }}

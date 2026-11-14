@@ -1,0 +1,4 @@
+Merhaba {{ recipient_first_name }},
+
+{{ student_full_name }}, {{ session_date }} günü {{ start_time }}–{{ end_time }} dersinde öğretmeni tarafından izinli sayıldı. Ayrıntılar için:
+{{ link }}

@@ -1,0 +1,4 @@
+Merhaba {{ recipient_first_name }},
+
+"{{ task_title }}" ödevinin son teslim zamanı yaklaşıyor: {{ due_at }}. Henüz teslim etmedin. Teslim etmek için:
+{{ link }}

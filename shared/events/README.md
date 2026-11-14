@@ -34,8 +34,9 @@ shared/events/
   `environments/*.tfvars`). A consumer that starts handling a new event type must add it there,
   otherwise SNS drops the event before it reaches the queue, without a log line.
   Example: `notification-queue` is subscribed to `user-events` (filter: `UserUpdated`,
-  `GuardianLinked`, `GuardianUnlinked`) and to `exam-analysis-events` (no filter), with
-  `notification-queue-dlq` after 5 receives; services only receive and delete messages.
+  `GuardianLinked`, `GuardianUnlinked`) and to `exam-analysis-events`, `attendance-events` and
+  `task-events` (no filter), with `notification-queue-dlq` after 5 receives; services only receive
+  and delete messages.
 - SNS message attributes:
   - `eventType`: same value as in the envelope
   - `traceparent`: W3C trace context of the request that caused the event (may be missing).
@@ -78,4 +79,4 @@ shared/events/
 | `TaskDueSoon` | task | notification | An open assignment entered its reminder window |
 | `TaskOverdue` | task | notification | The due time passed without a submission |
 | `SubmissionGraded` | task | notification | A submission was evaluated (or evaluated again) |
-| `NewMessage` | messaging | notification (later) | A message arrived for a recipient with no open WebSocket (one event per message) |
+| `NewMessage` | messaging | none (deliberately not consumed, see CLAUDE.md) | A message arrived for a recipient with no open WebSocket (one event per message) |

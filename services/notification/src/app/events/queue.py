@@ -1,6 +1,6 @@
 """SQS adapter: the only place that talks to the queue.
-The service never subscribes to SNS itself. The queue and its two subscriptions (user-events with
-a filter policy, exam-analysis-events without one) are created by Terraform
+The service never subscribes to SNS itself. The queue and its subscriptions (user-events with
+a filter policy; exam-analysis-, attendance- and task-events without one) are created by Terraform
 (infra/terraform). Here the worker only reads messages and deletes the ones it has committed.
 """
 

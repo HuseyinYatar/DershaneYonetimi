@@ -1,0 +1,1 @@
+{{ session_date }} {{ start_time }}–{{ end_time }} dersi için öğretmenin izin verdi: {{ link }}

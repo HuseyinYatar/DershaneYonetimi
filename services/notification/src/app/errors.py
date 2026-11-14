@@ -63,6 +63,10 @@ MESSAGES: dict[str, tuple[str, str]] = {
         "Bu bildirim türü için tercih ayarlanamaz.",
         "Preferences cannot be set for this notification type.",
     ),
+    "CHANNEL_NOT_USED": (
+        "Bu bildirim türü bu kanaldan gönderilmiyor.",
+        "This notification type is not sent on this channel.",
+    ),
     "VALIDATION_ERROR": (
         "İstek geçersiz. Lütfen gönderilen alanları kontrol edin.",
         "The request is invalid.",
