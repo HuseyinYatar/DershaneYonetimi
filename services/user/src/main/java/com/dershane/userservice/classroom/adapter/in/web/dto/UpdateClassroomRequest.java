@@ -5,4 +5,5 @@ import jakarta.validation.constraints.Size;
 
 /** Null fields are left unchanged. The grade level cannot change once students are enrolled. */
 public record UpdateClassroomRequest(
-    @Size(min = 1, max = 60) String name, @Pattern(regexp = ClassroomTerm.PATTERN) String term) {}
+    @Size(min = 1, max = 60) @Pattern(regexp = ".*\\S.*") String name,
+    @Pattern(regexp = ClassroomTerm.PATTERN) String term) {}

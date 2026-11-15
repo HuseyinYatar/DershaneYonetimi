@@ -4,6 +4,7 @@ import com.dershane.attendanceservice.roster.application.port.in.RecordMembershi
 import com.dershane.attendanceservice.roster.application.port.in.RecordMembershipAddedUseCase;
 import com.dershane.attendanceservice.shared.adapter.in.event.EventHandler;
 import com.dershane.attendanceservice.shared.application.Actor;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -27,7 +28,7 @@ class StudentAddedToClassroomHandler implements EventHandler {
   }
 
   @Override
-  public void handle(String eventType, JsonNode data) {
+  public void handle(String eventType, Instant occurredAt, JsonNode data) {
     // The event carries exactly the fields of the command.
     recordAdded.recordAdded(
         Actor.SYSTEM, json.treeToValue(data, RecordMembershipAddedCommand.class));

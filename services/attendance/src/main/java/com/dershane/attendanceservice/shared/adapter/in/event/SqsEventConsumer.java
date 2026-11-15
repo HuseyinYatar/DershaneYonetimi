@@ -7,6 +7,7 @@ import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -222,7 +223,7 @@ public class SqsEventConsumer implements SmartLifecycle {
     if (!processedEvents.markProcessed(incoming.eventId(), incoming.eventType())) {
       return false;
     }
-    incoming.handler().handle(incoming.eventType(), incoming.data());
+    incoming.handler().handle(incoming.eventType(), incoming.occurredAt(), incoming.data());
     return true;
   }
 
@@ -243,7 +244,8 @@ public class SqsEventConsumer implements SmartLifecycle {
             .log("No handler for event type; check the queue's filter policy in infra/terraform");
         return null;
       }
-      return new Incoming(eventId, eventType, handler, envelope.required("data"));
+      Instant occurredAt = Instant.parse(envelope.required("occurredAt").asString());
+      return new Incoming(eventId, eventType, occurredAt, handler, envelope.required("data"));
     } catch (RuntimeException ex) {
       count("unknown", "failed");
       log.atWarn()
@@ -268,7 +270,8 @@ public class SqsEventConsumer implements SmartLifecycle {
     }
   }
 
-  private record Incoming(UUID eventId, String eventType, EventHandler handler, JsonNode data) {
+  private record Incoming(
+      UUID eventId, String eventType, Instant occurredAt, EventHandler handler, JsonNode data) {
 
     @Override
     public String toString() {

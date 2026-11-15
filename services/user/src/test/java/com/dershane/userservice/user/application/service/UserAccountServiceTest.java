@@ -184,6 +184,29 @@ class UserAccountServiceTest {
   }
 
   @Test
+  void aProfileChangedByAnotherRequestSinceItWasLoadedIsNotOverwritten() {
+    Guardian loaded =
+        Guardian.register(
+            accountId, branchId, new PersonalInfo("Ayşe", "Kaya", null, "05551112233"), "x");
+    ReflectionTestUtils.setField(loaded, "version", 1L);
+    Guardian stored =
+        Guardian.register(
+            accountId, branchId, new PersonalInfo("Ayşe", "Demir", null, "05551112233"), "x");
+    ReflectionTestUtils.setField(stored, "version", 2L);
+    PersonalInfo renamed = new PersonalInfo("Ayşe", "Yılmaz", null, "05551112233");
+    when(loadUser.findById(accountId)).thenReturn(Optional.of(stored));
+
+    assertThatThrownBy(() -> service.update(loaded, renamed, g -> {}))
+        .isInstanceOfSatisfying(
+            DomainException.class,
+            ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONCURRENT_MODIFICATION));
+
+    verify(saveUser, never()).save(any());
+    // The Keycloak change made before the conflict is taken back.
+    verify(identityProvider, times(2)).updateProfile(eq(accountId), any(IdentityProfile.class));
+  }
+
+  @Test
   void deactivationDisablesLoginFirstThenLetsOtherModulesCloseTheStudentsClassroom() {
     Student student = student(accountId, new PersonalInfo("Ali", "Kaya", null, null));
     when(loadUser.findById(accountId)).thenReturn(Optional.of(student));

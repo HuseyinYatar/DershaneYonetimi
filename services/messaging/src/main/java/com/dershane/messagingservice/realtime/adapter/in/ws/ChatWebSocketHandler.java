@@ -26,7 +26,7 @@ class ChatWebSocketHandler extends TextWebSocketHandler {
   private static final int SEND_TIME_LIMIT_MS = 5000;
   private static final int SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
   static final CloseStatus REAUTHENTICATE = new CloseStatus(4401, "reauthenticate");
-  private static final String CONNECTED_AT = "connectedAt";
+  static final String CONNECTED_AT = "connectedAt";
   private static final String DECORATED = "decorated";
 
   private final SessionRegistry registry;

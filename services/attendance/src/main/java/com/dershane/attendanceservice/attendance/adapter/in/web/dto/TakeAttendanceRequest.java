@@ -12,7 +12,8 @@ import java.util.List;
  *     text, so it is masked in {@code toString}
  */
 public record TakeAttendanceRequest(
-    @NotEmpty @Valid List<AttendanceEntryRequest> entries, @Size(max = 500) String reason) {
+    @NotEmpty @Size(max = 500) @Valid List<AttendanceEntryRequest> entries,
+    @Size(max = 500) String reason) {
 
   @Override
   public String toString() {

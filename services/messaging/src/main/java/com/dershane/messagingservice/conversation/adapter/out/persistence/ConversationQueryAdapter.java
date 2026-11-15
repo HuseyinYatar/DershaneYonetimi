@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -34,11 +35,15 @@ import org.springframework.stereotype.Component;
  * Read side in plain SQL. It joins {@code user_replica} (owned by the directory module) for the
  * other participant's name; reading another module's table is allowed, writing is not.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 public class ConversationQueryAdapter implements ConversationQueryPort {
 
   private static final int PREVIEW_LENGTH = 100;
+
+  /** Most edited or deleted older messages one sync answer carries. */
+  private static final int MAX_CHANGED_ROWS = 500;
 
   // The role comes from the conversation itself, so it is known even if the user copy is missing.
   private static final String VIEW_SQL =
@@ -115,21 +120,29 @@ public class ConversationQueryAdapter implements ConversationQueryPort {
     boolean hasMore = newer.size() > limit;
     List<MessageView> result = new ArrayList<>();
     if (criteria.updatedSince() != null) {
-      // shortcut: unbounded, but only messages edited or deleted since the last sync; cap it if
-      // a conversation ever sees thousands of edits between two syncs.
-      result.addAll(
+      // Capped: a client that sends updatedSince far in the past would otherwise load the whole
+      // conversation. A normal sync sends the previous syncedAt and gets a handful of rows.
+      List<MessageView> updated =
           jdbc.sql(
                   "select "
                       + MESSAGE_COLUMNS
                       + " from message m where m.conversation_id = :c and m.seq <= :after"
-                      + " and m.updated_at > :since order by m.seq")
+                      + " and m.updated_at > :since order by m.seq limit :cap")
               .param("c", conversationId)
               .param("after", criteria.afterSeq())
               .param(
                   "since",
                   OffsetDateTime.ofInstant(criteria.updatedSince(), java.time.ZoneOffset.UTC))
+              .param("cap", MAX_CHANGED_ROWS)
               .query(ConversationQueryAdapter::toMessageView)
-              .list());
+              .list();
+      if (updated.size() == MAX_CHANGED_ROWS) {
+        log.atWarn()
+            .addKeyValue("conversationId", conversationId)
+            .addKeyValue("cap", MAX_CHANGED_ROWS)
+            .log("sync.changed_rows_capped");
+      }
+      result.addAll(updated);
     }
     result.addAll(hasMore ? newer.subList(0, limit) : newer);
     return new MessageRows(result, hasMore);

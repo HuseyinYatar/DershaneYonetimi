@@ -31,6 +31,7 @@ public class IdempotencyStore {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public IdempotencyRecord claim(UUID callerId, String key, String requestHash) {
     Instant now = calendar.now();
+    records.deleteExpiredOf(callerId, key, now);
     return records.saveAndFlush(
         IdempotencyRecord.start(callerId, key, requestHash, now, now.plus(properties.retention())));
   }

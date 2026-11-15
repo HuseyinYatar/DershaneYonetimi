@@ -7,8 +7,8 @@ import java.util.UUID;
 
 /** Null fields are left unchanged. Carries personal data: {@code toString} is masked. */
 public record UpdateTeacherRequest(
-    @Size(min = 1, max = 80) String firstName,
-    @Size(min = 1, max = 80) String lastName,
+    @Size(min = 1, max = 80) @Pattern(regexp = UserPatterns.NOT_BLANK) String firstName,
+    @Size(min = 1, max = 80) @Pattern(regexp = UserPatterns.NOT_BLANK) String lastName,
     @Email @Size(max = 254) String email,
     @Pattern(regexp = UserPatterns.PHONE) String phone,
     UUID specialtySubjectId) {

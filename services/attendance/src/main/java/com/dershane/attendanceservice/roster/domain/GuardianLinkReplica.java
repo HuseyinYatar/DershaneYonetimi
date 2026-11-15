@@ -1,5 +1,6 @@
 package com.dershane.attendanceservice.roster.domain;
 
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 
@@ -14,13 +15,27 @@ public class GuardianLinkReplica {
 
   private final UUID guardianId;
 
-  public GuardianLinkReplica(UUID studentId, Long version, UUID guardianId) {
+  /**
+   * Time of the user service event that set this guardian. Events are not ordered, so an older
+   * event must not overwrite a newer one. Null for rows copied before the column existed.
+   */
+  private final Instant linkedAt;
+
+  public GuardianLinkReplica(UUID studentId, Long version, UUID guardianId, Instant linkedAt) {
     this.studentId = studentId;
     this.version = version;
     this.guardianId = guardianId;
+    this.linkedAt = linkedAt;
   }
 
-  public static GuardianLinkReplica of(UUID studentId, UUID guardianId) {
-    return new GuardianLinkReplica(studentId, null, guardianId);
+  public static GuardianLinkReplica of(UUID studentId, UUID guardianId, Instant linkedAt) {
+    return new GuardianLinkReplica(studentId, null, guardianId, linkedAt);
+  }
+
+  /**
+   * The stored link was made after {@code eventTime}, so an event from {@code eventTime} is stale.
+   */
+  public boolean isNewerThan(Instant eventTime) {
+    return linkedAt != null && linkedAt.isAfter(eventTime);
   }
 }

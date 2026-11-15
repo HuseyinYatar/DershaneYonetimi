@@ -16,6 +16,7 @@ import com.dershane.attendanceservice.shared.application.BranchAccessPolicy;
 import com.dershane.attendanceservice.shared.domain.ErrorCode;
 import com.dershane.attendanceservice.shared.domain.Rejections;
 import io.micrometer.observation.annotation.Observed;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
@@ -96,18 +97,25 @@ class ReplicaService
   @Override
   @Transactional
   @Observed(name = "roster.guardian.link")
-  public void link(Actor actor, UUID guardianId, UUID studentId) {
+  public void link(Actor actor, UUID guardianId, UUID studentId, Instant occurredAt) {
     requireBranchAdminOfStudent(actor, studentId, "roster.guardian.link");
     Optional<GuardianLinkReplica> existing = loadLinks.findByStudentId(studentId);
     if (existing.isEmpty()) {
-      saveLinks.save(GuardianLinkReplica.of(studentId, guardianId));
+      saveLinks.save(GuardianLinkReplica.of(studentId, guardianId, occurredAt));
     } else if (existing.get().getGuardianId().equals(guardianId)) {
       log.atDebug()
           .addKeyValue("studentId", studentId)
           .log("Guardian already linked; repeated event ignored");
       return;
+    } else if (existing.get().isNewerThan(occurredAt)) {
+      log.atInfo()
+          .addKeyValue("studentId", studentId)
+          .addKeyValue("guardianId", guardianId)
+          .log("Student was linked to another guardian later; late GuardianLinked ignored");
+      return;
     } else {
-      saveLinks.save(new GuardianLinkReplica(studentId, existing.get().getVersion(), guardianId));
+      saveLinks.save(
+          new GuardianLinkReplica(studentId, existing.get().getVersion(), guardianId, occurredAt));
     }
     log.atInfo()
         .addKeyValue("studentId", studentId)
@@ -118,20 +126,33 @@ class ReplicaService
   @Override
   @Transactional
   @Observed(name = "roster.guardian.unlink")
-  public void unlink(Actor actor, UUID studentId, UUID guardianId) {
+  public void unlink(Actor actor, UUID studentId, UUID guardianId, Instant occurredAt) {
     requireBranchAdminOfStudent(actor, studentId, "roster.guardian.unlink");
     Optional<GuardianLinkReplica> existing = loadLinks.findByStudentId(studentId);
     if (existing.isEmpty()) {
-      log.atDebug()
-          .addKeyValue("studentId", studentId)
-          .log("Student has no guardian link; repeated event ignored");
-      return;
+      // Events are not ordered: GuardianUnlinked can overtake its GuardianLinked. Dropping it
+      // would leave the later link in place for good, so reject and let the queue redeliver it.
+      throw Rejections.reject(
+          log,
+          ErrorCode.GUARDIAN_LINK_NOT_FOUND,
+          "GuardianUnlinked arrived before the link it removes; it is retried",
+          "studentId",
+          studentId,
+          "guardianId",
+          guardianId);
     }
     if (!existing.get().getGuardianId().equals(guardianId)) {
       log.atInfo()
           .addKeyValue("studentId", studentId)
           .addKeyValue("guardianId", guardianId)
           .log("Student is linked to another guardian; stale unlink ignored");
+      return;
+    }
+    if (existing.get().isNewerThan(occurredAt)) {
+      log.atInfo()
+          .addKeyValue("studentId", studentId)
+          .addKeyValue("guardianId", guardianId)
+          .log("Guardian was linked again after this event; stale unlink ignored");
       return;
     }
     saveLinks.deleteByStudentId(studentId);

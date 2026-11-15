@@ -129,6 +129,21 @@ class AttendanceControllerTest {
   }
 
   @Test
+  void aListLargerThanAnyClassIsABadRequest() throws Exception {
+    String entry = "{\"studentId\":\"" + studentId + "\",\"status\":\"PRESENT\"}";
+    String body =
+        "{\"entries\":[" + String.join(",", java.util.Collections.nCopies(501, entry)) + "]}";
+    mvc.perform(
+            post("/api/v1/class-sessions/{id}/attendance", sessionId)
+                .with(token(teacherId, branchId, "teacher"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    verifyNoInteractions(takeAttendance);
+  }
+
+  @Test
   void anUnknownStatusIsABadRequest() throws Exception {
     mvc.perform(
             post("/api/v1/class-sessions/{id}/attendance", sessionId)

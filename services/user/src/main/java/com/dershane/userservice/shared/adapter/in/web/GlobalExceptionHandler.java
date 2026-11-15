@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -87,6 +88,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         .addKeyValue("errorCode", ErrorCode.CONCURRENT_MODIFICATION.name())
         .log("Record was modified by another request (optimistic lock)");
     return respond(ErrorCode.CONCURRENT_MODIFICATION);
+  }
+
+  /** A client's {@code sort} parameter named a property the entity does not have. */
+  @ExceptionHandler(PropertyReferenceException.class)
+  public ResponseEntity<ProblemDetail> handleUnknownSortProperty(PropertyReferenceException ex) {
+    // The property name is client input, so it stays out of the log.
+    log.atWarn()
+        .addKeyValue("errorCode", ErrorCode.VALIDATION_FAILED.name())
+        .log("Request sorted by an unknown property");
+    return respond(ErrorCode.VALIDATION_FAILED);
   }
 
   @ExceptionHandler(Exception.class)

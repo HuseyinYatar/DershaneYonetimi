@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -27,4 +28,8 @@ class GuardianLinkReplicaJpaEntity extends AuditableJpaEntity {
 
   @Column(name = "guardian_id", nullable = false)
   private UUID guardianId;
+
+  /** Time of the event that set this guardian; null for rows copied before the column existed. */
+  @Column(name = "linked_at")
+  private Instant linkedAt;
 }

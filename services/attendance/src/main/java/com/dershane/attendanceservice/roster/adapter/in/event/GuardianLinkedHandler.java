@@ -3,6 +3,7 @@ package com.dershane.attendanceservice.roster.adapter.in.event;
 import com.dershane.attendanceservice.roster.application.port.in.LinkGuardianUseCase;
 import com.dershane.attendanceservice.shared.adapter.in.event.EventHandler;
 import com.dershane.attendanceservice.shared.application.Actor;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -23,9 +24,9 @@ class GuardianLinkedHandler implements EventHandler {
   }
 
   @Override
-  public void handle(String eventType, JsonNode data) {
+  public void handle(String eventType, Instant occurredAt, JsonNode data) {
     GuardianLink link = json.treeToValue(data, GuardianLink.class);
-    linkGuardian.link(Actor.SYSTEM, link.guardianId(), link.studentId());
+    linkGuardian.link(Actor.SYSTEM, link.guardianId(), link.studentId(), occurredAt);
   }
 
   private record GuardianLink(UUID guardianId, UUID studentId) {}

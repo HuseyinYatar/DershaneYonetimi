@@ -278,7 +278,7 @@ class RecordCorrectionServiceTest {
     when(excuses.coveredExcuses(anyCollection(), any())).thenReturn(Map.of());
     when(loadRecords.findBySessionIdAndStudentId(sessionId, studentId))
         .thenReturn(Optional.empty());
-    when(memberships.wasMemberOn(classroomId, studentId, TODAY)).thenReturn(true);
+    when(memberships.wasMemberOn(classroomId, branchId, studentId, TODAY)).thenReturn(true);
 
     service.correct(
         teacher,
@@ -297,7 +297,7 @@ class RecordCorrectionServiceTest {
     when(excuses.coveredExcuses(anyCollection(), any())).thenReturn(Map.of());
     when(loadRecords.findBySessionIdAndStudentId(sessionId, studentId))
         .thenReturn(Optional.empty());
-    when(memberships.wasMemberOn(classroomId, studentId, TODAY)).thenReturn(false);
+    when(memberships.wasMemberOn(classroomId, branchId, studentId, TODAY)).thenReturn(false);
 
     assertRejected(
         new CorrectRecordCommand(sessionId, studentId, AttendanceStatus.PRESENT, "Add"),

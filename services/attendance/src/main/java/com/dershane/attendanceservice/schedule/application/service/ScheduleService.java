@@ -1,5 +1,6 @@
 package com.dershane.attendanceservice.schedule.application.service;
 
+import com.dershane.attendanceservice.roster.application.port.in.ClassroomBranchQuery;
 import com.dershane.attendanceservice.schedule.application.port.in.CreateScheduleCommand;
 import com.dershane.attendanceservice.schedule.application.port.in.CreateScheduleUseCase;
 import com.dershane.attendanceservice.schedule.application.port.in.DeactivateScheduleUseCase;
@@ -49,6 +50,7 @@ class ScheduleService
   private final ScheduleQueryPort scheduleQuery;
   private final CreateScheduledSessionUseCase createSession;
   private final BranchAccessPolicy branchAccess;
+  private final ClassroomBranchQuery classrooms;
   private final BusinessCalendar calendar;
 
   @Override
@@ -56,6 +58,16 @@ class ScheduleService
   @Observed(name = "schedule.create")
   public ScheduleView create(Actor actor, CreateScheduleCommand command) {
     branchAccess.requireBranchAdmin(actor, command.branchId(), "schedule.create");
+    if (classrooms.isKnownInOtherBranch(command.classroomId(), command.branchId())) {
+      throw Rejections.reject(
+          log,
+          ErrorCode.BRANCH_MISMATCH,
+          "Schedule rejected: the classroom belongs to another branch",
+          "classroomId",
+          command.classroomId(),
+          "branchId",
+          command.branchId());
+    }
     ClassSchedule saved =
         saveSchedule.save(
             ClassSchedule.create(

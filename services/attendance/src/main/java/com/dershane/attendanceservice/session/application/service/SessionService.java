@@ -1,5 +1,6 @@
 package com.dershane.attendanceservice.session.application.service;
 
+import com.dershane.attendanceservice.roster.application.port.in.ClassroomBranchQuery;
 import com.dershane.attendanceservice.session.application.port.in.CancelSessionUseCase;
 import com.dershane.attendanceservice.session.application.port.in.CompleteSessionUseCase;
 import com.dershane.attendanceservice.session.application.port.in.CreateAdHocSessionCommand;
@@ -55,6 +56,7 @@ class SessionService
   private final SessionLookup sessionLookup;
   private final SessionAccessPolicy sessionAccess;
   private final BranchAccessPolicy branchAccess;
+  private final ClassroomBranchQuery classrooms;
   private final BusinessCalendar calendar;
   private final MeterRegistry meters;
 
@@ -63,6 +65,7 @@ class SessionService
   @Observed(name = "session.create")
   public SessionView create(Actor actor, CreateAdHocSessionCommand command) {
     branchAccess.requireBranchAdmin(actor, command.branchId(), "session.create");
+    requireClassroomOfBranch(command.classroomId(), command.branchId(), "session.create");
     ClassSession planned =
         ClassSession.plan(
             null,
@@ -110,6 +113,7 @@ class SessionService
     }
     session.reassignTeacher(teacherId);
     if (loadSession.existsTeacherOverlap(
+        session.getBranchId(),
         teacherId,
         session.getSessionDate(),
         session.getStartsAt(),
@@ -258,6 +262,7 @@ class SessionService
   /** The first rule the session breaks, or null when it fits. */
   private ErrorCode findOverlap(ClassSession session) {
     if (loadSession.existsClassroomOverlap(
+        session.getBranchId(),
         session.getClassroomId(),
         session.getSessionDate(),
         session.getStartsAt(),
@@ -266,6 +271,7 @@ class SessionService
       return ErrorCode.SESSION_CLASSROOM_OVERLAP;
     }
     if (loadSession.existsTeacherOverlap(
+        session.getBranchId(),
         session.getTeacherId(),
         session.getSessionDate(),
         session.getStartsAt(),
@@ -285,6 +291,22 @@ class SessionService
         session.getTeacherId(),
         "sessionDate",
         session.getSessionDate());
+  }
+
+  /** A classroom the replica already knows in another branch cannot be scheduled by this one. */
+  private void requireClassroomOfBranch(UUID classroomId, UUID branchId, String action) {
+    if (classrooms.isKnownInOtherBranch(classroomId, branchId)) {
+      throw Rejections.reject(
+          log,
+          ErrorCode.BRANCH_MISMATCH,
+          "Rejected: the classroom belongs to another branch",
+          "action",
+          action,
+          "classroomId",
+          classroomId,
+          "branchId",
+          branchId);
+    }
   }
 
   private SessionView requireView(UUID sessionId) {

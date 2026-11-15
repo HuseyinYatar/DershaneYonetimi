@@ -51,6 +51,7 @@ class SendMessageService implements SendMessageUseCase {
   public MessageView send(Actor actor, UUID conversationId, SendMessageCommand command) {
     Conversation conversation = access.requireParticipant(conversationId, actor.id());
     UUID recipientId = conversation.otherParticipant(actor.id());
+    requireActiveCaller(actor);
     requireActiveRecipient(conversationId, recipientId);
 
     // Read before the row lock below: a slow Redis must not lengthen the lock.
@@ -93,6 +94,22 @@ class SendMessageService implements SendMessageUseCase {
         .addKeyValue("seq", seq)
         .log("Message sent");
     return view;
+  }
+
+  /** A deactivated account whose token has not expired yet must not write or open chats. */
+  private void requireActiveCaller(Actor actor) {
+    directory
+        .find(actor.id())
+        .filter(entry -> !entry.active())
+        .ifPresent(
+            entry -> {
+              throw Rejections.reject(
+                  log,
+                  ErrorCode.ACCOUNT_INACTIVE,
+                  "The caller's account is inactive",
+                  "callerId",
+                  actor.id());
+            });
   }
 
   /** A conversation with a deactivated user stays readable but accepts no new messages. */

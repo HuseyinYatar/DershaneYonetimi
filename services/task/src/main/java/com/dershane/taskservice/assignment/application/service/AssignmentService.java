@@ -216,9 +216,9 @@ class AssignmentService
     if (actor.isSuperAdmin()) {
       return true;
     }
-    if (actor.isAdmin()) {
-      // A missing branch claim never matches: null must not open every branch.
-      return actor.branchId() != null && actor.branchId().equals(view.branchId());
+    // A missing branch claim never matches: null must not open every branch.
+    if (actor.isAdmin() && actor.branchId() != null && actor.branchId().equals(view.branchId())) {
+      return true;
     }
     return actor.isGuardian() && guardians.isGuardianOf(actor.id(), view.studentId());
   }

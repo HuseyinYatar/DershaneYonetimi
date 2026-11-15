@@ -79,7 +79,8 @@ class SendMessageServiceTest {
             new SimpleMeterRegistry(),
             Clock.fixed(NOW, ZoneOffset.UTC));
     when(access.requireParticipant(conversation.getId(), studentId)).thenReturn(conversation);
-    when(directory.find(teacherId)).thenReturn(Optional.of(entry(true)));
+    lenient().when(directory.find(teacherId)).thenReturn(Optional.of(entry(true)));
+    lenient().when(directory.find(studentId)).thenReturn(Optional.empty());
     lenient().when(sequence.nextSeq(conversation.getId(), NOW)).thenReturn(5L);
     lenient().when(saveMessage.save(any(Message.class))).thenAnswer(i -> i.getArgument(0));
   }
@@ -137,6 +138,21 @@ class SendMessageServiceTest {
     verify(realtime).publish(event.capture());
     assertThat(event.getValue().recipients()).containsExactlyInAnyOrder(studentId, teacherId);
     assertThat(((RealtimeEvent.MessageChanged) event.getValue()).message()).isEqualTo(sent);
+  }
+
+  @Test
+  void aSenderWhoseAccountWasDeactivatedCannotWrite() {
+    when(directory.find(studentId))
+        .thenReturn(
+            Optional.of(
+                new DirectoryEntryView(
+                    studentId, DirectoryRole.STUDENT, branchId, "S", "S", false)));
+
+    assertThatExceptionOfType(DomainException.class)
+        .isThrownBy(this::send)
+        .extracting(DomainException::getErrorCode)
+        .isEqualTo(ErrorCode.ACCOUNT_INACTIVE);
+    verify(sequence, never()).nextSeq(eq(conversation.getId()), any());
   }
 
   @Test

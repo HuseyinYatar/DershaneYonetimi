@@ -23,11 +23,12 @@ interface ClassSessionJpaRepository
   @Query(
       """
       select count(s) > 0 from ClassSessionJpaEntity s
-      where s.classroomId = :classroomId and s.sessionDate = :date
+      where s.branchId = :branchId and s.classroomId = :classroomId and s.sessionDate = :date
         and s.status in :statuses and s.id <> :excludeId
         and s.startsAt < :endsAt and s.endsAt > :startsAt
       """)
   boolean existsClassroomOverlap(
+      UUID branchId,
       UUID classroomId,
       LocalDate date,
       LocalTime startsAt,
@@ -38,11 +39,12 @@ interface ClassSessionJpaRepository
   @Query(
       """
       select count(s) > 0 from ClassSessionJpaEntity s
-      where s.teacherId = :teacherId and s.sessionDate = :date
+      where s.branchId = :branchId and s.teacherId = :teacherId and s.sessionDate = :date
         and s.status in :statuses and s.id <> :excludeId
         and s.startsAt < :endsAt and s.endsAt > :startsAt
       """)
   boolean existsTeacherOverlap(
+      UUID branchId,
       UUID teacherId,
       LocalDate date,
       LocalTime startsAt,

@@ -49,7 +49,11 @@ class RealtimeFrameListener implements MessageListener {
       envelope.path("recipients").forEach(r -> recipients.add(UUID.fromString(r.asString())));
       registry.send(recipients, envelope.path("frame").toString());
     } catch (RuntimeException e) {
-      log.atWarn().setCause(e).log("realtime.frame_rejected");
+      // A parse error quotes the frame, which holds message text: type only, cause at DEBUG.
+      log.atWarn()
+          .addKeyValue("exception", e.getClass().getSimpleName())
+          .log("realtime.frame_rejected");
+      log.atDebug().setCause(e).log("realtime.frame_rejected.cause");
     }
   }
 }

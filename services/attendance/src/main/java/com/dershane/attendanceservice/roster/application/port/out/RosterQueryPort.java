@@ -7,7 +7,10 @@ import java.util.UUID;
 
 public interface RosterQueryPort {
 
-  List<RosterEntryView> findRosterOn(UUID classroomId, LocalDate date);
+  List<RosterEntryView> findRosterOn(UUID classroomId, UUID branchId, LocalDate date);
 
-  boolean existsMembershipOn(UUID classroomId, UUID studentId, LocalDate date);
+  boolean existsMembershipOn(UUID classroomId, UUID branchId, UUID studentId, LocalDate date);
+
+  /** The replica holds a member of the classroom whose branch is not {@code branchId}. */
+  boolean existsMembershipInOtherBranch(UUID classroomId, UUID branchId);
 }

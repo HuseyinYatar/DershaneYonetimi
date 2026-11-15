@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.dershane.attendanceservice.roster.application.port.in.ClassroomBranchQuery;
 import com.dershane.attendanceservice.session.application.port.in.CreateAdHocSessionCommand;
 import com.dershane.attendanceservice.session.application.port.in.ScheduledSessionCommand;
 import com.dershane.attendanceservice.session.application.port.in.ScheduledSessionOutcome;
@@ -47,6 +48,7 @@ class SessionServiceTest {
   @Mock private LoadSessionPort loadSession;
   @Mock private SaveSessionPort saveSession;
   @Mock private SessionQueryPort sessionQuery;
+  @Mock private ClassroomBranchQuery classrooms;
 
   private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
   private final UUID branchId = UUID.randomUUID();
@@ -68,6 +70,7 @@ class SessionServiceTest {
             new SessionLookup(loadSession),
             new SessionAccessPolicy(branchAccess),
             branchAccess,
+            classrooms,
             new BusinessCalendar(
                 Clock.fixed(Instant.parse("2026-10-30T07:00:00Z"), ZoneOffset.UTC),
                 "Europe/Istanbul"),
@@ -170,8 +173,37 @@ class SessionServiceTest {
   }
 
   @Test
+  void aClassroomOfAnotherBranchCannotBeScheduled() {
+    when(classrooms.isKnownInOtherBranch(classroomId, branchId)).thenReturn(true);
+
+    assertThatExceptionOfType(DomainException.class)
+        .isThrownBy(() -> service.create(admin, adHoc()))
+        .satisfies(ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BRANCH_MISMATCH));
+    verify(saveSession, never()).save(any());
+  }
+
+  @Test
+  void overlapIsLookedForWithinTheSessionsOwnBranchOnly() {
+    when(loadSession.existsClassroomOverlap(any(), any(), any(), any(), any(), any()))
+        .thenReturn(true);
+
+    assertThatExceptionOfType(DomainException.class)
+        .isThrownBy(() -> service.create(admin, adHoc()));
+
+    verify(loadSession)
+        .existsClassroomOverlap(
+            org.mockito.ArgumentMatchers.eq(branchId),
+            org.mockito.ArgumentMatchers.eq(classroomId),
+            any(),
+            any(),
+            any(),
+            any());
+  }
+
+  @Test
   void aSessionCannotOverlapAnotherOfTheSameClassroom() {
-    when(loadSession.existsClassroomOverlap(any(), any(), any(), any(), any())).thenReturn(true);
+    when(loadSession.existsClassroomOverlap(any(), any(), any(), any(), any(), any()))
+        .thenReturn(true);
 
     assertThatExceptionOfType(DomainException.class)
         .isThrownBy(() -> service.create(admin, adHoc()))
@@ -182,7 +214,8 @@ class SessionServiceTest {
 
   @Test
   void aTeacherCannotRunTwoSessionsAtOnce() {
-    when(loadSession.existsTeacherOverlap(any(), any(), any(), any(), any())).thenReturn(true);
+    when(loadSession.existsTeacherOverlap(any(), any(), any(), any(), any(), any()))
+        .thenReturn(true);
 
     assertThatExceptionOfType(DomainException.class)
         .isThrownBy(() -> service.create(admin, adHoc()))
@@ -206,7 +239,8 @@ class SessionServiceTest {
     UUID id = UUID.randomUUID();
     when(loadSession.findById(id))
         .thenReturn(Optional.of(stored(SessionStatus.PLANNED, TODAY, id)));
-    when(loadSession.existsTeacherOverlap(any(), any(), any(), any(), any())).thenReturn(true);
+    when(loadSession.existsTeacherOverlap(any(), any(), any(), any(), any(), any()))
+        .thenReturn(true);
 
     assertThatExceptionOfType(DomainException.class)
         .isThrownBy(() -> service.reassign(admin, id, UUID.randomUUID()))
@@ -258,7 +292,8 @@ class SessionServiceTest {
   @Test
   void aScheduledDayThatClashesIsSkippedNotFailed() {
     UUID scheduleId = UUID.randomUUID();
-    when(loadSession.existsClassroomOverlap(any(), any(), any(), any(), any())).thenReturn(true);
+    when(loadSession.existsClassroomOverlap(any(), any(), any(), any(), any(), any()))
+        .thenReturn(true);
 
     ScheduledSessionOutcome outcome = service.createFromSchedule(scheduled(scheduleId));
 
