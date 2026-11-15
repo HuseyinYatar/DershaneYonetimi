@@ -27,7 +27,7 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
   availability_zone       = local.azs[0]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = true #bu subnet'te açılan EC2'lere kendiliğinden public IP verilir.
 
   tags = { Name = "${var.name}-public-a" }
 }
@@ -51,7 +51,7 @@ resource "aws_route" "public_internet" {
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.this.id
 }
-
+#tabloyu subnet'e bağlar.
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id

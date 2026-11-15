@@ -307,7 +307,7 @@ DershaneYonetimi/
 ├── services/<servis-adi>/     her servis kendi Dockerfile'ı ve testleriyle
 ├── frontend/
 ├── shared/events/             olay şemaları (JSON Schema) ve kuralları
-├── infra/terraform/           AWS ve Floci altyapısı (README.md): bootstrap/ (state bucket, Budget, CI rolleri),
+├── infra/terraform/           AWS ve Floci altyapısı (README.md): bootstrap/ (state bucket, Budget, GitHub OIDC),
 │                              tek kök modül, modules/ (events, storage, network, nodes, iam, registry,
 │                              database, cache, edge, email, monitoring), ortam farkları environments/'ta.
 │                              Yerelde `floci-init` yalnızca SNS/SQS ve optik dosya bucket'ını uygular
@@ -328,7 +328,8 @@ Servis klasör adları İngilizce, küçük harf ve tire ile ayrılmıştır (`e
 
 - **CI: GitHub Actions.** Her servisin kendi workflow'u vardır ve `paths` filtresiyle yalnızca o servisin klasörü (veya `shared/events/`) değişince çalışır. Bir servisteki değişiklik diğerlerini derlememeli.
 - **CD: ArgoCD (GitOps).** CI kümeye doğrudan dağıtım yapmaz; `k8s/environments/<ortam>/<servis>.yaml` içindeki imaj sürümünü günceller, küme içinde çalışan ArgoCD dağıtımı yapar. main korumalıysa CI bot'unun bypass izni mi alacağı, yoksa ArgoCD Image Updater mı kullanılacağı GitOps haftalarında belirlenir.
-- **AWS kimliği:** GitHub Actions AWS'ye OIDC ile girer (`bootstrap/` rolleri, ECR push rolü). GitHub'da AWS anahtarı saklanmaz.
+- **AWS kimliği:** GitHub Actions AWS'ye yalnızca imajı ECR'a göndermek için OIDC ile girer (`bootstrap/`'taki OIDC sağlayıcısı, `registry` modülündeki ECR push rolü, yalnızca main). GitHub'da AWS anahtarı saklanmaz.
+- **Terraform elle uygulanır:** `plan` ve `apply` CI'da değil, ekip üyesinin kendi IAM kullanıcısıyla (`aws login`) laptop'tan çalıştırılır; state ve kilit S3'tedir. Onay adımı yoktur, değişikliği kimin yaptığı CloudTrail'de görünür (raporda bilinen sınır).
 
 Servis pipeline aşamaları:
 1. Lint (Java: Spotless + Checkstyle, Python: Ruff)
@@ -338,7 +339,7 @@ Servis pipeline aşamaları:
 5. İmajı ECR'a gönderme (yalnızca ana dal)
 6. `k8s/` altında imaj sürümünü güncelleme (yalnızca ana dal)
 
-Pull request'te 1–4, ana dala birleştirmede 1–6 çalışır. Terraform için ayrı pipeline vardır (`terraform.yml`): `fmt`, `validate`, `terraform test` (sahte provider), tflint, `trivy config`; PR'da `plan` (PR'a yorum), main'de `production` environment onayıyla `apply`.
+Pull request'te 1–4, ana dala birleştirmede 1–6 çalışır. Terraform için ayrı pipeline vardır (`terraform.yml`), yalnızca statik kontrol yapar ve AWS'ye bağlanmaz: `fmt`, `validate`, `terraform test` (sahte provider), tflint, `trivy config`.
 
 İmaj etiketi commit SHA'sıdır; `latest` kullanılmaz.
 

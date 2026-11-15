@@ -21,7 +21,7 @@ variable "alert_email" {
 }
 
 variable "github_repo" {
-  description = "owner/name trusted by the Terraform roles. Null: no GitHub OIDC."
+  description = "owner/name of the repository. Set: the GitHub OIDC provider is created (the ECR push role trusts it). Null: no GitHub OIDC."
   type        = string
   default     = null
 }

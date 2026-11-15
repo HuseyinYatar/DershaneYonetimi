@@ -8,7 +8,7 @@ Kubernetes kurulumunun kendisi (`kubeadm init/join`, CNI, Traefik) burada değil
 
 ```
 infra/terraform/
-├── bootstrap/            yalnızca AWS, hesap başına bir kez: state bucket'ı, Budget, GitHub OIDC, terraform rolleri
+├── bootstrap/            yalnızca AWS, hesap başına bir kez: state bucket'ı, Budget, GitHub OIDC (ECR push için)
 ├── backend.tf            backend "s3" {}; değerler environments/prod.s3.tfbackend'ten (yerelde override edilir)
 ├── events.auto.tfvars    topic'ler ve abonelikler (her ortamda aynı, kendiliğinden yüklenir)
 ├── main.tf               modül çağrıları; servislerin AWS izinleri (local.service_access)
@@ -50,9 +50,20 @@ Floci adresi `AWS_ENDPOINT_URL` ortam değişkeninden gelir, `.tf` dosyalarında
 - **Free plan bitiş tarihi:** 11. haftadan sonra olmalı (Billing → Free plan).
 - **Makine tipleri:** EC2 → Launch instance listesinde `c7i-flex.large` ve `m7i-flex.large` "Free tier eligible" görünmeli.
 - **vCPU kotası:** Service Quotas → "Running On-Demand Standard instances" en az 6 vCPU olmalı.
-- **Yönetici kullanıcı:** root kullanılmaz. IAM Identity Center'da yönetici kullanıcı ve MFA, ardından `aws configure sso` ve `aws sso login`.
+- **Yönetici kullanıcı:** root kullanılmaz, yalnızca root'a MFA eklenir. Her ekip üyesine ayrı bir IAM kullanıcısı açılır (`AdministratorAccess`, MFA, konsol şifresi); kullanıcı paylaşılmaz, apply'ı kimin yaptığı CloudTrail'de bu adla görünür.
 
-### 2. bootstrap (bir kez, elle)
+### 2. Laptop'ta giriş
+
+Terraform yalnızca laptop'tan, elle çalıştırılır; CI AWS'ye Terraform için girmez. Kimlik AWS CLI'dan gelir:
+
+```bash
+aws login                      # AWS CLI v2.32+, tarayıcıda IAM kullanıcısıyla giriş, geçici anahtar
+aws sts get-caller-identity    # arn:aws:iam::<hesap>:user/<kullanıcı> görünmeli
+```
+
+Terraform bu oturumu okuyamazsa anahtar ortama aktarılır: `eval "$(aws configure export-credentials --format env)"`. Access key (`aws configure`) yalnızca son çare: süresiz geçerlidir ve diskte düz metin durur.
+
+### 3. bootstrap (bir kez)
 
 ```bash
 export TF_VAR_alert_email='<adres>'
@@ -62,35 +73,33 @@ terraform -chdir=infra/terraform/bootstrap output
 ```
 
 Çıktılar:
-- **`state_bucket`:** `environments/prod.s3.tfbackend` dosyasındaki `<ACCOUNT_ID>` yerine yazılır. Ayrıca GitHub'da repository variable `TF_STATE_BUCKET` olarak girilir.
-- **`terraform_plan_role_arn` / `terraform_apply_role_arn`:** repository variable `AWS_TERRAFORM_PLAN_ROLE_ARN` / `AWS_TERRAFORM_APPLY_ROLE_ARN` olarak girilir.
-- **`production` environment:** GitHub'da açılır, required reviewers ile korunur. apply'ın "onay"ı budur.
+- **`state_bucket`:** `environments/prod.s3.tfbackend` dosyasındaki `<ACCOUNT_ID>` yerine yazılır. Ekipteki herkes aynı state'i ve aynı kilidi (`use_lockfile`) kullanır; iki kişi aynı anda apply yaparsa ikincisi kilitte bekler.
 
 bootstrap state'i (`bootstrap/terraform.tfstate`) Git'e girmez. Kaybolmaması için bir kopyası saklanmalı ya da state bucket'ına taşınmalı (`backend "s3"` eklenip `terraform init -migrate-state`).
 
-### 3. Kişisel değerler
+### 4. Kişisel değerler
 
-Bu değerler Git'e yazılmaz. Yerelde ortam değişkeni, CI'da repository variable olarak verilir:
+Bu değerler Git'e yazılmaz, ortam değişkeni olarak verilir:
 
-| Ortam değişkeni | Repository variable | Örnek |
-|---|---|---|
-| `TF_VAR_admin_cidrs` | `TF_ADMIN_CIDRS` | `["<ev IP'si>/32"]` (SSH ve kubectl; boşsa yalnızca SSM) |
-| `TF_VAR_ssh_public_key` | `TF_SSH_PUBLIC_KEY` | `ssh-ed25519 AAAA...` |
-| `TF_VAR_alert_email` | `TF_ALERT_EMAIL` | alarm ve bütçe e-postası |
-| `TF_VAR_ses_test_recipients` | `TF_SES_TEST_RECIPIENTS` | `["<adres>"]` (SES sandbox) |
+| Ortam değişkeni | Örnek |
+|---|---|
+| `TF_VAR_admin_cidrs` | `["<ev IP'si>/32"]` (SSH ve kubectl; boşsa yalnızca SSM) |
+| `TF_VAR_ssh_public_key` | `ssh-ed25519 AAAA...` |
+| `TF_VAR_alert_email` | alarm ve bütçe e-postası |
+| `TF_VAR_ses_test_recipients` | `["<adres>"]` (SES sandbox) |
 
-### 4. plan ve apply
+### 5. plan ve apply
 
 ```bash
 cd infra/terraform
 terraform init -backend-config=environments/prod.s3.tfbackend
-terraform plan  -var-file=environments/prod.tfvars
-terraform apply -var-file=environments/prod.tfvars
+terraform plan -var-file=environments/prod.tfvars -out=tfplan
+terraform apply tfplan
 ```
 
-Sonraki değişiklikler PR ile gelir: `.github/workflows/terraform.yml` PR'da plan'ı yorum olarak yazar, main'de onaydan sonra apply eder.
+`apply tfplan`, incelenen planın birebir aynısını uygular; arada state değiştiyse yeni plan çıkarmaz, hata verir. Sonraki değişikliklerde de aynı komutlar çalıştırılır. PR'da `.github/workflows/terraform.yml` yalnızca statik kontrolleri (fmt, validate, test, tflint, trivy) yapar, AWS'ye bağlanmaz.
 
-### 5. Apply'dan sonra elle yapılacaklar
+### 6. Apply'dan sonra elle yapılacaklar
 
 - **Güzel Hosting DNS paneli:**
   - `@` ve `*` için A kaydı → `terraform output ingress_public_ip`.
@@ -162,7 +171,7 @@ Pod'lara External Secrets Operator ile gelirler. Veritabanlarını ve rollerini 
 | Ne zaman | Komut | Boşta kalan |
 |---|---|---|
 | Günlük | `infra/scripts/power.sh off` / `on` (EC2 ve RDS) | NLB, ElastiCache, EBS, EIP |
-| Uzun ara | `prod.tfvars`'ta `standby = true`, PR ve apply | EBS, 2 EIP, RDS diski, secret'lar |
+| Uzun ara | `prod.tfvars`'ta `standby = true`, sonra plan ve apply | EBS, 2 EIP, RDS diski, secret'lar |
 
 Terraform sunucunun açık/kapalı durumunu izlemez, bu yüzden apply `power.sh`'ı geri almaz. RDS durdurulduktan 7 gün sonra kendiliğinden açılır.
 
@@ -185,5 +194,6 @@ terraform init -backend=false && terraform validate && terraform test
 - **Tek AZ, tek control plane.**
 - **Tek RDS instance'ı** içinde servis başına veritabanı.
 - **SMTP şifresi state'te:** SES SMTP şifresi bir IAM access key'den türediği için Terraform state'inde bulunur. State bucket'ı bu yüzden şifreli, versiyonlu ve kapalıdır.
+- **apply onaysızdır:** AWS yetkisi olan ekip üyesi kendi laptop'ından apply yapabilir; ikinci bir onay adımı yoktur. Kimin ne zaman değiştirdiği yalnızca CloudTrail'de görünür.
 - **`trivy config` yalnızca rapor ediyor:** bulgular gözden geçirilip `.trivyignore`'a gerekçesiyle yazılana kadar CI'ı durdurmaz.
 - **Floci yalnızca olay altyapısı için:** EC2/kubeadm platformu emülatörde kurulmaz (Floci EC2'yi container olarak açıyor, systemd ve kernel modülü yok). Platformun doğrulaması AWS'de yapılır.

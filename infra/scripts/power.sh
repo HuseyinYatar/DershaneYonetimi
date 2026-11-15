@@ -6,8 +6,9 @@
 #   infra/scripts/power.sh on  [environment]    database first, then the nodes
 #   infra/scripts/power.sh off [environment]    nodes first, then the database
 #
-# Needs the AWS CLI with a session for the account (aws sso login). RDS starts a stopped database by
-# itself after 7 days; run "off" again if the break is longer.
+# Needs an AWS CLI session for the account; how to sign in is in infra/terraform/README.md
+# ("Laptop'ta giriş"). RDS starts a stopped database by itself after 7 days; run "off" again if the
+# break is longer.
 set -euo pipefail
 
 ACTION="${1:-}"

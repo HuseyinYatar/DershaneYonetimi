@@ -1,11 +1,7 @@
 name: terraform
 
-# Pull request: format, validate, test (mocked providers), lint, IaC scan, then a plan against AWS
-# posted to the PR. main: apply after approval of the "production" environment.
-# The AWS jobs run only once the repository variables from bootstrap/ exist:
-#   AWS_TERRAFORM_PLAN_ROLE_ARN, AWS_TERRAFORM_APPLY_ROLE_ARN, TF_STATE_BUCKET
-# Personal values are repository variables too (optional): TF_ADMIN_CIDRS (JSON list),
-# TF_SSH_PUBLIC_KEY, TF_ALERT_EMAIL, TF_SES_TEST_RECIPIENTS (JSON list).
+# Static checks only: format, validate, test (mocked providers), lint, IaC scan. No AWS access.
+# plan and apply are run by hand from a team member's own IAM user (infra/terraform/README.md).
 on:
   pull_request:
     paths:
@@ -20,15 +16,13 @@ on:
 permissions:
   contents: read
 
-# Never cancel a running apply; a second run waits for the first (and for the state lock).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
-  AWS_REGION: eu-central-1
 
 defaults:
   run:
@@ -67,80 +61,3 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: 0
 
-  plan:
-    if: github.event_name == 'pull_request' && vars.AWS_TERRAFORM_PLAN_ROLE_ARN != ''
-    needs: check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: "~1.15.0"
-          terraform_wrapper: false
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ vars.AWS_TERRAFORM_PLAN_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Personal values
-        env:
-          ADMIN_CIDRS: ${{ vars.TF_ADMIN_CIDRS }}
-          SSH_PUBLIC_KEY: ${{ vars.TF_SSH_PUBLIC_KEY }}
-          ALERT_EMAIL: ${{ vars.TF_ALERT_EMAIL }}
-          SES_TEST_RECIPIENTS: ${{ vars.TF_SES_TEST_RECIPIENTS }}
-        run: |
-          [ -n "$ADMIN_CIDRS" ] && echo "TF_VAR_admin_cidrs=$ADMIN_CIDRS" >> "$GITHUB_ENV"
-          [ -n "$SSH_PUBLIC_KEY" ] && echo "TF_VAR_ssh_public_key=$SSH_PUBLIC_KEY" >> "$GITHUB_ENV"
-          [ -n "$ALERT_EMAIL" ] && echo "TF_VAR_alert_email=$ALERT_EMAIL" >> "$GITHUB_ENV"
-          [ -n "$SES_TEST_RECIPIENTS" ] && echo "TF_VAR_ses_test_recipients=$SES_TEST_RECIPIENTS" >> "$GITHUB_ENV"
-          true
-      - run: terraform init -backend-config=environments/prod.s3.tfbackend -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
-      - run: terraform plan -var-file=environments/prod.tfvars -lock-timeout=5m -no-color -out=tfplan
-      - name: Post the plan to the pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          {
-            echo '### terraform plan (prod)'
-            echo '```'
-            terraform show -no-color tfplan | tail -c 60000
-            echo '```'
-          } > plan.md
-          gh pr comment "$PR" --body-file plan.md
-
-  apply:
-    if: github.event_name == 'push' && vars.AWS_TERRAFORM_APPLY_ROLE_ARN != ''
-    needs: check
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: "~1.15.0"
-          terraform_wrapper: false
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ vars.AWS_TERRAFORM_APPLY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Personal values
-        env:
-          ADMIN_CIDRS: ${{ vars.TF_ADMIN_CIDRS }}
-          SSH_PUBLIC_KEY: ${{ vars.TF_SSH_PUBLIC_KEY }}
-          ALERT_EMAIL: ${{ vars.TF_ALERT_EMAIL }}
-          SES_TEST_RECIPIENTS: ${{ vars.TF_SES_TEST_RECIPIENTS }}
-        run: |
-          [ -n "$ADMIN_CIDRS" ] && echo "TF_VAR_admin_cidrs=$ADMIN_CIDRS" >> "$GITHUB_ENV"
-          [ -n "$SSH_PUBLIC_KEY" ] && echo "TF_VAR_ssh_public_key=$SSH_PUBLIC_KEY" >> "$GITHUB_ENV"
-          [ -n "$ALERT_EMAIL" ] && echo "TF_VAR_alert_email=$ALERT_EMAIL" >> "$GITHUB_ENV"
-          [ -n "$SES_TEST_RECIPIENTS" ] && echo "TF_VAR_ses_test_recipients=$SES_TEST_RECIPIENTS" >> "$GITHUB_ENV"
-          true
-      - run: terraform init -backend-config=environments/prod.s3.tfbackend -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
-      - run: terraform apply -var-file=environments/prod.tfvars -lock-timeout=5m -auto-approve
