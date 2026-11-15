@@ -90,14 +90,9 @@ body {
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: auto;
   flex: none;
-  border-radius: 11px;
-  background: var(--ink);
-  color: #fff;
 }
 
 .brand-name {
