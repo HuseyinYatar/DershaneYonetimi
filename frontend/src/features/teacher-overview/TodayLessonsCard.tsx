@@ -1,3 +1,4 @@
+import { CalendarX } from "lucide-react";
 import { Link } from "react-router";
 import type { components } from "@/api/schema/attendance";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -35,7 +36,11 @@ export function TodayLessonsCard({
       ) : isPending ? (
         <SkeletonRows rows={3} />
       ) : rows.length === 0 ? (
-        <EmptyState text="Bugün dersin yok." />
+        <EmptyState
+          icon={CalendarX}
+          title="Bugün ders yok"
+          text="Bugün için planlanmış bir dersin görünmüyor."
+        />
       ) : (
         rows.map((session) => {
           const badge = sessionBadge(session.status!);

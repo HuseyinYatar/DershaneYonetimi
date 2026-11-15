@@ -1,17 +1,20 @@
 import { ChartNoAxesColumn } from "lucide-react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import {
   useExamResults,
   useExamSubjectNames,
   useMockExam,
+  usePublishExam,
   useTopicAnalysis,
 } from "@/api/queries/exam";
+import { useActor } from "@/auth/useActor";
 import { ScoreInline } from "@/components/ScoreInline";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Bar } from "@/components/ui/Bar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { Breadcrumb, PageHeader } from "@/components/ui/PageHeader";
+import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { TableHead, TableRow, Td, Th } from "@/components/ui/Table";
 import {
@@ -23,6 +26,10 @@ import {
   ratioToPercent,
 } from "@/lib/format";
 import { examBadge } from "@/lib/status/exams";
+import { AnswerKeyCard } from "./AnswerKeyCard";
+import { ImportCard } from "./ImportCard";
+import { NationalStatisticsCard } from "./NationalStatisticsCard";
+import { UnmatchedRowsCard } from "./UnmatchedRowsCard";
 
 const BACK = { label: "Denemeler", to: "/exams" };
 const RESULT_COLS =
@@ -152,6 +159,10 @@ function TopicsCard({ mockExamId }: { mockExamId: string }) {
 export function ExamDetailPage() {
   const { mockExamId = "" } = useParams();
   const exam = useMockExam(mockExamId);
+  const publish = usePublishExam(mockExamId);
+  const isAdmin = !!useActor()?.roles.includes("admin");
+  const [params, setParams] = useSearchParams();
+  const jobId = params.get("job");
   const data = exam.data;
   const badge = data ? examBadge(data.status) : undefined;
 
@@ -163,14 +174,49 @@ export function ExamDetailPage() {
         title={data?.name ?? "Deneme"}
       />
       {badge && (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <StatusBadge tone={badge.tone} label={badge.label} />
+          {isAdmin && data?.status === "PROCESSED" && (
+            <button
+              type="button"
+              disabled={publish.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Sonuçlar açıklansın mı? Öğrenciler ve veliler bilgilendirilir, geri alınamaz.",
+                  )
+                ) {
+                  publish.mutate();
+                }
+              }}
+              className={PRIMARY_BUTTON}
+            >
+              {publish.isPending ? "Açıklanıyor…" : "Sonuçları açıkla"}
+            </button>
+          )}
         </div>
       )}
       {exam.isError ? (
         <QueryError error={exam.error} className="py-16" />
       ) : (
         <div className="mt-5 flex flex-col gap-4">
+          {isAdmin && data && (
+            <>
+              <AnswerKeyCard
+                mockExamId={mockExamId}
+                examTypeId={data.examTypeId}
+                status={data.status}
+              />
+              <ImportCard
+                mockExamId={mockExamId}
+                status={data.status}
+                jobId={jobId}
+                onJob={(id) => setParams({ job: id }, { replace: true })}
+              />
+              {jobId && <UnmatchedRowsCard jobId={jobId} />}
+              <NationalStatisticsCard mockExamId={mockExamId} examTypeId={data.examTypeId} />
+            </>
+          )}
           <ResultsCard mockExamId={mockExamId} />
           <TopicsCard mockExamId={mockExamId} />
         </div>

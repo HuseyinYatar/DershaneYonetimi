@@ -1,4 +1,4 @@
-// All user-facing numbers and dates go through here (tr-TR: "72,5", "%94", "Cuma, 13 Kasım").
+// All user-facing numbers and dates go through here (tr-TR: "72,5", "%94", "Cuma 13 Kasım").
 const LOCALE = "tr-TR";
 
 const decimal1 = new Intl.NumberFormat(LOCALE, {
@@ -49,9 +49,9 @@ export function ratioToPercent(ratio: number | string | null | undefined): numbe
 
 const cap = (text: string) => text.charAt(0).toLocaleUpperCase(LOCALE) + text.slice(1);
 
-// "Cuma, 13 Kasım"
+// "Cuma 13 Kasım"
 export function formatDateLong(date: Date): string {
-  return `${cap(weekday.format(date))}, ${dayMonth.format(date)}`;
+  return `${cap(weekday.format(date))} ${dayMonth.format(date)}`;
 }
 
 // "8 Kasım 2026"
@@ -59,9 +59,9 @@ export function formatFullDate(date: Date): string {
   return fullDate.format(date);
 }
 
-// "8 Kasım 2026, Pazar"
+// "8 Kasım 2026 Pazar"
 export function formatFullDateWithWeekday(date: Date): string {
-  return `${fullDate.format(date)}, ${cap(weekday.format(date))}`;
+  return `${fullDate.format(date)} ${cap(weekday.format(date))}`;
 }
 
 // "12 Kas"

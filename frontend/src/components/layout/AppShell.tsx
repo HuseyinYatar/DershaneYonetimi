@@ -1,4 +1,4 @@
-import { Ellipsis, GraduationCap, LogOut, Settings, type LucideIcon } from "lucide-react";
+import { Ellipsis, LogOut, Settings, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router";
 import { useUnreadCount } from "@/api/queries/notification";
@@ -62,14 +62,7 @@ function SideAction({
 }
 
 function Logo({ size = 36 }: { size?: number }) {
-  return (
-    <span
-      style={{ width: size, height: size }}
-      className="grid flex-none place-items-center rounded-[11px] bg-ink text-white"
-    >
-      <GraduationCap size={18} strokeWidth={1.5} aria-hidden="true" />
-    </span>
-  );
+  return <img src="/logo.png" alt="" width={size + 6} className="h-auto flex-none" />;
 }
 
 function TabBar({

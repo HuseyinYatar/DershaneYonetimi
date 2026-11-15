@@ -1,3 +1,4 @@
+import { ClipboardCheck } from "lucide-react";
 import { Link } from "react-router";
 import { useAssignment } from "@/api/queries/task";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -51,7 +52,11 @@ export function PendingGradingCard({
       ) : isPending ? (
         <SkeletonRows rows={3} />
       ) : rows.length === 0 ? (
-        <EmptyState text="Değerlendirme bekleyen teslim yok." />
+        <EmptyState
+          icon={ClipboardCheck}
+          title="Bekleyen teslim yok"
+          text="Değerlendirmeni bekleyen bir teslim görünmüyor."
+        />
       ) : (
         rows.map((row) => (
           <PendingRow key={row.id} row={row} name={studentLabel(studentNames, row.studentId)} />

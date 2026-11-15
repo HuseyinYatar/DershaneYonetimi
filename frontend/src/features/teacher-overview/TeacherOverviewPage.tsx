@@ -50,7 +50,8 @@ export function TeacherOverviewPage() {
             {
               icon: ClipboardCheck,
               value: submitted.data ? formatInt(submitted.data.page?.totalElements ?? 0) : "—",
-              label: "değerlendirme bekleyen",
+              // Short on purpose: "değerlendirme" is wider than a phone stat cell.
+              label: "not bekleyen",
             },
             {
               icon: School,

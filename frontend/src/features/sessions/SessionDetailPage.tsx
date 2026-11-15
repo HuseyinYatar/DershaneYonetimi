@@ -1,6 +1,7 @@
 import { useParams } from "react-router";
 import { useRoster, useSession } from "@/api/queries/attendance";
-import { useMyClassrooms } from "@/api/queries/user";
+import { useBranchClassrooms, useMyClassrooms } from "@/api/queries/user";
+import { useActor } from "@/auth/useActor";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
@@ -8,7 +9,9 @@ import { Breadcrumb, PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatClock, formatFullDateWithWeekday, parseDateOnly } from "@/lib/format";
 import { sessionBadge } from "@/lib/status/sessions";
+import { dateKey } from "@/lib/week";
 import { CompletedAttendance } from "./CompletedAttendance";
+import { SessionAdminActions } from "./SessionAdminActions";
 import { TakeAttendance, TakeAttendanceSkeleton } from "./TakeAttendance";
 
 const BACK = { label: "Yoklama", to: "/sessions" };
@@ -17,8 +20,15 @@ export function SessionDetailPage() {
   const { sessionId = "" } = useParams();
   const session = useSession(sessionId);
   const status = session.data?.status;
-  const roster = useRoster(sessionId, status === "PLANNED" || status === "COMPLETED");
-  const classrooms = useMyClassrooms();
+  const isAdmin = !!useActor()?.roles.includes("admin");
+  // An admin may also take attendance for an expired session, so its roster is needed too.
+  const roster = useRoster(
+    sessionId,
+    status === "PLANNED" || status === "COMPLETED" || (isAdmin && status === "EXPIRED"),
+  );
+  const myClassrooms = useMyClassrooms(!isAdmin);
+  const branchClassrooms = useBranchClassrooms(isAdmin);
+  const classrooms = isAdmin ? branchClassrooms : myClassrooms;
 
   if (session.isError) {
     return (
@@ -46,7 +56,7 @@ export function SessionDetailPage() {
   const students = roster.data?.students ?? [];
 
   const body = () => {
-    if (data.status === "CANCELLED" || data.status === "EXPIRED") {
+    if (data.status === "CANCELLED" || (data.status === "EXPIRED" && !isAdmin)) {
       return (
         <Card>
           <EmptyState
@@ -61,8 +71,11 @@ export function SessionDetailPage() {
     }
     if (roster.isError) return <QueryError error={roster.error} />;
     if (roster.isPending) return <TakeAttendanceSkeleton />;
-    return data.status === "PLANNED" ? (
-      <TakeAttendance sessionId={sessionId} students={students} />
+    // After the session day only an admin may take attendance, and must give a reason.
+    const late =
+      isAdmin && (data.status === "EXPIRED" || (data.sessionDate ?? "") < dateKey(new Date()));
+    return data.status === "PLANNED" || data.status === "EXPIRED" ? (
+      <TakeAttendance sessionId={sessionId} students={students} requireReason={late} />
     ) : (
       <CompletedAttendance sessionId={sessionId} students={students} />
     );
@@ -78,7 +91,12 @@ export function SessionDetailPage() {
       <div className="mt-4">
         <StatusBadge tone={badge.tone} label={badge.label} />
       </div>
-      <div className="mt-5">{body()}</div>
+      <div className="mt-5 flex flex-col gap-4">
+        {isAdmin && data.status === "PLANNED" && (
+          <SessionAdminActions sessionId={sessionId} teacherId={data.teacherId ?? ""} />
+        )}
+        {body()}
+      </div>
     </>
   );
 }

@@ -1,14 +1,22 @@
 import { CalendarX, ChevronLeft, ChevronRight } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useSessions } from "@/api/queries/attendance";
-import { useMyClassrooms } from "@/api/queries/user";
+import {
+  branchSessionsQuery,
+  sessionsQuery,
+  useBranchSessions,
+  useSessions,
+} from "@/api/queries/attendance";
+import { useBranchClassrooms, useBranchTeachers, useMyClassrooms } from "@/api/queries/user";
 import { useActor } from "@/auth/useActor";
 import { StatusBadge } from "@/components/StatusBadge";
 import { WeekStrip } from "@/components/WeekStrip";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { PillLink } from "@/components/ui/Pill";
+import { PillButton, PillLink } from "@/components/ui/Pill";
+
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { TableHead, TableRow, Td, Th } from "@/components/ui/Table";
 import {
@@ -18,20 +26,53 @@ import {
   parseDateOnly,
 } from "@/lib/format";
 import { sessionBadge } from "@/lib/status/sessions";
+import { fullName } from "@/lib/userForm";
+import { cn } from "@/lib/utils";
 import { dateKey, weekDays, weekRangeLabel } from "@/lib/week";
+import { NewSessionForm } from "./NewSessionForm";
 
 const COLS = "grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[130px_minmax(0,1fr)_170px_120px]";
+const ADMIN_COLS =
+  "grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[110px_minmax(0,1fr)_minmax(0,1fr)_170px_120px]";
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function SessionsPage() {
   const actor = useActor();
+  // Admins see every session of the branch; teachers only their own (the service enforces it too).
+  const isAdmin = !!actor?.roles.includes("admin");
+  const [creating, setCreating] = useState(false);
+  // Set by the arrows only, so the first render and day clicks do not animate.
+  const [direction, setDirection] = useState<"left" | "right" | null>(null);
   const [params, setParams] = useSearchParams();
   const dayParam = params.get("day");
   const day = dayParam && DAY.test(dayParam) ? dayParam : dateKey(new Date());
   const days = weekDays(parseDateOnly(day));
-  const sessions = useSessions(actor?.id, { from: dateKey(days[0]), to: dateKey(days[6]) });
-  const classrooms = useMyClassrooms();
-  const classroomNames = new Map((classrooms.data ?? []).map((c) => [c.id, c.name]));
+  const range = { from: dateKey(days[0]), to: dateKey(days[6]) };
+  const teacherSessions = useSessions(isAdmin ? undefined : actor?.id, range);
+  const branchSessions = useBranchSessions(range, isAdmin);
+  const sessions = isAdmin ? branchSessions : teacherSessions;
+  const myClassrooms = useMyClassrooms(!isAdmin);
+  const branchClassrooms = useBranchClassrooms(isAdmin);
+  const teachers = useBranchTeachers(isAdmin);
+  const classroomNames = new Map(
+    ((isAdmin ? branchClassrooms.data : myClassrooms.data) ?? []).map((c) => [c.id, c.name]),
+  );
+  const teacherNames = new Map((teachers.data ?? []).map((t) => [t.id, fullName(t)]));
+  const cols = isAdmin ? ADMIN_COLS : COLS;
+
+  // Warm the neighbouring weeks so an arrow click shows cached data instead of a loading flash.
+  const queryClient = useQueryClient();
+  const teacherId = actor?.id;
+  useEffect(() => {
+    for (const shift of [-7, 7]) {
+      const start = parseDateOnly(range.from);
+      start.setDate(start.getDate() + shift);
+      const near = weekDays(start);
+      const nearRange = { from: dateKey(near[0]), to: dateKey(near[6]) };
+      if (isAdmin) void queryClient.prefetchQuery(branchSessionsQuery(nearRange));
+      else if (teacherId) void queryClient.prefetchQuery(sessionsQuery(teacherId, nearRange));
+    }
+  }, [range.from, isAdmin, teacherId, queryClient]);
 
   const week = sessions.data ?? [];
   const visible = week
@@ -39,6 +80,7 @@ export function SessionsPage() {
     .sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
   const setDay = (key: string) => setParams({ day: key }, { replace: true });
   const shiftWeek = (weeks: number) => {
+    setDirection(weeks > 0 ? "right" : "left");
     const next = parseDateOnly(day);
     next.setDate(next.getDate() + 7 * weeks);
     setDay(dateKey(next));
@@ -47,6 +89,18 @@ export function SessionsPage() {
   return (
     <>
       <PageHeader eyebrow={formatDateLong(new Date())} title="Yoklama" />
+      {isAdmin && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <PillButton onClick={() => setCreating(!creating)}>Ek ders aç</PillButton>
+          <PillLink to="/schedules">Haftalık program</PillLink>
+          <PillLink to="/excuses">Mazeretler</PillLink>
+        </div>
+      )}
+      {isAdmin && creating && (
+        <div className="mt-4">
+          <NewSessionForm day={day} onDone={() => setCreating(false)} />
+        </div>
+      )}
       <div className="mt-6 grid items-start gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
         <Card className="p-5">
           <CardHeader
@@ -72,7 +126,14 @@ export function SessionsPage() {
               </span>
             }
           />
-          <div className="mt-5">
+          <div
+            key={range.from}
+            className={cn(
+              "mt-5",
+              direction === "right" && "anim-slide-from-right",
+              direction === "left" && "anim-slide-from-left",
+            )}
+          >
             <WeekStrip
               days={days}
               selected={day}
@@ -89,9 +150,10 @@ export function SessionsPage() {
             title={formatFullDateWithWeekday(parseDateOnly(day))}
             className="px-5 pt-5 pb-4"
           />
-          <TableHead cols={COLS}>
+          <TableHead cols={cols}>
             <Th>Saat</Th>
             <Th className="hidden md:flex">Sınıf</Th>
+            {isAdmin && <Th className="hidden md:flex">Öğretmen</Th>}
             <Th className="hidden md:flex">Durum</Th>
             <Th className="hidden md:flex" />
           </TableHead>
@@ -105,7 +167,11 @@ export function SessionsPage() {
             <EmptyState
               icon={CalendarX}
               title="Bu gün ders yok"
-              text="Seçtiğin günde sana atanmış bir ders görünmüyor."
+              text={
+                isAdmin
+                  ? "Seçilen günde şubede planlanmış bir ders görünmüyor."
+                  : "Seçtiğin günde sana atanmış bir ders görünmüyor."
+              }
             />
           ) : (
             visible.map((session) => {
@@ -113,12 +179,17 @@ export function SessionsPage() {
               const hours = `${formatClock(session.startsAt)} – ${formatClock(session.endsAt)}`;
               const classroom = classroomNames.get(session.classroomId) ?? "Sınıf";
               return (
-                <TableRow key={session.id} cols={COLS}>
+                <TableRow key={session.id} cols={cols} className="anim-fade">
                   <Td>
                     <div className="text-sm font-medium">{hours}</div>
                     <div className="text-[13px] text-dim md:hidden">{classroom}</div>
                   </Td>
                   <Td className="hidden text-sm md:block">{classroom}</Td>
+                  {isAdmin && (
+                    <Td className="hidden text-sm md:block">
+                      {teacherNames.get(session.teacherId) ?? "Öğretmen"}
+                    </Td>
+                  )}
                   <Td className="hidden md:block">
                     <StatusBadge tone={badge.tone} label={badge.label} />
                   </Td>
@@ -127,7 +198,9 @@ export function SessionsPage() {
                       <StatusBadge tone={badge.tone} label={badge.label} iconOnly />
                     </span>
                     <PillLink to={`/sessions/${session.id}`}>
-                      {session.status === "PLANNED" ? "Yoklama al" : "Görüntüle"}
+                      {session.status === "PLANNED" || (isAdmin && session.status === "EXPIRED")
+                        ? "Yoklama al"
+                        : "Görüntüle"}
                     </PillLink>
                   </Td>
                 </TableRow>

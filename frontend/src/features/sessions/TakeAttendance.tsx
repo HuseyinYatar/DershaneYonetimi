@@ -4,7 +4,7 @@ import { useTakeAttendance } from "@/api/queries/attendance";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PRIMARY_BUTTON } from "@/components/ui/form";
+import { INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
 import { PillButton, SegButton } from "@/components/ui/Pill";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
@@ -33,8 +33,18 @@ export function TakeAttendanceSkeleton() {
 }
 
 // One row per roster student, no preselected status: every student has to be marked on purpose.
-export function TakeAttendance({ sessionId, students }: { sessionId: string; students: Row[] }) {
+// `requireReason`: an admin taking attendance after the session day ended must say why.
+export function TakeAttendance({
+  sessionId,
+  students,
+  requireReason = false,
+}: {
+  sessionId: string;
+  students: Row[];
+  requireReason?: boolean;
+}) {
   const [marks, setMarks] = useState<Marks>({});
+  const [reason, setReason] = useState("");
   const take = useTakeAttendance(sessionId);
   const ids = students.map((s) => s.studentId ?? "");
 
@@ -87,14 +97,29 @@ export function TakeAttendance({ sessionId, students }: { sessionId: string; stu
           );
         })}
       </ul>
+      {requireReason && (
+        <input
+          aria-label="Geç yoklama gerekçesi"
+          placeholder="Gerekçe (dersin günü geçti, zorunlu)"
+          maxLength={500}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          className={`${INPUT} mt-4`}
+        />
+      )}
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
         <span className="text-[13px] text-dim">
           {markedCount(ids, marks)} / {ids.length} öğrenci işaretlendi
         </span>
         <button
           type="button"
-          disabled={!allMarked(ids, marks) || take.isPending}
-          onClick={() => take.mutate(toEntries(ids, marks))}
+          disabled={!allMarked(ids, marks) || take.isPending || (requireReason && !reason.trim())}
+          onClick={() =>
+            take.mutate({
+              entries: toEntries(ids, marks),
+              reason: requireReason ? reason.trim() : undefined,
+            })
+          }
           className={PRIMARY_BUTTON}
         >
           {take.isPending ? "Kaydediliyor…" : "Yoklamayı kaydet"}

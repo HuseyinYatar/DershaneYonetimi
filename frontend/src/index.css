@@ -171,11 +171,32 @@
 .anim-fade {
   animation: fade-in 0.4s ease-out both;
 }
+/* Week strip: the new week enters from the side the arrow points to. */
+@keyframes slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+.anim-slide-from-right {
+  animation: slide-from-right 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-slide-from-left {
+  animation: slide-from-left 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 @media (prefers-reduced-motion: reduce) {
   .anim-draw,
   .anim-grow-y,
   .anim-grow-x,
-  .anim-fade {
+  .anim-fade,
+  .anim-slide-from-right,
+  .anim-slide-from-left {
     animation: none;
   }
 }

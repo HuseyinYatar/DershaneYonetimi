@@ -1,6 +1,6 @@
 import { School } from "lucide-react";
 import { Link } from "react-router";
-import { useMyClassrooms } from "@/api/queries/user";
+import { useMyClassrooms, useMyClassroomStudentCounts } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -13,6 +13,7 @@ const COLS = "grid-cols-[minmax(0,1fr)_90px] md:grid-cols-[minmax(0,1fr)_110px_1
 export function ClassroomsPage() {
   const classrooms = useMyClassrooms();
   const list = classrooms.data ?? [];
+  const counts = useMyClassroomStudentCounts();
 
   return (
     <>
@@ -58,7 +59,7 @@ export function ClassroomsPage() {
               </Td>
               <Td className="hidden text-sm md:block">{classroom.gradeLevel}. sınıf</Td>
               <Td className="hidden text-sm md:block">{classroom.term}</Td>
-              <Td className="text-sm">{formatInt(classroom.activeStudentCount)}</Td>
+              <Td className="text-sm">{formatInt(counts.get(classroom.id))}</Td>
             </TableRow>
           ))
         )}

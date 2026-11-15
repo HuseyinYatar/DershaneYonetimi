@@ -40,8 +40,8 @@ describe("number formatting", () => {
 });
 
 describe("date formatting", () => {
-  it("formats the header date as weekday, day month", () => {
-    expect(formatDateLong(new Date(2026, 10, 13))).toBe("Cuma, 13 Kasım");
+  it("formats the header date as weekday day month", () => {
+    expect(formatDateLong(new Date(2026, 10, 13))).toBe("Cuma 13 Kasım");
   });
 
   it("formats deadlines as short date and 24-hour time", () => {
@@ -49,7 +49,7 @@ describe("date formatting", () => {
   });
 
   it("formats exam dates with the weekday", () => {
-    expect(formatFullDateWithWeekday(new Date(2026, 10, 8))).toBe("8 Kasım 2026, Pazar");
+    expect(formatFullDateWithWeekday(new Date(2026, 10, 8))).toBe("8 Kasım 2026 Pazar");
   });
 
   it("parses date-only values as local dates", () => {
@@ -94,7 +94,7 @@ describe("formatRelativeDeadline", () => {
 
   it("spells out later days", () => {
     expect(formatRelativeDeadline(new Date(2026, 10, 17, 18, 0), now)).toBe(
-      "Salı, 17 Kasım · 18:00",
+      "Salı 17 Kasım · 18:00",
     );
   });
 });

@@ -39,8 +39,25 @@ describe("navForRoles", () => {
     expect(items.some((item) => item.badge)).toBe(false);
   });
 
+  it("gives admins the management pages, four of them in the tab bar", () => {
+    const items = navForRoles(["admin"], "a-1");
+    expect(items.map((item) => [item.label, item.to, item.tab])).toEqual([
+      ["Kullanıcılar", "/users", true],
+      ["Sınıflar", "/classrooms", true],
+      ["Yoklama", "/sessions", true],
+      ["Denemeler", "/exams", true],
+      ["Haftalık program", "/schedules", false],
+      ["Mazeretler", "/excuses", false],
+    ]);
+    expect(navForRoles(["admin", "super-admin"], "a-1")).toEqual(items);
+  });
+
+  it("keeps the task pages for an admin who also teaches", () => {
+    const items = navForRoles(["admin", "teacher"], "a-1");
+    expect(items.at(-1)).toMatchObject({ label: "Görevler", to: "/given-tasks", tab: false });
+  });
+
   it("returns nothing for roles without screens yet", () => {
-    expect(navForRoles(["admin", "super-admin"], "a-1")).toEqual([]);
     expect(navForRoles(["guardian"], "g-1")).toEqual([]);
     expect(navForRoles([], "x")).toEqual([]);
   });

@@ -1,4 +1,5 @@
-import { FileText } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { useExamTypes, useMockExams } from "@/api/queries/exam";
 import { useMe } from "@/api/queries/user";
@@ -7,11 +8,14 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PillButton } from "@/components/ui/Pill";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { TableHead, TableRow, Td, Th } from "@/components/ui/Table";
 import { formatFullDate, parseDateOnly } from "@/lib/format";
 import { scoreSourceLabel } from "@/lib/score";
 import { examBadge } from "@/lib/status/exams";
+import { NewExamForm } from "./NewExamForm";
+import { WeakTopicSettingCard } from "./WeakTopicSettingCard";
 
 const COLS =
   "grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1.4fr)_100px_130px_170px_160px]";
@@ -23,10 +27,25 @@ export function ExamsPage() {
   const examTypes = useExamTypes();
   const typeName = (id: string) => examTypes.data?.find((t) => t.id === id)?.name ?? "Deneme";
   const list = [...(exams.data ?? [])].sort((a, b) => b.examDate.localeCompare(a.examDate));
+  // Creating exams and the weak-topic setting are admin-only (the services enforce it too).
+  const isAdmin = !!actor?.roles.includes("admin");
+  const [creating, setCreating] = useState(false);
 
   return (
     <>
       <PageHeader eyebrow="Şubenin denemeleri" title="Denemeler" />
+      {isAdmin && (
+        <div className="mt-4 flex flex-col gap-4">
+          <div>
+            <PillButton onClick={() => setCreating(!creating)}>
+              <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
+              Yeni deneme
+            </PillButton>
+          </div>
+          {creating && <NewExamForm onDone={() => setCreating(false)} />}
+          <WeakTopicSettingCard />
+        </div>
+      )}
       <Card className="mt-6 overflow-hidden">
         <CardHeader
           className="px-5 pt-5 pb-4"
