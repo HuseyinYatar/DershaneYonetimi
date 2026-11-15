@@ -26,27 +26,29 @@ Projenin asıl amacı cloud-native ve modern DevOps uygulamalarını göstermek:
 | Kubernetes | EC2 üzerinde kubeadm ile kendi kurduğumuz küme | kind |
 | AWS servisleri | Gerçek AWS | **Floci** (yerel AWS emülatörü, `http://localhost:4566`) |
 | İmaj deposu | Amazon ECR | Yerel registry |
-| Veritabanı | RDS (PostgreSQL) | Floci RDS veya yerel PostgreSQL |
-| Önbellek | ElastiCache (Redis) | Floci ElastiCache veya yerel Redis |
+| Veritabanı | RDS (PostgreSQL 17), tek instance içinde servis başına veritabanı ve rol | Yerel PostgreSQL (docker-compose) |
+| Önbellek | ElastiCache (Redis) | Yerel Redis (docker-compose) |
 | Dosya | S3 | Floci S3 |
-| Gizli bilgiler | Secrets Manager | Floci Secrets Manager |
-| Giriş trafiği | Network Load Balancer + NGINX Ingress + Route 53 | NGINX Ingress |
+| Gizli bilgiler | Secrets Manager | Yerelde ortam değişkenleri (docker-compose) |
+| Giriş trafiği | Network Load Balancer (sabit Elastic IP) + Traefik. DNS Güzel Hosting'de (`onlinecourses.site`, A kaydı), TLS cert-manager + Let's Encrypt | Traefik |
 
 Kurallar:
 - AWS uç noktası kodda sabit yazılmaz; ortam değişkeninden okunur (`AWS_ENDPOINT_URL`). Yerelde Floci'yi, üretimde boş bırakılarak gerçek AWS'yi gösterir.
-- Aynı Terraform kodu hem Floci'ye hem AWS'ye uygulanabilmeli. Ortama özgü farklar değişken dosyalarında tutulur.
+- Olay altyapısı (SNS, SQS) ve optik dosya bucket'ı aynı Terraform koduyla hem Floci'ye hem AWS'ye uygulanır; ortama özgü farklar değişken dosyalarında tutulur. Küme platformu (EC2, RDS, ElastiCache, NLB, IAM...) yalnızca AWS'de kurulur: Floci EC2'yi container olarak açtığı için kubeadm orada çalışmaz.
 - Floci bir emülatördür; son doğrulama AWS üzerinde yapılır. EC2 sunucuları demo ve test dışında durdurulur.
 
 ## Kubernetes kümesi (EC2 + kubeadm)
 
 Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS kontrol düzlemini AWS yönettiği için Kubernetes'in iç yapısı görülmüyor; projenin amacı tam Kubernetes deneyimi.
 
-- **Topoloji:** 1 control plane + 2 worker node (EC2). Tek control plane bilinçli bir sınırlılıktır, raporda belirtilir.
-- **Kurulum:** EC2, VPC, subnet ve security group'lar Terraform ile açılır. Kubernetes kurulumu (containerd, kubeadm init/join) cloud-init veya Ansible ile otomatik yapılır; elle sunucuya girip kurulum yapılmaz.
-- **Ağ eklentisi (CNI):** Calico veya Cilium.
-- **ECR erişimi:** Node'lara ECR okuma yetkili IAM instance profile verilir.
+- **Topoloji:** 1 control plane (`c7i-flex.large`, 2 vCPU / 4 GiB) + 2 worker (`m7i-flex.large`, 2 vCPU / 8 GiB). İkisi de AWS free plan'a uygun tek kubeadm adayıdır (micro tipler kubeadm'in 2 GiB alt sınırının altında, `t4g` ARM). Sabit private IP: cp `10.0.1.10`, worker'lar `.11`, `.12`; cp'nin Elastic IP'si var. Tek control plane bilinçli bir sınırlılıktır, raporda belirtilir.
+- **Ağ:** Node'lar ve NLB tek public subnet'te (tek AZ), RDS ve ElastiCache iki private subnet'te. NAT Gateway yok (ayda ~40 $): node'lar public IP ile dışarı çıkar, gelen trafiği security group sınırlar. Raporda maliyet kararı olarak yazılır.
+- **Kurulum:** Altyapının tamamı Terraform'dadır (`infra/terraform`, kurallar `infra/terraform/README.md`). Node hazırlığı Terraform'un user-data betiğiyle yapılır: swap kapalı, kernel modülleri ve sysctl, containerd 2.x (`SystemdCgroup = true`), kubelet/kubeadm/kubectl (`apt-mark hold`), `ecr-credential-provider`. `kubeadm init/join`, CNI ve Traefik bunun üzerine kurulur; bu adımlar da otomatik yapılır (Ansible veya betik), elle sunucuya girip kurulum yapılmaz.
+- **Ağ eklentisi (CNI):** Calico veya Cilium. Pod CIDR `192.168.0.0/16`, VPC `10.0.0.0/16` ile çakışmaz.
+- **ECR erişimi:** Node'lara ECR okuma yetkili IAM instance profile verilir. kubeadm'de kubelet bu rolü kendiliğinden kullanmadığı için `ecr-credential-provider` kurulur.
+- **Pod kimliği (IRSA):** Pod'lar AWS'ye kalıcı anahtarla değil, servis başına IAM rolüyle erişir. ServiceAccount token'ı STS'te geçici anahtarla değiştirilir. Kümenin OIDC issuer'ı bir S3 bucket'ındadır: API server `--service-account-issuer` ile kurulur, `keys.json` init'ten sonra yüklenir. Java servislerinde `software.amazon.awssdk:sts` gerekir. IMDS hop limit 1 olduğu için pod node rolüne düşemez. Terraform'da `pod_identity = "node"` ile ortak node rolüne geçilebilir.
 - **Kalıcı disk:** Küme içinde durumlu servis çalışacaksa AWS EBS CSI sürücüsü kurulur. Veritabanı RDS'te olduğu sürece gerekmez.
-- **Dış trafik:** NGINX Ingress Controller, önünde Network Load Balancer.
+- **Dış trafik:** Traefik, NodePort 30080/30443 ile Terraform'un açtığı NLB'nin arkasındadır. NLB TCP geçirir, TLS'i Traefik cert-manager sertifikasıyla açar. ingress-nginx Mart 2026'da emekliye ayrıldığı (güvenlik yaması almadığı) için kullanılmaz. Adresler: `onlinecourses.site` → frontend, `api.onlinecourses.site` → api-gateway, `auth.onlinecourses.site` → Keycloak (ayrı origin; gateway yalnızca `/api/**` sunar). Traefik middleware'i (hız sınırı, CORS, JWT) kullanılmaz, bunlar gateway'dedir.
 - **Metrik:** HPA için metrics-server kurulur.
 - **etcd yedeği:** Control plane'deki etcd düzenli olarak S3'e yedeklenir.
 - Küme sertifikaları ve kubeconfig depoya konmaz; Secrets Manager'da tutulur.
@@ -218,7 +220,7 @@ com.dershane.<servis>
 - **İstemci önbelleği ve eşitleme.** Tarayıcı (IndexedDB) her sohbetin son N mesajını saklar (N yapılandırılabilir, başlangıç 200). `GET /conversations/{id}/messages`: parametresiz son `limit` mesaj; `beforeSeq` yukarı kaydırma; `afterSeq=N[&updatedSince=T]` N'den yeni mesajlar **ve** `updated_at > T` olan (düzenlenen/silinen) eski mesajlar. `limit` varsayılan 50, en çok 200. Yanıt `{messages, hasMore, syncedAt}`; `syncedAt = şimdi − 10 sn` (kısa transaction'ların geç commit'ini kaçırmamak için), istemci sonraki istekte `updatedSince = syncedAt` gönderir; tekrar gelen mesaj `id` ile üzerine yazılır. İstemci numaralarda boşluk görürse `afterSeq` ile eksik aralığı ister. Silinen mesajın `content` ve `fileId`'si istemciye dönmez.
 - **Okundu bilgisi.** `ConversationParticipant.lastReadSeq` katılımcının okuduğu son `seq`'dir (0 = hiçbiri). Okunmamış sayısı `seq > lastReadSeq`, göndereni kendisi olmayan ve silinmemiş mesajlardır. Gönderenin kendi okundusu mesajla birlikte ilerler. `PUT /conversations/{id}/read` konumu yalnızca ileri alır (`seq > lastSeq` → `READ_SEQ_OUT_OF_RANGE`); değişirse `READ` çerçevesi iki tarafa gider.
 - **Düzenleme ve silme.** Yalnızca gönderen. Düzenleme `messaging.message.edit-window` (15 dk) içinde; eski içerik `message_edit` tablosuna eklenir (yalnızca ekleme). PHOTO'da yalnızca açıklama düzenlenir. `editedAt` "düzenlendi" göstermek, `updated_at` (her değişiklikte) önbellek eşitlemek içindir. Silme süre sınırsızdır ve tekrarlanabilir (ikinci istek 204, değişiklik yok).
-- **WebSocket kimlik doğrulaması: tek kullanımlık bilet.** Tarayıcı el sıkışmada `Authorization` gönderemez. İstemci `POST /api/v1/chat/tickets` (JWT ile) → 30 sn geçerli bilet; `GET /api/v1/chat/ws?ticket=…` ile bağlanır, servis bileti Redis'ten `GETDEL` ile bir kez tüketir. `/api/v1/chat/ws` hem gateway'de hem serviste `permitAll`'dır; geçersiz bilet 401, Redis yoksa 503. İstemci 30 sn'de bir `{"type":"PING"}` gönderir (`PONG` döner; sunucu çevrimiçi anahtarını yeniler, NGINX'in 60 sn'lik `proxy-read-timeout`'unu da aşar). Soket `max-session-age` (60 dk) sonra `4401 reauthenticate` ile kapatılır, istemci yeni biletle bağlanır (çıkış yapmış veya pasife alınmış kullanıcının soketi en çok bu kadar yaşar).
+- **WebSocket kimlik doğrulaması: tek kullanımlık bilet.** Tarayıcı el sıkışmada `Authorization` gönderemez. İstemci `POST /api/v1/chat/tickets` (JWT ile) → 30 sn geçerli bilet; `GET /api/v1/chat/ws?ticket=…` ile bağlanır, servis bileti Redis'ten `GETDEL` ile bir kez tüketir. `/api/v1/chat/ws` hem gateway'de hem serviste `permitAll`'dır; geçersiz bilet 401, Redis yoksa 503. İstemci 30 sn'de bir `{"type":"PING"}` gönderir (`PONG` döner; sunucu çevrimiçi anahtarını yeniler, bağlantıyı Traefik'in ve NLB'nin boşta zaman aşımlarının altında tutar). Soket `max-session-age` (60 dk) sonra `4401 reauthenticate` ile kapatılır, istemci yeni biletle bağlanır (çıkış yapmış veya pasife alınmış kullanıcının soketi en çok bu kadar yaşar).
 - **Soket ömrü ve sınırı:** `max-session-age` yalnızca istemci çerçeve gönderince değil, dakikada bir çalışan zamanlanmış süpürmeyle de uygulanır (`SessionExpiry`); sessiz soket süresiz açık kalamaz. Kullanıcı başına en çok 5 soket vardır, fazlası en eskiden başlayarak `4429` ile kapatılır. Pasife alınmış hesap (token süresi dolmamış olsa da) sohbet açamaz, mesaj gönderemez, bilet alamaz (`ACCOUNT_INACTIVE`). Senkron cevabı en çok 500 değişmiş eski mesaj taşır. Gerçek zamanlı çerçeve hatalarında log yalnızca istisna türünü yazar, neden DEBUG'dadır (çerçeve mesaj metni içerir).
 - **Çerçeveler (sunucu → istemci):** `{"type":"MESSAGE","message":{…}}` (oluşturma, düzenleme, silme; istemci `id` ile upsert eder), `{"type":"READ","conversationId","userId","lastReadSeq"}`, `{"type":"PONG"}`. Tüm pod'lar tek Redis kanalını (`messaging:frames`) dinler ve yalnızca kendi soketlerine dağıtır. Yavaş soket `ConcurrentWebSocketSessionDecorator` ile (5 sn / 512 KB) düşürülür. Çerçeve kaybı veya yayın hatası WARN + `messaging.realtime.publish{outcome=failure}`; mesaj yine kayıtlıdır.
 - **`NewMessage` (çevrimdışı bildirim).** Alıcının açık soketi yoksa gelen **her mesaj için** bir `NewMessage` outbox'a yazılır (10 mesaj = 10 olay; kısma yok). Yükte içerik ve ad yok. Çevrimiçi durumu Redis'te `presence:{userId}` anahtarıdır (TTL 70 sn, PING yeniler, son soket kapanınca silinir) ve yalnızca bu karar için kullanılır, karşı tarafa gösterilmez. Redis'e ulaşılamazsa kullanıcı çevrimdışı sayılır (kaçan bildirim yerine fazla bildirim). notification servisinin bu olayı işlemesi ve aboneliği, notification yazılırken eklenir.
@@ -298,22 +300,26 @@ com.dershane.<servis>
 
 ## Depo yapısı
 
-Uygulama kodu monorepo, dağıtım tanımları ayrı GitOps deposu.
+Uygulama kodu, altyapı ve dağıtım tanımları tek depodadır (monorepo). Küme içi tanımlar ayrı bir GitOps deposu yerine `k8s/` klasöründedir. Servis workflow'larının `paths` filtresi `k8s/**`'i içermediği için CI'ın etiket commit'i pipeline'ı yeniden tetiklemez.
 
 ```
-dershane-app/
+DershaneYonetimi/
 ├── services/<servis-adi>/     her servis kendi Dockerfile'ı ve testleriyle
 ├── frontend/
 ├── shared/events/             olay şemaları (JSON Schema) ve kuralları
-├── infra/terraform/           AWS ve Floci altyapısı: tek kök modül, `modules/events` (SNS/SQS),
-│                              ortam farkları `environments/*.tfvars`'ta. Yerelde `floci-init` uygular
+├── infra/terraform/           AWS ve Floci altyapısı (README.md): bootstrap/ (state bucket, Budget, CI rolleri),
+│                              tek kök modül, modules/ (events, storage, network, nodes, iam, registry,
+│                              database, cache, edge, email, monitoring), ortam farkları environments/'ta.
+│                              Yerelde `floci-init` yalnızca SNS/SQS ve optik dosya bucket'ını uygular
+├── infra/scripts/power.sh     EC2 ve RDS'i çalışma aralarında durdurur/başlatır (kredi)
+├── k8s/                       ArgoCD bu klasörü izler (henüz yok, GitOps haftaları)
+│   ├── charts/<servis-adi>/   Helm chart'ları
+│   ├── platform/              Traefik, cert-manager, External Secrets, ArgoCD, izleme
+│   ├── apps/                  ArgoCD Application tanımları
+│   └── environments/{dev,prod}/<servis>.yaml
 ├── local/                     yerel ortam: docker-compose.yml (PostgreSQL, Keycloak, Floci,
 │                              Mailpit), keycloak/ realm tanımı, postgres/ init betiği
-└── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar
-
-dershane-gitops/               ArgoCD bu depoyu izler
-├── charts/<servis-adi>/       Helm chart'ları
-└── environments/{dev,prod}/values.yaml
+└── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar + terraform.yml
 ```
 
 Servis klasör adları İngilizce, küçük harf ve tire ile ayrılmıştır (`exam-analysis`, `messaging`).
@@ -321,7 +327,8 @@ Servis klasör adları İngilizce, küçük harf ve tire ile ayrılmıştır (`e
 ## CI/CD
 
 - **CI: GitHub Actions.** Her servisin kendi workflow'u vardır ve `paths` filtresiyle yalnızca o servisin klasörü (veya `shared/events/`) değişince çalışır. Bir servisteki değişiklik diğerlerini derlememeli.
-- **CD: ArgoCD (GitOps).** CI kümeye doğrudan dağıtım yapmaz; GitOps deposundaki imaj sürümünü günceller, küme içinde çalışan ArgoCD dağıtımı yapar.
+- **CD: ArgoCD (GitOps).** CI kümeye doğrudan dağıtım yapmaz; `k8s/environments/<ortam>/<servis>.yaml` içindeki imaj sürümünü günceller, küme içinde çalışan ArgoCD dağıtımı yapar. main korumalıysa CI bot'unun bypass izni mi alacağı, yoksa ArgoCD Image Updater mı kullanılacağı GitOps haftalarında belirlenir.
+- **AWS kimliği:** GitHub Actions AWS'ye OIDC ile girer (`bootstrap/` rolleri, ECR push rolü). GitHub'da AWS anahtarı saklanmaz.
 
 Servis pipeline aşamaları:
 1. Lint (Java: Spotless + Checkstyle, Python: Ruff)
@@ -329,9 +336,9 @@ Servis pipeline aşamaları:
 3. Entegrasyon testleri (Testcontainers + Floci; Java'da `*IT` sınıfları, `mvn verify`)
 4. Docker imajı oluşturma + güvenlik taraması (Trivy) + SBOM (CycloneDX)
 5. İmajı ECR'a gönderme (yalnızca ana dal)
-6. GitOps deposunda imaj sürümünü güncelleme (yalnızca ana dal)
+6. `k8s/` altında imaj sürümünü güncelleme (yalnızca ana dal)
 
-Pull request'te 1–4, ana dala birleştirmede 1–6 çalışır. Terraform için ayrı pipeline vardır: PR'da `plan`, onayla `apply`.
+Pull request'te 1–4, ana dala birleştirmede 1–6 çalışır. Terraform için ayrı pipeline vardır (`terraform.yml`): `fmt`, `validate`, `terraform test` (sahte provider), tflint, `trivy config`; PR'da `plan` (PR'a yorum), main'de `production` environment onayıyla `apply`.
 
 İmaj etiketi commit SHA'sıdır; `latest` kullanılmaz.
 
@@ -364,7 +371,7 @@ Entegrasyon testleri gerçek AWS'ye bağlanmaz; Floci ve Testcontainers kullanı
 - Servisler birbirinden bağımsız dağıtılabilir
 - Ana dala birleştirilen değişiklik, elle müdahale olmadan AWS'deki kümeye ulaşır
 - Küme sıfırdan Terraform ve otomasyon betikleriyle, elle müdahale olmadan kurulabilir
-- Aynı Terraform kodu Floci ve AWS'de hatasız uygulanır
+- Olay altyapısı (SNS/SQS/S3) aynı Terraform koduyla Floci'de ve AWS'de hatasız uygulanır; küme platformu AWS'de
 - Yük testinde exam-analysis pod sayısı HPA ile artar ve yük kalkınca azalır
 - Bir servis kapatıldığında diğer işlevler çalışmaya devam eder
 - Tüm servislerin metrik, log ve izleri Grafana'da görülebilir

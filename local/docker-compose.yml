@@ -72,20 +72,26 @@ services:
     ports:
       - "4566:4566"
 
-  # Applies infra/terraform (SNS topics, SQS queues, buckets) to Floci, then exits. State and the
-  # provider cache live in the terraform-state volume; `down -v` resets them together with Floci.
+  # Applies infra/terraform to Floci (SNS topics, SQS queues, the optical files bucket), then exits.
+  # The configuration declares an S3 backend for AWS; here a copy of it gets backend_override.tf, which
+  # Terraform merges over that block, so the state stays a file in the terraform-state volume.
+  # `down -v` resets the state together with Floci.
   floci-init:
     image: hashicorp/terraform:1.15
-    working_dir: /workspace
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
         until nc -z -w1 floci 4566; do echo "Waiting for Floci..."; sleep 1; done
-        terraform init -input=false
-        terraform apply -auto-approve -input=false -state=/state/terraform.tfstate -var-file=environments/local.tfvars
+        cp -R /workspace/. /tmp/terraform && cd /tmp/terraform
+        printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
+        terraform init -input=false -reconfigure -backend-config=path=/state/terraform.tfstate
+        terraform apply -auto-approve -input=false -var-file=environments/local.tfvars
     environment:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: eu-central-1
+      # The AWS provider reads the Floci address from here (nothing in the .tf files).
+      AWS_ENDPOINT_URL: http://floci:4566
       TF_DATA_DIR: /state/.terraform
     volumes:
       - ../infra/terraform:/workspace:ro

@@ -1,7 +1,8 @@
 name: image
 
 # Reusable: build the image (tag = commit SHA, never latest), write the CycloneDX SBOM, scan with Trivy.
-# Pushing to ECR and updating the GitOps repo (main only) are added here once AWS is up.
+# Pushing to ECR (role: terraform output ecr_push_role_arn) and updating the image tag under k8s/
+# (main only) are added here once AWS is up.
 on:
   workflow_call:
     inputs:
