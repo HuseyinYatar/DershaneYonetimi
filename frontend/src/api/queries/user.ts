@@ -62,16 +62,6 @@ export function useClassroomStudents(classroomId: string | undefined) {
   return useQuery({ ...classroomStudentsQuery(classroomId ?? ""), enabled: !!classroomId });
 }
 
-// classroomId -> active student count. GET /me/classrooms never fills activeStudentCount, so the
-// count comes from each classroom's student list (shared cache with the detail page).
-export function useMyClassroomStudentCounts() {
-  const classrooms = useMyClassrooms();
-  const results = useQueries({
-    queries: (classrooms.data ?? []).map((c) => classroomStudentsQuery(c.id ?? "")),
-  });
-  return new Map((classrooms.data ?? []).map((c, i) => [c.id, results[i]?.data?.length] as const));
-}
-
 // studentId -> "First Last" across the teacher's classrooms (assignments only carry student ids).
 export function useMyStudentNames() {
   const classrooms = useMyClassrooms();

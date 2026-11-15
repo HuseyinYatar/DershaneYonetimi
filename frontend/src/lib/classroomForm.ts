@@ -16,6 +16,12 @@ export const classroomFormSchema = z.object({
     .regex(/^\d{4}-\d{4}$/, "Dönem 2026-2027 biçiminde olmalı."),
 });
 
+// Keeps only digits and inserts the dash while typing: "20262027" -> "2026-2027".
+export function maskTerm(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  return digits.length > 4 ? `${digits.slice(0, 4)}-${digits.slice(4)}` : digits;
+}
+
 export type ClassroomFormValues = z.infer<typeof classroomFormSchema>;
 
 export function toCreateClassroom(v: ClassroomFormValues, branchId: string): CreateRequest {

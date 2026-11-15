@@ -1,5 +1,7 @@
 package com.dershane.userservice.classroom.application.port.out;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -11,6 +13,9 @@ public interface ClassroomEnrollmentPort {
   boolean hasActiveStudents(UUID classroomId);
 
   long countActiveStudents(UUID classroomId);
+
+  /** Active student counts of many classrooms in one query; every given id gets an entry. */
+  Map<UUID, Long> countActiveStudents(Collection<UUID> classroomIds);
 
   boolean isStudentOf(UUID studentId, UUID classroomId);
 

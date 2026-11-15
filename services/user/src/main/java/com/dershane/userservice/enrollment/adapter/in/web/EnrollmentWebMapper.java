@@ -15,7 +15,6 @@ import com.dershane.userservice.enrollment.application.port.in.ClassroomTeacherV
 import com.dershane.userservice.enrollment.application.port.in.MembershipView;
 import com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView;
 import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
 
 @Mapper
 interface EnrollmentWebMapper {
@@ -32,6 +31,5 @@ interface EnrollmentWebMapper {
 
   ClassroomTeacherResponse toResponse(ClassroomTeacherView view);
 
-  @Mapping(target = "activeStudentCount", ignore = true)
   MyClassroomResponse toResponse(ClassroomSummaryView view);
 }

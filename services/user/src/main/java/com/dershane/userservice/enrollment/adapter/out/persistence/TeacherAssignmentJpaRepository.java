@@ -72,7 +72,10 @@ interface TeacherAssignmentJpaRepository extends JpaRepository<TeacherAssignment
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.ClassroomSummaryView(
-          c.id, c.branchId, c.name, c.gradeLevel, c.term, c.active, c.createdAt, c.updatedAt)
+          c.id, c.branchId, c.name, c.gradeLevel, c.term, c.active,
+          (select count(m) from MembershipJpaEntity m
+           where m.classroomId = c.id and m.endDate is null),
+          c.createdAt, c.updatedAt)
       from ClassroomJpaEntity c
       where c.active = true
         and c.id in (select a.classroomId from TeacherAssignmentJpaEntity a

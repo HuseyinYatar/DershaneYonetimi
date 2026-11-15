@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * @param activeStudentCount null in lists, where counting every classroom would be wasteful
+ * @param activeStudentCount filled by the service; the persistence mapper leaves it null
  */
 public record ClassroomView(
     UUID id,

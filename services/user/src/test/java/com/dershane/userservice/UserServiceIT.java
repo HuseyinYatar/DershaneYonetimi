@@ -203,6 +203,8 @@ class UserServiceIT {
 
     assertThat(moved.get("closedMembershipId").asString())
         .isEqualTo(first.get("membershipId").asString());
+    assertThat(listedStudentCount(classroomA)).isZero();
+    assertThat(listedStudentCount(classroomB)).isEqualTo(1);
   }
 
   @Test
@@ -284,6 +286,18 @@ class UserServiceIT {
     Files.createDirectories(output.getParent());
     Files.writeString(output, document);
     assertThat(document).contains("/api/v1/students").contains("Idempotency-Key");
+  }
+
+  /** The count the classroom list shows (not the detail endpoint). */
+  private long listedStudentCount(UUID classroomId) {
+    JsonNode page =
+        call("GET", "/api/v1/classrooms?branchId=" + branchId, superAdmin(), null).getBody();
+    for (JsonNode item : page.get("content")) {
+      if (item.get("id").asString().equals(classroomId.toString())) {
+        return item.get("activeStudentCount").asLong();
+      }
+    }
+    throw new AssertionError("Classroom missing from list: " + classroomId);
   }
 
   private UUID createClassroom(String name) {
