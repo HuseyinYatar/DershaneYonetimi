@@ -39,6 +39,7 @@ export function TeacherOverviewPage() {
               icon: CalendarDays,
               value: sessions.data ? formatInt(todaySessions.length) : "—",
               label: "bugünkü ders",
+              to: "/sessions",
             },
             {
               icon: CalendarCheck,
@@ -46,17 +47,20 @@ export function TeacherOverviewPage() {
                 ? formatInt(todaySessions.filter((s) => s.status === "PLANNED").length)
                 : "—",
               label: "yoklama bekleyen",
+              to: "/sessions",
             },
             {
               icon: ClipboardCheck,
               value: submitted.data ? formatInt(submitted.data.page?.totalElements ?? 0) : "—",
               // Short on purpose: "değerlendirme" is wider than a phone stat cell.
               label: "not bekleyen",
+              to: "/given-tasks",
             },
             {
               icon: School,
               value: classrooms.data ? formatInt(classrooms.data.length) : "—",
               label: "sınıf",
+              to: "/classrooms",
             },
           ]}
         />
