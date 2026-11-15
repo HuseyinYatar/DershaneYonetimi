@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { ApiError } from "@/api/problem";
+import { ApiError, isNetworkError, isOffline } from "@/api/problem";
 import { cn } from "@/lib/utils";
 
 // Plain text by default; with `icon` it becomes the richer variant (icon disc, title, text, action).
@@ -43,9 +43,11 @@ export function UnavailableState({ className }: { className?: string }) {
 
 // Inline text for a failed query. The failure itself is already toasted globally.
 export function QueryError({ error, className }: { error: unknown; className?: string }) {
-  return isUnavailable(error) ? (
-    <UnavailableState className={className} />
-  ) : (
-    <EmptyState text="Veri alınamadı." className={className} />
-  );
+  if (isUnavailable(error)) return <UnavailableState className={className} />;
+  const text = !isNetworkError(error)
+    ? "Veri alınamadı."
+    : isOffline()
+      ? "İnternet bağlantınız yok."
+      : "Bağlantı kurulamadı.";
+  return <EmptyState text={text} className={className} />;
 }
