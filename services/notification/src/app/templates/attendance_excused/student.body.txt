@@ -1,0 +1,4 @@
+Merhaba {{ recipient_first_name }},
+
+{{ session_date }} günü {{ start_time }}–{{ end_time }} dersi için öğretmenin sana izin verdi; yoklamada izinli olarak işaretlendin. Ayrıntılar için:
+{{ link }}

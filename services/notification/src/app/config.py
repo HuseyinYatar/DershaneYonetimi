@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Points to Floci locally; left empty in production so boto3 talks to real AWS.
     aws_endpoint_url: str | None = None
     aws_region: str = "eu-central-1"
-    # Queue subscribed to user-events and exam-analysis-events (infra/terraform).
+    # Queue subscribed to user-, exam-analysis-, attendance- and task-events (infra/terraform).
     # Looked up by name, so the same value works on Floci and AWS. Empty value disables consuming;
     # the worker then only delivers notifications already stored.
     sqs_queue_name: str | None = "notification-queue"
@@ -39,6 +39,8 @@ class Settings(BaseSettings):
 
     # Links in the notification texts point to the frontend.
     frontend_base_url: str = "http://localhost:3000"
+    # Task deadlines arrive in UTC and are written into the texts in this time zone.
+    institution_time_zone: str = "Europe/Istanbul"
 
     delivery_batch_size: int = 20
     delivery_max_attempts: int = 5

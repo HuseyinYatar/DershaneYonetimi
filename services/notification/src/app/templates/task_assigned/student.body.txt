@@ -1,0 +1,7 @@
+Merhaba {{ recipient_first_name }},
+
+Sana yeni bir ödev verildi: {{ task_title }}
+Son teslim: {{ due_at }}
+
+Ödevi görmek ve teslim etmek için:
+{{ link }}

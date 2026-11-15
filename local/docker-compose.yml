@@ -368,7 +368,8 @@ services:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: eu-central-1
-      # Created by floci-init (infra/terraform) with its two SNS subscriptions.
+      # Created by floci-init (infra/terraform), subscribed to the user, exam-analysis, attendance
+      # and task topics.
       SQS_QUEUE_NAME: notification-queue
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"

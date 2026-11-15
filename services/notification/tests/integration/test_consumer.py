@@ -1,6 +1,7 @@
 import json
+import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import boto3
 import pytest
@@ -13,7 +14,14 @@ from app.db import get_engine
 from app.events.consumer import EventConsumer
 from app.events.handlers import EventHandlers
 from app.events.queue import SqsQueue
-from app.models import Base, ContactReplica, GuardianLinkReplica, Notification, ProcessedEvent
+from app.models import (
+    Base,
+    ContactReplica,
+    GuardianLinkReplica,
+    Notification,
+    NotificationPreference,
+    ProcessedEvent,
+)
 from app.models.enums import Channel, DeliveryStatus
 from tests.factories import create_scenario
 
@@ -152,6 +160,123 @@ def test_exam_results_published_creates_the_notifications_of_the_drawing(
         assert session.scalar(select(func.count()).select_from(Notification)) == 7
         assert session.scalar(select(func.count()).select_from(ProcessedEvent)) == 1
     assert harness.messages_left() == 0
+
+
+def notifications_by_person(db_session) -> dict:
+    return {(row.recipient_id, row.channel): row for row in db_session.scalars(select(Notification)).all()}
+
+
+def attendance_event(event_type: str, student_id: uuid.UUID) -> dict:
+    return envelope(
+        event_type,
+        {
+            "recordId": str(uuid.uuid4()), "sessionId": str(uuid.uuid4()), "studentId": str(student_id),
+            "classroomId": str(uuid.uuid4()), "branchId": str(uuid.uuid4()), "subjectId": str(uuid.uuid4()),
+            "sessionDate": "2026-11-14", "startTime": "10:00:00", "endTime": "10:40:00",
+        },
+        source="attendance",
+    )  # fmt: skip
+
+
+def task_event(event_type: str, student_id: uuid.UUID, due_at: datetime, **extra: object) -> dict:
+    return envelope(
+        event_type,
+        {
+            "assignmentId": str(uuid.uuid4()), "taskId": str(uuid.uuid4()), "studentId": str(student_id),
+            "branchId": str(uuid.uuid4()), "title": "Paragraf testi",
+            "dueAt": due_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), **extra,
+        },
+        source="task",
+    )  # fmt: skip
+
+
+def test_student_absent_reaches_the_student_and_the_guardian_on_every_channel(harness, db_session) -> None:
+    s = create_scenario(db_session)
+    harness.send(attendance_event("StudentAbsent", s.ali))
+
+    harness.consumer.consume_batch()
+
+    rows = notifications_by_person(db_session)
+    assert set(rows) == {
+        (s.ali, Channel.IN_APP),  # Ali has no e-mail and no phone
+        (s.fatma, Channel.IN_APP),
+        (s.fatma, Channel.EMAIL),
+        (s.fatma, Channel.SMS),
+    }
+    assert rows[(s.fatma, Channel.EMAIL)].title == "Ali Yılmaz: 14 Kasım 2026 10:00 dersinde devamsız"
+    assert rows[(s.fatma, Channel.SMS)].body == (
+        f"Ali Yılmaz 14 Kasım 2026 10:00–10:40 dersinde devamsız: http://fe/students/{s.ali}/attendance"
+    )
+    assert harness.messages_left() == 0
+
+
+def test_teacher_excuse_follows_the_attendance_preference(harness, db_session) -> None:
+    s = create_scenario(db_session)
+    # Fatma turned SMS off for attendance; the switch is stored under StudentAbsent.
+    db_session.add(NotificationPreference(user_id=s.fatma, event_type="StudentAbsent", channel=Channel.SMS))
+    db_session.commit()
+    harness.send(attendance_event("StudentExcusedByTeacher", s.ali))
+
+    harness.consumer.consume_batch()
+
+    rows = notifications_by_person(db_session)
+    assert set(rows) == {(s.ali, Channel.IN_APP), (s.fatma, Channel.IN_APP), (s.fatma, Channel.EMAIL)}
+    assert "öğretmeni tarafından izinli sayıldı" in rows[(s.fatma, Channel.EMAIL)].body
+
+
+def test_task_assigned_goes_only_to_the_student_and_never_by_sms(harness, db_session) -> None:
+    s = create_scenario(db_session)
+    db_session.get(ContactReplica, s.ayse).phone = "05350000003"
+    db_session.commit()
+    due_at = datetime(2026, 11, 16, 20, 59, tzinfo=UTC)
+    harness.send(task_event("TaskAssigned", s.ayse, due_at, recurrence="ONCE"))
+
+    harness.consumer.consume_batch()
+
+    rows = notifications_by_person(db_session)
+    assert set(rows) == {(s.ayse, Channel.IN_APP), (s.ayse, Channel.EMAIL)}  # no Hasan, no SMS
+    assert rows[(s.ayse, Channel.EMAIL)].title == "Yeni ödev: Paragraf testi"
+    assert "Son teslim: 16 Kasım 2026 23:59" in rows[(s.ayse, Channel.EMAIL)].body  # UTC -> Istanbul
+
+
+def test_task_overdue_also_reaches_the_guardian(harness, db_session) -> None:
+    s = create_scenario(db_session)
+    harness.send(task_event("TaskOverdue", s.ali, datetime(2026, 11, 16, 20, 59, tzinfo=UTC)))
+
+    harness.consumer.consume_batch()
+
+    rows = notifications_by_person(db_session)
+    assert set(rows) == {(s.ali, Channel.IN_APP), (s.fatma, Channel.IN_APP), (s.fatma, Channel.EMAIL)}
+    assert rows[(s.fatma, Channel.IN_APP)].title == "Ali Yılmaz: ödev zamanında teslim edilmedi"
+
+
+def test_submission_graded_text_has_no_score(harness, db_session) -> None:
+    s = create_scenario(db_session)
+    harness.send(task_event("SubmissionGraded", s.ayse, datetime.now(UTC), score=85))
+
+    harness.consumer.consume_batch()
+
+    rows = notifications_by_person(db_session)
+    assert set(rows) == {(s.ayse, Channel.IN_APP), (s.ayse, Channel.EMAIL)}
+    # Links carry random UUIDs, which may contain "85" themselves: check the text without them.
+    texts = [re.sub(r"https?://\S+", "", row.title + row.body) for row in rows.values()]
+    assert all("85" not in text for text in texts)
+
+
+def test_a_reminder_read_after_the_deadline_is_skipped(harness, db_session, caplog) -> None:
+    s = create_scenario(db_session)
+    harness.send(task_event("TaskDueSoon", s.ayse, datetime.now(UTC) - timedelta(minutes=5)))
+    harness.consumer.consume_batch()
+
+    assert notifications_by_person(db_session) == {}
+    assert db_session.scalar(select(func.count()).select_from(ProcessedEvent)) == 1  # handled, not retried
+    assert harness.messages_left() == 0
+    assert any("notification.event_skipped" in str(record.msg) for record in caplog.records)
+
+    harness.send(task_event("TaskDueSoon", s.ayse, datetime.now(UTC) + timedelta(hours=2)))
+    harness.consumer.consume_batch()
+
+    assert set(notifications_by_person(db_session)) == {(s.ayse, Channel.IN_APP), (s.ayse, Channel.EMAIL)}
 
 
 def test_invalid_messages_stay_in_the_queue_for_the_dlq(harness, db_session, caplog) -> None:

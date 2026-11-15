@@ -1,40 +1,69 @@
 """What each consumed event does. Handlers only add changes to the session; the consumer commits them
 together with the processed_event row, so an event is applied exactly once or not at all."""
 
+import uuid
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.delivery.planner import ExamInfo, create_exam_result_notifications
+from app.delivery.planner import ExamInfo, ValuesFor, plan_notifications
+from app.delivery.templates import clock_time, turkish_date, turkish_datetime
 from app.events.payloads import (
+    AssignmentEvent,
+    AttendanceRecordEvent,
     EventEnvelope,
     EventModel,
     ExamResultsPublished,
     GuardianLinked,
     GuardianUnlinked,
+    StudentAbsent,
+    StudentExcusedByTeacher,
     StudentResultAdded,
+    SubmissionGraded,
+    TaskAssigned,
+    TaskDueSoon,
+    TaskOverdue,
     UserUpdated,
 )
 from app.models import ContactReplica, GuardianLinkReplica
 from app.models.base import utcnow
-from app.observability.metrics import REPLICA_EVENTS_IGNORED
+from app.observability.metrics import NOTIFICATIONS_SKIPPED, REPLICA_EVENTS_IGNORED
 
 logger = structlog.get_logger(__name__)
 
 
+DEFAULT_TIME_ZONE = ZoneInfo("Europe/Istanbul")
+
+
 class EventHandlers:
-    def __init__(self, frontend_base_url: str) -> None:
+    def __init__(
+        self,
+        frontend_base_url: str,
+        time_zone: ZoneInfo = DEFAULT_TIME_ZONE,
+        clock: Callable[[], datetime] = utcnow,
+    ) -> None:
         self._frontend_base_url = frontend_base_url
+        # Task deadlines arrive in UTC; the texts show them in the institution's time zone.
+        self._time_zone = time_zone
+        self._clock = clock
         self._routes: dict[str, tuple[type[EventModel], Callable[[Session, EventEnvelope, Any], None]]] = {
             "UserUpdated": (UserUpdated, self._user_updated),
             "GuardianLinked": (GuardianLinked, self._guardian_linked),
             "GuardianUnlinked": (GuardianUnlinked, self._guardian_unlinked),
             "ExamResultsPublished": (ExamResultsPublished, self._exam_results_published),
             "StudentResultAdded": (StudentResultAdded, self._student_result_added),
+            "StudentAbsent": (StudentAbsent, self._attendance_record),
+            "StudentExcusedByTeacher": (StudentExcusedByTeacher, self._attendance_record),
+            "TaskAssigned": (TaskAssigned, self._assignment),
+            "TaskDueSoon": (TaskDueSoon, self._task_due_soon),
+            "TaskOverdue": (TaskOverdue, self._assignment),
+            "SubmissionGraded": (SubmissionGraded, self._assignment),
         }
 
     def handles(self, event_type: str) -> bool:
@@ -127,23 +156,84 @@ class EventHandlers:
     def _exam_results_published(
         self, session: Session, envelope: EventEnvelope, event: ExamResultsPublished
     ) -> None:
-        create_exam_result_notifications(
+        exam = ExamInfo(event.mock_exam_id, event.exam_type_code, event.mock_exam_name, event.exam_date)
+        plan_notifications(
             session,
             event_id=envelope.event_id,
             event_type=envelope.event_type,
             student_ids=event.student_ids,
-            exam=ExamInfo(event.mock_exam_id, event.exam_type_code, event.mock_exam_name, event.exam_date),
-            frontend_base_url=self._frontend_base_url,
+            values_for=self._exam_values(exam),
         )
 
     def _student_result_added(
         self, session: Session, envelope: EventEnvelope, event: StudentResultAdded
     ) -> None:
-        create_exam_result_notifications(
+        exam = ExamInfo(event.mock_exam_id, None, event.mock_exam_name, event.exam_date)
+        plan_notifications(
             session,
             event_id=envelope.event_id,
             event_type=envelope.event_type,
             student_ids=[event.student_id],
-            exam=ExamInfo(event.mock_exam_id, None, event.mock_exam_name, event.exam_date),
-            frontend_base_url=self._frontend_base_url,
+            values_for=self._exam_values(exam),
         )
+
+    def _exam_values(self, exam: ExamInfo) -> ValuesFor:
+        def values(student_id: uuid.UUID) -> dict[str, Any]:
+            return {
+                "exam_name": exam.display_name,
+                "exam_date": turkish_date(exam.exam_date),
+                "link": f"{self._frontend_base_url}/students/{student_id}/results/{exam.mock_exam_id}",
+            }
+
+        return values
+
+    # --- attendance: notifications --------------------------------------------------------------
+
+    def _attendance_record(
+        self, session: Session, envelope: EventEnvelope, event: AttendanceRecordEvent
+    ) -> None:
+        """StudentAbsent and StudentExcusedByTeacher: same values, different texts (app.delivery.kinds)."""
+        values = {
+            "session_date": turkish_date(event.session_date),
+            "start_time": clock_time(event.start_time),
+            "end_time": clock_time(event.end_time),
+            "link": f"{self._frontend_base_url}/students/{event.student_id}/attendance",
+        }
+        plan_notifications(
+            session,
+            event_id=envelope.event_id,
+            event_type=envelope.event_type,
+            student_ids=[event.student_id],
+            values_for=lambda _: values,
+        )
+
+    # --- task: notifications --------------------------------------------------------------------
+
+    def _assignment(self, session: Session, envelope: EventEnvelope, event: AssignmentEvent) -> None:
+        """TaskAssigned, TaskOverdue and SubmissionGraded: one assignment of one student."""
+        values = {
+            "task_title": event.title,
+            "due_at": turkish_datetime(event.due_at, self._time_zone),
+            "link": f"{self._frontend_base_url}/students/{event.student_id}/tasks/{event.assignment_id}",
+        }
+        plan_notifications(
+            session,
+            event_id=envelope.event_id,
+            event_type=envelope.event_type,
+            student_ids=[event.student_id],
+            values_for=lambda _: values,
+        )
+
+    def _task_due_soon(self, session: Session, envelope: EventEnvelope, event: TaskDueSoon) -> None:
+        # A reminder read after the deadline (the queue was backed up, the worker was down) would
+        # tell the student to hurry for a deadline that is already gone; TaskOverdue covers it.
+        if event.due_at <= self._clock():
+            NOTIFICATIONS_SKIPPED.labels(reason="past_due").inc()
+            logger.info(
+                "notification.event_skipped",
+                event_type=envelope.event_type,
+                assignment_id=str(event.assignment_id),
+                reason="past_due",
+            )
+            return
+        self._assignment(session, envelope, event)

@@ -1,0 +1,4 @@
+Merhaba {{ recipient_first_name }},
+
+{{ student_full_name }}, {{ session_date }} günü {{ start_time }}–{{ end_time }} dersinin yoklamasında devamsız olarak işaretlendi. Ayrıntıları görmek veya mazeret bildirmek için:
+{{ link }}

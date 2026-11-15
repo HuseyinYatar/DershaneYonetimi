@@ -6,8 +6,8 @@ a producer adding an optional field does not break this service.
 """
 
 import uuid
-from datetime import date, datetime
-from typing import Any
+from datetime import date, datetime, time
+from typing import Any, Literal
 
 from pydantic import ConfigDict, Field
 
@@ -75,3 +75,60 @@ class StudentResultAdded(EventModel):
     student_id: uuid.UUID
     mock_exam_name: str | None = None
     exam_date: date | None = None
+
+
+# --- attendance -------------------------------------------------------------------------------
+
+
+class AttendanceRecordEvent(EventModel):
+    """Shared shape of StudentAbsent and StudentExcusedByTeacher (attendance). Times are the
+    institution's local time; subjectId is kept for the contract but the texts name no subject."""
+
+    record_id: uuid.UUID
+    session_id: uuid.UUID
+    student_id: uuid.UUID
+    classroom_id: uuid.UUID
+    branch_id: uuid.UUID
+    subject_id: uuid.UUID
+    session_date: date
+    start_time: time
+    end_time: time
+
+
+class StudentAbsent(AttendanceRecordEvent):
+    """The student ended up absent without an approved excuse."""
+
+
+class StudentExcusedByTeacher(AttendanceRecordEvent):
+    """The teacher excused the student without an approved guardian excuse."""
+
+
+# --- task ---------------------------------------------------------------------------------------
+
+
+class AssignmentEvent(EventModel):
+    """Shared shape of the task events: one assignment of one student. dueAt is an instant (UTC)."""
+
+    assignment_id: uuid.UUID
+    task_id: uuid.UUID
+    student_id: uuid.UUID
+    branch_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=200)
+    due_at: datetime
+
+
+class TaskAssigned(AssignmentEvent):
+    recurrence: Literal["ONCE", "DAILY", "WEEKLY"]
+
+
+class TaskDueSoon(AssignmentEvent):
+    """The assignment entered its reminder window and is still open."""
+
+
+class TaskOverdue(AssignmentEvent):
+    """The due time passed without a submission."""
+
+
+class SubmissionGraded(AssignmentEvent):
+    # Part of the contract; never written into a text (no scores in notifications).
+    score: int | None

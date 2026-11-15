@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -13,12 +14,28 @@ from app.events.payloads import (
     ExamResultsPublished,
     GuardianLinked,
     GuardianUnlinked,
+    StudentAbsent,
+    StudentExcusedByTeacher,
     StudentResultAdded,
+    SubmissionGraded,
+    TaskAssigned,
+    TaskDueSoon,
+    TaskOverdue,
     UserUpdated,
 )
 from tests.conftest import TEST_AUDIENCE, TEST_ISSUER
 
 EVENTS_DIR = Path(__file__).resolve().parents[4] / "shared" / "events"
+
+ATTENDANCE_RECORD = {
+    "recordId": str(uuid.uuid4()), "sessionId": str(uuid.uuid4()), "studentId": str(uuid.uuid4()),
+    "classroomId": str(uuid.uuid4()), "branchId": str(uuid.uuid4()), "subjectId": str(uuid.uuid4()),
+    "sessionDate": "2026-11-14", "startTime": "10:00:00", "endTime": "10:40:00",
+}  # fmt: skip
+ASSIGNMENT = {
+    "assignmentId": str(uuid.uuid4()), "taskId": str(uuid.uuid4()), "studentId": str(uuid.uuid4()),
+    "branchId": str(uuid.uuid4()), "title": "Paragraf testi", "dueAt": "2026-11-16T20:59:00Z",
+}  # fmt: skip
 
 # One schema-valid sample per consumed event, as the producers publish them.
 SAMPLES = {
@@ -49,6 +66,12 @@ SAMPLES = {
         StudentResultAdded,
         {"mockExamId": str(uuid.uuid4()), "branchId": str(uuid.uuid4()), "studentId": str(uuid.uuid4())},
     ),
+    "attendance/StudentAbsent": (StudentAbsent, ATTENDANCE_RECORD),
+    "attendance/StudentExcusedByTeacher": (StudentExcusedByTeacher, ATTENDANCE_RECORD),
+    "task/TaskAssigned": (TaskAssigned, {**ASSIGNMENT, "recurrence": "DAILY"}),
+    "task/TaskDueSoon": (TaskDueSoon, ASSIGNMENT),
+    "task/TaskOverdue": (TaskOverdue, ASSIGNMENT),
+    "task/SubmissionGraded": (SubmissionGraded, {**ASSIGNMENT, "score": None}),
 }  # fmt: skip
 
 
@@ -89,6 +112,13 @@ class TestConsumedEventContracts:
 
         event = ExamResultsPublished.model_validate(data)
         assert (event.mock_exam_name, event.exam_date) == (None, None)
+
+    def test_attendance_times_without_seconds_and_utc_deadlines_parse(self) -> None:
+        record = StudentAbsent.model_validate({**ATTENDANCE_RECORD, "startTime": "10:00", "endTime": "10:40"})
+        task = TaskDueSoon.model_validate(ASSIGNMENT)
+
+        assert (record.start_time.hour, record.end_time.minute) == (10, 40)
+        assert task.due_at.utcoffset() == timedelta(0)
 
 
 class TestKeycloakTokenVerifier:

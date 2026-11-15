@@ -5,14 +5,17 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.auth.keycloak import CurrentUser
+from app.delivery.kinds import CONFIGURABLE_CHANNELS_BY_PREFERENCE
 from app.errors import BusinessRuleError
 from app.models import NotificationPreference
 from app.models.enums import CONFIGURABLE_CHANNELS
 from app.schemas import PreferenceItem
 
-# Notification kinds a user can choose channels for. StudentResultAdded follows the
-# ExamResultsPublished preference (app.delivery.planner.PREFERENCE_EVENT_TYPES).
-CONFIGURABLE_EVENT_TYPES = ("ExamResultsPublished",)
+# Notification kinds a user can choose channels for, one per group of events (app.delivery.kinds):
+#   ExamResultsPublished  exam results (also StudentResultAdded)
+#   StudentAbsent         attendance (also StudentExcusedByTeacher)
+#   TaskAssigned          tasks (also TaskDueSoon, TaskOverdue, SubmissionGraded)
+CONFIGURABLE_EVENT_TYPES = tuple(CONFIGURABLE_CHANNELS_BY_PREFERENCE)
 
 
 def get_preferences(session: Session, user: CurrentUser) -> list[PreferenceItem]:
@@ -25,8 +28,8 @@ def get_preferences(session: Session, user: CurrentUser) -> list[PreferenceItem]
     )
     return [
         PreferenceItem(event_type=event_type, channel=channel, enabled=(event_type, channel) not in disabled)
-        for event_type in CONFIGURABLE_EVENT_TYPES
-        for channel in CONFIGURABLE_CHANNELS
+        for event_type, channels in CONFIGURABLE_CHANNELS_BY_PREFERENCE.items()
+        for channel in channels
     ]
 
 
@@ -42,6 +45,14 @@ def update_preferences(
         if item.event_type not in CONFIGURABLE_EVENT_TYPES:
             raise BusinessRuleError(
                 "EVENT_TYPE_NOT_CONFIGURABLE", "No preference for this event type", event_type=item.event_type
+            )
+        if item.channel not in CONFIGURABLE_CHANNELS_BY_PREFERENCE[item.event_type]:
+            # e.g. SMS for tasks: nothing is ever sent there, so a switch would mean nothing.
+            raise BusinessRuleError(
+                "CHANNEL_NOT_USED",
+                "This notification type is not sent on this channel",
+                event_type=item.event_type,
+                channel=item.channel.value,
             )
 
     for item in items:

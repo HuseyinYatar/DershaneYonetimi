@@ -87,7 +87,13 @@ def test_preferences_turn_email_and_sms_off_but_never_in_app(client, make_token)
 
     body = {"preferences": [{"eventType": "ExamResultsPublished", "channel": "SMS", "enabled": False}]}
     saved = client.put("/api/v1/notification-preferences", json=body, headers=headers).json()
-    assert {(item["channel"], item["enabled"]) for item in saved} == {("EMAIL", True), ("SMS", False)}
+    assert {(item["eventType"], item["channel"], item["enabled"]) for item in saved} == {
+        ("ExamResultsPublished", "EMAIL", True),
+        ("ExamResultsPublished", "SMS", False),
+        ("StudentAbsent", "EMAIL", True),
+        ("StudentAbsent", "SMS", True),
+        ("TaskAssigned", "EMAIL", True),  # tasks are never sent by SMS: no switch for it
+    }
 
     body = {"preferences": [{"eventType": "ExamResultsPublished", "channel": "IN_APP", "enabled": False}]}
     response = client.put(
@@ -96,6 +102,18 @@ def test_preferences_turn_email_and_sms_off_but_never_in_app(client, make_token)
     assert response.status_code == 422
     assert response.json()["errorCode"] == "CHANNEL_NOT_CONFIGURABLE"
     assert response.json()["detail"].startswith("In-app notifications cannot be turned off")
+
+
+def test_a_channel_the_kind_never_uses_cannot_be_switched(client, make_token) -> None:
+    body = {"preferences": [{"eventType": "TaskAssigned", "channel": "SMS", "enabled": False}]}
+
+    response = client.put(
+        "/api/v1/notification-preferences", json=body, headers=auth(make_token, uuid.uuid4())
+    )
+
+    assert response.status_code == 422
+    assert response.json()["errorCode"] == "CHANNEL_NOT_USED"
+    assert response.json()["detail"] == "Bu bildirim türü bu kanaldan gönderilmiyor."
 
 
 def test_missing_token_is_a_problem_detail_in_turkish(client) -> None:

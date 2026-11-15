@@ -24,6 +24,12 @@ subscriptions = {
     {
       topic = "exam-analysis"
     },
+    {
+      topic = "attendance"
+    },
+    {
+      topic = "task"
+    },
   ]
   "task-user-events" = [{
     topic       = "user"
