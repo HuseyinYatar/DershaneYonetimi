@@ -109,17 +109,18 @@ export type UserRow =
   Schemas["StudentResponse"] | Schemas["TeacherResponse"] | Schemas["GuardianResponse"];
 export type UserPage = { content?: UserRow[]; page?: Schemas["PageMetadata"] };
 
-// The user service has no text search; the list is paged and filtered by active state only.
+// Paged, filtered by active state and by `q` (name, or student number for students).
 export function useUserPage(
   kind: UserKind,
   page: number,
   size: number,
   active: boolean | undefined,
+  search = "",
 ) {
   return useQuery({
-    queryKey: ["user", "list", kind, page, size, active],
+    queryKey: ["user", "list", kind, page, size, active, search],
     queryFn: (): Promise<UserPage> => {
-      const query = { active, pageable: { page, size } };
+      const query = { active, q: search.trim() || undefined, pageable: { page, size } };
       if (kind === "student") return unwrap(userApi.GET("/api/v1/students", { params: { query } }));
       if (kind === "teacher") return unwrap(userApi.GET("/api/v1/teachers", { params: { query } }));
       return unwrap(userApi.GET("/api/v1/guardians", { params: { query } }));

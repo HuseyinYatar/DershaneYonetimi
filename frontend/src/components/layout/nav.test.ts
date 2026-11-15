@@ -52,9 +52,12 @@ describe("navForRoles", () => {
     expect(navForRoles(["admin", "super-admin"], "a-1")).toEqual(items);
   });
 
-  it("keeps the task pages for an admin who also teaches", () => {
+  it("keeps the overview and task pages for an admin who also teaches", () => {
     const items = navForRoles(["admin", "teacher"], "a-1");
-    expect(items.at(-1)).toMatchObject({ label: "Görevler", to: "/given-tasks", tab: false });
+    expect(items.slice(-2)).toMatchObject([
+      { label: "Öğretmen özeti", to: "/overview", tab: false },
+      { label: "Görevler", to: "/given-tasks", tab: false },
+    ]);
   });
 
   it("returns nothing for roles without screens yet", () => {

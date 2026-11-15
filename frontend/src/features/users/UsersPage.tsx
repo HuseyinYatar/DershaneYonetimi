@@ -1,9 +1,11 @@
-import { ChevronLeft, ChevronRight, Plus, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Search, Users } from "lucide-react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useUserPage, useUserSubjects, type UserRow } from "@/api/queries/user";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
+import { INPUT } from "@/components/ui/form";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PillLink, SegButton } from "@/components/ui/Pill";
 import { SkeletonRows } from "@/components/ui/Skeleton";
@@ -25,7 +27,9 @@ export function UsersPage() {
   const kind: UserKind = USER_KINDS.find((k) => k === params.get("kind")) ?? "student";
   const filter = ACTIVE_FILTERS.find((f) => f.key === params.get("state")) ?? ACTIVE_FILTERS[0];
   const page = Math.max(0, Number(params.get("page")) || 0);
-  const users = useUserPage(kind, page, PAGE_SIZE, filter.value);
+  const search = params.get("q") ?? "";
+  const [term, setTerm] = useState(search);
+  const users = useUserPage(kind, page, PAGE_SIZE, filter.value, search);
   const subjects = useUserSubjects();
   const subjectNames = new Map((subjects.data ?? []).map((s) => [s.id, s.name]));
 
@@ -63,6 +67,27 @@ export function UsersPage() {
             </SegButton>
           ))}
         </div>
+        <form
+          role="search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            update({ q: term.trim() || undefined, page: undefined });
+          }}
+          className="flex min-w-0 flex-1 gap-1.5 md:max-w-sm"
+        >
+          <input
+            type="search"
+            aria-label="Ad veya numara ara"
+            placeholder="Ad veya numara ara"
+            maxLength={80}
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            className={INPUT}
+          />
+          <button type="submit" aria-label="Ara" className="rounded-full bg-white px-3">
+            <Search size={14} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        </form>
         <PillLink to={`/users/new?kind=${kind}`}>
           <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
           Yeni {KIND_LABELS[kind].singular.toLocaleLowerCase("tr-TR")}
@@ -107,7 +132,11 @@ export function UsersPage() {
           <EmptyState
             icon={Users}
             title="Kullanıcı yok"
-            text="Bu süzgeçle eşleşen kullanıcı görünmüyor."
+            text={
+              search
+                ? `“${search}” ile eşleşen kullanıcı görünmüyor.`
+                : "Bu süzgeçle eşleşen kullanıcı görünmüyor."
+            }
           />
         ) : (
           list.map((row) => {

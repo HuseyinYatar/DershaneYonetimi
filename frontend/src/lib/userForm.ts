@@ -131,8 +131,10 @@ export function toCreateRequest(v: UserFormValues, branchId: string): CreateCall
   return { kind: "guardian", body: { ...base, phone: v.phone.trim() } };
 }
 
-export function toUpdateRequest(v: UserFormValues): UpdateCall {
+// `version` is the one the form was loaded with; the service rejects a stale one (CONCURRENT_MODIFICATION).
+export function toUpdateRequest(v: UserFormValues, version: number): UpdateCall {
   const base = {
+    version,
     firstName: v.firstName.trim(),
     lastName: v.lastName.trim(),
     email: optional(v.email),

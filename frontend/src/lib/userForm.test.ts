@@ -77,8 +77,13 @@ describe("request builders", () => {
   it("builds a teacher update with the specialty and no student fields", () => {
     const update = toUpdateRequest(
       form({ kind: "teacher", email: "t@dershane.test", specialtySubjectId: "s-1" }),
+      7,
     );
-    expect(update.body).toMatchObject({ email: "t@dershane.test", specialtySubjectId: "s-1" });
+    expect(update.body).toMatchObject({
+      email: "t@dershane.test",
+      specialtySubjectId: "s-1",
+      version: 7,
+    });
     expect(update.body).not.toHaveProperty("studentNumber");
   });
 });

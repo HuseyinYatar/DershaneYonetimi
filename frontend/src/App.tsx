@@ -83,6 +83,7 @@ export function App() {
               </RequireRole>
             }
           >
+            <Route path="overview" element={<TeacherOverviewPage />} />
             <Route path="given-tasks" element={<GivenTasksPage />} />
             <Route path="given-tasks/new" element={<NewTaskPage />} />
             <Route path="given-tasks/:taskId" element={<GivenTaskDetailPage />} />

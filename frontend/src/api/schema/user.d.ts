@@ -649,6 +649,8 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+            /** Format: int64 */
+            version?: number;
         };
         UserCreatedResponseTeacherResponse: {
             user?: components["schemas"]["TeacherResponse"];
@@ -725,6 +727,8 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+            /** Format: int64 */
+            version?: number;
         };
         UserCreatedResponseStudentResponse: {
             user?: components["schemas"]["StudentResponse"];
@@ -756,6 +760,8 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+            /** Format: int64 */
+            version?: number;
         };
         UserCreatedResponseGuardianResponse: {
             user?: components["schemas"]["GuardianResponse"];
@@ -826,6 +832,8 @@ export interface components {
             phone?: string;
             /** Format: uuid */
             specialtySubjectId?: string;
+            /** Format: int64 */
+            version: number;
         };
         UpdateSubjectRequest: {
             name: string;
@@ -841,6 +849,8 @@ export interface components {
             gradeLevel?: number;
             /** @enum {string} */
             targetExam?: "YKS" | "LGS";
+            /** Format: int64 */
+            version: number;
         };
         UpdateGuardianRequest: {
             firstName?: string;
@@ -848,6 +858,8 @@ export interface components {
             /** Format: email */
             email?: string;
             phone?: string;
+            /** Format: int64 */
+            version: number;
         };
         UpdateClassroomRequest: {
             name?: string;

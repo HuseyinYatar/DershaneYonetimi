@@ -35,9 +35,12 @@ export function navForRoles(roles: Role[], userId: string): NavItem[] {
       { label: "Denemeler", to: "/exams", icon: FileText, tab: true, prefix: true },
       { label: "Haftalık program", to: "/schedules", icon: CalendarClock, tab: false },
       { label: "Mazeretler", to: "/excuses", icon: FileCheck, tab: false },
-      // An admin who also teaches keeps the task pages.
+      // An admin who also teaches keeps the teacher overview and the task pages.
       ...(roles.includes("teacher")
-        ? [{ label: "Görevler", to: "/given-tasks", icon: ListChecks, tab: false, prefix: true }]
+        ? [
+            { label: "Öğretmen özeti", to: "/overview", icon: LayoutDashboard, tab: false },
+            { label: "Görevler", to: "/given-tasks", icon: ListChecks, tab: false, prefix: true },
+          ]
         : []),
     ];
   }

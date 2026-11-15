@@ -31,8 +31,8 @@ function toFormValues(kind: UserKind, user: UserRow): UserFormValues {
   };
 }
 
-// The caller keys this card by the record's updatedAt, so a refetch after a save or a
-// CONCURRENT_MODIFICATION error resets the form to the stored values.
+// The form sends the version it was loaded with. The caller keys this card by the record's updatedAt,
+// so a refetch after a save or a CONCURRENT_MODIFICATION error resets the form to the stored values.
 export function UserEditCard({ kind, user }: { kind: UserKind; user: UserRow }) {
   const update = useUpdateUser(user.id ?? "");
   const {
@@ -48,7 +48,9 @@ export function UserEditCard({ kind, user }: { kind: UserKind; user: UserRow }) 
     <Card className="p-5">
       <CardHeader title="Bilgiler" />
       <form
-        onSubmit={handleSubmit((values) => update.mutate(toUpdateRequest(values)))}
+        onSubmit={handleSubmit((values) =>
+          update.mutate(toUpdateRequest(values, user.version ?? 0)),
+        )}
         noValidate
         className="mt-4 flex flex-col gap-4"
       >
