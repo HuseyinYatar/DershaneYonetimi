@@ -1,0 +1,31 @@
+package com.dershane.apigateway.ratelimit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.security.Principal;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+class SubmissionKeyResolverTest {
+
+  private final SubjectKeyResolver subject = new SubjectKeyResolver();
+  private final SubmissionKeyResolver resolver = new SubmissionKeyResolver(subject);
+
+  @Test
+  void keyIsThePrincipalNameWithAPrefixSoItNeverSharesTheDefaultBucket() {
+    Principal principal = () -> "6f1c0a3e-0000-0000-0000-000000000001";
+    ServerWebExchange exchange =
+        MockServerWebExchange.from(
+                MockServerHttpRequest.put("/api/v1/task-assignments/a/submission"))
+            .mutate()
+            .principal(Mono.just(principal))
+            .build();
+
+    assertThat(resolver.resolve(exchange).block())
+        .isEqualTo("submission:6f1c0a3e-0000-0000-0000-000000000001")
+        .isNotEqualTo(subject.resolve(exchange).block());
+  }
+}

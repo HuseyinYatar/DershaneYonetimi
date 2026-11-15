@@ -1,0 +1,39 @@
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok";
+    }
+
+    # Hashed filenames, safe to cache forever. ^~ keeps the extension rule below from taking over.
+    location ^~ /assets/ {
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # Runtime config and the entry page must always be revalidated.
+    location = /config.js {
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /index.html {
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "no-cache";
+    }
+
+    # A missing file with an extension is a real 404, not the SPA.
+    location ~ \.[a-zA-Z0-9]+$ {
+        include /etc/nginx/conf.d/security-headers.inc;
+        try_files $uri =404;
+    }
+
+    # SPA fallback: extensionless paths are served by the exact /index.html location above.
+    location / {
+        try_files $uri /index.html;
+    }
+}

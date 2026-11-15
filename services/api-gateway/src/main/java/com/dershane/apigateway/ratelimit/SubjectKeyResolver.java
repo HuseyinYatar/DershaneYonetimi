@@ -2,6 +2,7 @@ package com.dershane.apigateway.ratelimit;
 
 import java.security.Principal;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -12,7 +13,9 @@ import reactor.core.publisher.Mono;
  * ({@code GET /api/v1/chat/ws}), which is permitted without a token; the limiter lets an empty key
  * through (see {@code deny-empty-key} in application.yml).
  */
+// @Primary: the limiter filter factory injects a single KeyResolver by type as its default.
 @Component
+@Primary
 public class SubjectKeyResolver implements KeyResolver {
 
   @Override

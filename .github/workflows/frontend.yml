@@ -1,0 +1,46 @@
+name: frontend
+
+on:
+  pull_request:
+    paths:
+      - frontend/**
+      - .github/workflows/frontend.yml
+      - .github/workflows/_image.yml
+  push:
+    branches: [main]
+    paths:
+      - frontend/**
+      - .github/workflows/frontend.yml
+      - .github/workflows/_image.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --coverage
+      - run: npm run build
+  image:
+    needs: test
+    uses: ./.github/workflows/_image.yml
+    with:
+      service: frontend
+      context: frontend
