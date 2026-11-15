@@ -5,6 +5,22 @@ exam-analysis için Python 3.14+ ve [uv](https://docs.astral.sh/uv/).
 
 ## Başlatma
 
+Tek komutla tüm backend (bağımlılıklar, servisler, gateway), servisler hazır olana kadar bekler:
+
+```bash
+local/up.sh            # çalışmayanları başlat (imaj yoksa derler)
+local/up.sh --build    # kod değiştiyse imajları yeniden derle
+local/up.sh --seed     # + mock veri (aşağıda "Mock veri")
+local/up.sh --reset    # önce volume'ları sil (veritabanı dahil)
+local/up.sh down       # durdur (container ve veri kalır)
+```
+
+Floci kaynakları `floci-data` volume'una yazar (`FLOCI_STORAGE_MODE=persistent`), bu yüzden yeniden
+başlatmada `floci-init` ~10 sn'de "No changes" ile biter. Yalnızca `--reset` (`down -v`) sonrası 42 kaynağı
+baştan açar (kuyruk başına ~25 sn, toplam 2–3 dk); takılmış gibi görünür ama ilerler.
+
+Elle:
+
 ```bash
 # Bağımlılıklar: PostgreSQL, Keycloak, Floci (SNS/SQS/S3), Mailpit, Redis
 docker compose -f local/docker-compose.yml up -d

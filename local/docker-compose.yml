@@ -69,8 +69,13 @@ services:
     image: floci/floci:2.3.0
     environment:
       FLOCI_DEFAULT_REGION: eu-central-1
+      # Keeps topics, queues, messages and buckets across restarts, so floci-init is a no-op instead of
+      # recreating everything (~25 s per queue). `down -v` resets it together with terraform-state.
+      FLOCI_STORAGE_MODE: persistent
     ports:
       - "4566:4566"
+    volumes:
+      - floci-data:/app/data
 
   # Applies infra/terraform (SNS topics, SQS queues, buckets) to Floci, then exits. State and the
   # provider cache live in the terraform-state volume; `down -v` resets them together with Floci.
@@ -404,4 +409,5 @@ services:
 
 volumes:
   postgres-data:
+  floci-data:
   terraform-state:
