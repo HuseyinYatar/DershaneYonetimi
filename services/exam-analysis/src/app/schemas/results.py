@@ -30,14 +30,22 @@ class NationalStatisticsUpdate(ApiModel):
 
 
 class ScoreRead(ApiModel):
-    """Always an estimate; the UI labels it "tahmini (kurum içi)" or "tahmini (Türkiye geneli)"."""
+    """Always an estimate. With coefficient_year the UI labels it "tahmini (2026 katsayılarıyla)";
+    otherwise (standard-score model) "tahmini (kurum içi)" or "tahmini (Türkiye geneli)"."""
 
     score_type_id: uuid.UUID
     score_type_code: str
     estimated_score: Decimal | None
     is_estimated: Literal[True] = True
+    # Statistics source of a standard-score result; null for the coefficient model.
     source: ScoringSource | None
     branch_rank: int | None
+    coefficient_year: int | None = None
+    # Why estimated_score is null: MINIMUM_NET_NOT_MET, SUBJECT_MISSING, LINKED_RESULT_MISSING
+    # (no published TYT yet), LINKED_MINIMUM_NOT_MET (the linked TYT has no score).
+    not_computed_reason: str | None = None
+    # Name of the exam whose TYT nets were counted (AYT/YDT score types).
+    linked_exam_name: str | None = None
 
 
 class ExamResultRow(ApiModel):

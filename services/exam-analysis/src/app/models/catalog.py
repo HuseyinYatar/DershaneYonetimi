@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Numeric, SmallInteger, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,9 +57,15 @@ class ScoreType(Base):
     exam_type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("exam_type.id"), index=True)
     code: Mapped[str] = mapped_column(String(16))
     name: Mapped[str] = mapped_column(String(100))
-    # Constant added to the weighted standard scores. The final scaling formula is an open
-    # decision (see CLAUDE.md); null means no constant is added.
+    # Coefficient model (app.scoring.coefficient_score) when coefficient_year is set: base_score is the
+    # score at zero net, weights are points per net. Otherwise (LGS until its coefficients are known)
+    # the standard-score model: base_score is added to the weighted standard scores.
     base_score: Mapped[Decimal | None] = mapped_column(Numeric(7, 3))
+    # Year the coefficients estimate; shown as "tahmini (2026 katsayılarıyla)".
+    coefficient_year: Mapped[int | None] = mapped_column(SmallInteger)
+    # Net one minimum-net group must reach (ÖSYM: 0.5), and the cap of the score (500).
+    minimum_net: Mapped[Decimal | None] = mapped_column(Numeric(4, 2))
+    max_score: Mapped[Decimal | None] = mapped_column(Numeric(7, 3))
 
     weights: Mapped[list[ScoreTypeWeight]] = relationship(cascade="all, delete-orphan", lazy="selectin")
 
@@ -69,9 +75,16 @@ class ScoreType(Base):
 class ScoreTypeWeight(Base):
     __tablename__ = "score_type_weight"
 
-    score_type_id: Mapped[uuid.UUID] = mapped_column( ForeignKey("score_type.id", ondelete="CASCADE"), primary_key=True)
+    score_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("score_type.id", ondelete="CASCADE"), primary_key=True
+    )
     subject_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("subject.id"), primary_key=True)
+    # Points per net (coefficient model) or the weight of the standard score (standard-score model).
+    # The subject may belong to another exam type: SAY/EA/SÖZ/DİL also count the TYT tests.
     weight: Mapped[Decimal] = mapped_column(Numeric(6, 3))
+    # Subjects with the same group number form one ÖSYM test for the minimum-net rule (e.g. Fizik,
+    # Kimya and Biyoloji are the Fen Bilimleri test); the score needs one group at minimum_net.
+    minimum_net_group: Mapped[int | None] = mapped_column(SmallInteger)
 
     __table_args__ = (CheckConstraint("weight > 0", name="weight_positive"),)
 

@@ -5,7 +5,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.auth.access import ensure_can_view_student
 from app.auth.keycloak import CurrentUser
@@ -41,14 +41,16 @@ from app.services import mock_exam_service
 
 def _scores_by_result(session: Session, result_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[ScoreRead]]:
     """Loads the estimated scores of the given results, grouped by result id."""
+    linked_exam = aliased(MockExam)
     rows = session.execute(
-        select(StudentScore, ScoreType.code)
+        select(StudentScore, ScoreType.code, ScoreType.coefficient_year, linked_exam.name)
         .join(ScoreType, ScoreType.id == StudentScore.score_type_id)
+        .outerjoin(linked_exam, linked_exam.id == StudentScore.linked_mock_exam_id)
         .where(StudentScore.student_result_id.in_(result_ids))
         .order_by(ScoreType.code)
     ).all()
     scores: dict[uuid.UUID, list[ScoreRead]] = defaultdict(list)
-    for score, code in rows:
+    for score, code, coefficient_year, linked_exam_name in rows:
         scores[score.student_result_id].append(
             ScoreRead(
                 score_type_id=score.score_type_id,
@@ -56,6 +58,9 @@ def _scores_by_result(session: Session, result_ids: list[uuid.UUID]) -> dict[uui
                 estimated_score=score.estimated_score,
                 source=score.source,
                 branch_rank=score.branch_rank,
+                coefficient_year=coefficient_year,
+                not_computed_reason=score.not_computed_reason,
+                linked_exam_name=linked_exam_name,
             )
         )
     return scores

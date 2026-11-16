@@ -1,5 +1,6 @@
 {
-  "_note": "Starter catalog. Topic lists are a sample of the curriculum; extend them through the API or this file. Score type weights are placeholders until verified against the OSYM/MEB guides (weightsVerified=false logs a warning on seeding). Optical layouts are examples; define each reader's real layout as its own format.",
+  "_note": "Starter catalog. Topic lists are a sample of the curriculum; extend them through the API or this file. Optical layouts are examples; define each reader's real layout as its own format.",
+  "_scoreTypes": "Score types with coefficientYear use the coefficient model: score = baseScore (score at zero net) + sum(weight x max(net, 0)), capped at maxScore; weights are points per net. 'TYT:MAT' is a subject of another exam type (AYT/YDT score types count the TYT tests, taken from the student's latest published TYT). minimumNetGroups lists the ÖSYM tests of the minimum-net rule: one group must reach minimumNet. Source of the 2026 coefficients: sinavhavuzu.com.tr/araclar/yks-puan-hesaplama (2026 estimates; expected error 2-3 points, SÖZ 4-6). LGS has no coefficients yet: it keeps the standard-score model with placeholder weights (weightsVerified=false logs a warning on seeding).",
   "examTypes": [
     {
       "code": "TYT",
@@ -68,7 +69,17 @@
         }
       ],
       "scoreTypes": [
-        {"code": "TYT", "name": "TYT Puanı", "baseScore": null, "weightsVerified": false, "weights": {"TUR": 1, "SOS": 1, "MAT": 1, "FEN": 1}}
+        {
+          "code": "TYT",
+          "name": "TYT Puanı",
+          "coefficientYear": 2026,
+          "baseScore": 147.50,
+          "maxScore": 500,
+          "minimumNet": 0.5,
+          "minimumNetGroups": [["TUR"], ["MAT"]],
+          "weightsVerified": true,
+          "weights": {"TUR": 2.71, "SOS": 3.14, "MAT": 3.25, "FEN": 2.57}
+        }
       ]
     },
     {
@@ -100,14 +111,47 @@
         {"code": "BIY", "name": "Biyoloji", "topics": [{"name": "Sinir Sistemi"}, {"name": "Genden Proteine"}, {"name": "Bitki Biyolojisi"}]}
       ],
       "scoreTypes": [
-        {"code": "SAY", "name": "Sayısal", "baseScore": null, "weightsVerified": false, "weights": {"MAT": 1, "FIZ": 1, "KIM": 1, "BIY": 1}},
-        {"code": "EA", "name": "Eşit Ağırlık", "baseScore": null, "weightsVerified": false, "weights": {"MAT": 1, "EDB": 1, "TAR1": 1, "COG1": 1}},
+        {
+          "code": "SAY",
+          "name": "Sayısal",
+          "coefficientYear": 2026,
+          "baseScore": 125.55,
+          "maxScore": 500,
+          "minimumNet": 0.5,
+          "minimumNetGroups": [["MAT"], ["FIZ", "KIM", "BIY"]],
+          "weightsVerified": true,
+          "weights": {
+            "TYT:TUR": 1.21, "TYT:SOS": 1.40, "TYT:MAT": 1.45, "TYT:FEN": 1.15,
+            "MAT": 2.97, "FIZ": 2.47, "KIM": 2.53, "BIY": 2.60
+          }
+        },
+        {
+          "code": "EA",
+          "name": "Eşit Ağırlık",
+          "coefficientYear": 2026,
+          "baseScore": 126.15,
+          "maxScore": 500,
+          "minimumNet": 0.5,
+          "minimumNetGroups": [["MAT"], ["EDB", "TAR1", "COG1"]],
+          "weightsVerified": true,
+          "weights": {
+            "TYT:TUR": 1.20, "TYT:SOS": 1.38, "TYT:MAT": 1.43, "TYT:FEN": 1.13,
+            "MAT": 2.93, "EDB": 3.21, "TAR1": 2.35, "COG1": 2.48
+          }
+        },
         {
           "code": "SOZ",
           "name": "Sözel",
-          "baseScore": null,
-          "weightsVerified": false,
-          "weights": {"EDB": 1, "TAR1": 1, "COG1": 1, "TAR2": 1, "COG2": 1, "FEL": 1, "DIN": 1}
+          "coefficientYear": 2026,
+          "baseScore": 121.42,
+          "maxScore": 500,
+          "minimumNet": 0.5,
+          "minimumNetGroups": [["EDB", "TAR1", "COG1"], ["TAR2", "COG2", "FEL", "DIN"]],
+          "weightsVerified": true,
+          "weights": {
+            "TYT:TUR": 1.17, "TYT:SOS": 1.36, "TYT:MAT": 1.41, "TYT:FEN": 1.11,
+            "EDB": 3.15, "TAR1": 2.31, "COG1": 2.43, "TAR2": 3.27, "COG2": 2.98, "FEL": 4.29, "DIN": 2.06
+          }
         }
       ]
     },
@@ -119,7 +163,17 @@
         {"code": "ING", "name": "İngilizce", "topics": [{"name": "Kelime Bilgisi"}, {"name": "Dil Bilgisi"}, {"name": "Okuduğunu Anlama"}]}
       ],
       "scoreTypes": [
-        {"code": "DIL", "name": "Dil", "baseScore": null, "weightsVerified": false, "weights": {"ING": 1}}
+        {
+          "code": "DIL",
+          "name": "Dil",
+          "coefficientYear": 2026,
+          "baseScore": 106.02,
+          "maxScore": 500,
+          "minimumNet": 0.5,
+          "minimumNetGroups": [["ING"]],
+          "weightsVerified": true,
+          "weights": {"TYT:TUR": 1.45, "TYT:SOS": 1.68, "TYT:MAT": 1.74, "TYT:FEN": 1.37, "ING": 2.62}
+        }
       ]
     },
     {

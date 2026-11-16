@@ -89,9 +89,25 @@ afterEach(cleanup);
 describe("ResultDetailPage", () => {
   it("labels an estimated score with its source", () => {
     renderPage([institutional]);
-    expect(screen.getByText("391,4")).toBeTruthy();
+    expect(screen.getByText("391,40")).toBeTruthy();
     expect(screen.getAllByText("tahmini (kurum içi)").length).toBeGreaterThan(0);
     expect(screen.queryByText("Türkiye geneli istatistik henüz girilmedi")).toBeNull();
+  });
+
+  it("labels a coefficient score with its year and the TYT it counted", () => {
+    renderPage([
+      {
+        ...institutional,
+        scoreTypeCode: "SAY",
+        estimatedScore: "402.10",
+        source: null,
+        coefficientYear: 2026,
+        linkedExamName: "Demo TYT Deneme 4",
+      },
+    ]);
+    expect(screen.getByText("402,10")).toBeTruthy();
+    expect(screen.getAllByText("tahmini (2026 katsayılarıyla)").length).toBeGreaterThan(0);
+    expect(screen.getByText(/TYT netleri: Demo TYT Deneme 4/)).toBeTruthy();
   });
 
   it("explains a missing national score instead of showing a number", () => {

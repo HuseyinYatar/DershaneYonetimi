@@ -53,7 +53,7 @@ export function ScoreCard({ scores }: { scores: Score[] }) {
                 <div className="mt-8 text-[76px] leading-none font-light tracking-[-0.045em]">
                   {formatNet(score.estimatedScore)}
                 </div>
-                <p className="mt-4 text-[13px] text-white/85">{scoreExplanation(score.source)}</p>
+                <p className="mt-4 text-[13px] text-white/85">{scoreExplanation(score)}</p>
               </>
             ) : (
               <div className="mt-6 flex items-start gap-3 text-sm text-white/90">

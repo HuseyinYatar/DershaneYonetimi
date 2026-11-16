@@ -15,10 +15,12 @@ import {
 } from "./format";
 
 describe("number formatting", () => {
-  it("uses a decimal comma with one digit for nets", () => {
-    expect(formatNet(72.5)).toBe("72,5");
-    expect(formatNet("22.00")).toBe("22,0");
-    expect(formatNet("1234.5")).toBe("1.234,5");
+  it("uses a decimal comma with two digits for nets and scores", () => {
+    expect(formatNet(72.5)).toBe("72,50");
+    expect(formatNet("8.75")).toBe("8,75");
+    expect(formatNet("22.00")).toBe("22,00");
+    expect(formatNet("330.327")).toBe("330,33");
+    expect(formatNet("1234.5")).toBe("1.234,50");
   });
 
   it("renders missing or non-numeric values as an em dash", () => {
