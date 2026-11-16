@@ -8,7 +8,6 @@ import pytest
 
 from app.scoring.coefficient_score import (
     REASON_MINIMUM_NET_NOT_MET,
-    REASON_SUBJECT_MISSING,
     CoefficientRule,
     compute_coefficient_scores,
 )
@@ -99,13 +98,13 @@ def test_a_group_of_subjects_is_one_test_for_the_minimum_rule() -> None:
     assert result["none"][1] == REASON_MINIMUM_NET_NOT_MET
 
 
-def test_a_missing_subject_is_not_computed() -> None:
+def test_an_untaken_test_counts_as_zero_net() -> None:
+    """AYT keeps no results for a test the student did not take; ÖSYM counts it as 0 net."""
     frame = nets([("partial", TUR, 30), ("partial", MAT, 30)])
 
     result = scores_of(compute_coefficient_scores(frame, TYT_COEFFICIENTS, TYT_RULE))
 
-    assert math.isnan(result["partial"][0])
-    assert result["partial"][1] == REASON_SUBJECT_MISSING
+    assert result["partial"][0] == pytest.approx(147.50 + 2.71 * 30 + 3.25 * 30)
 
 
 def test_a_score_type_without_minimum_groups_has_no_net_rule() -> None:

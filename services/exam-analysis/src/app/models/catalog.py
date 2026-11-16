@@ -18,6 +18,10 @@ class ExamType(Base):
     code: Mapped[str] = mapped_column(String(16), unique=True)
     name: Mapped[str] = mapped_column(String(100))
     wrong_divisor: Mapped[Decimal] = mapped_column(Numeric(4, 2))
+    # Optional tests (AYT): subject codes per ÖSYM test, e.g. [["EDB", "TAR1", "COG1"], ["MAT"], ...].
+    # A test in which a sheet answers no question was not taken: it gets no subject/topic results and
+    # its blanks are not counted. Null: every subject is compulsory (TYT, LGS).
+    optional_tests: Mapped[list[list[str]] | None] = mapped_column(JSONB)
 
     __table_args__ = (CheckConstraint("wrong_divisor > 0", name="wrong_divisor_positive"),)
 

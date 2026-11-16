@@ -86,6 +86,7 @@
       "code": "AYT",
       "name": "Alan Yeterlilik Testleri",
       "wrongDivisor": 4,
+      "optionalTests": [["EDB", "TAR1", "COG1"], ["TAR2", "COG2", "FEL", "DIN"], ["MAT"], ["FIZ", "KIM", "BIY"]],
       "subjects": [
         {"code": "EDB", "name": "Türk Dili ve Edebiyatı", "topics": [{"name": "Şiir Bilgisi"}, {"name": "Edebi Akımlar"}, {"name": "Cumhuriyet Dönemi Edebiyatı"}]},
         {"code": "TAR1", "name": "Tarih-1", "topics": [{"name": "Tarih Bilimi"}, {"name": "Osmanlı Kültür ve Medeniyeti"}]},

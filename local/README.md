@@ -197,14 +197,25 @@ kopyaları (`StudentReplica`, `MembershipReplica`, iletişim kopyaları) dolar; 
 
 **Yalnızca yerel hesaplar** (şifreler Keycloak admin API'siyle bilinen değere ayarlanır):
 
-| Rol | Kullanıcı adı | Şifre |
-|---|---|---|
-| Ana öğrenci (Ayşe Yılmaz) | `mrkz-1001` | `Demo1234!` |
-| Geçici şifreli öğrenci (Merve Koç; ilk girişte "şifre belirle" sayfası) | `mrkz-1010` | `Gecici123!` |
-| Diğer öğrenciler (1002–1009) | `mrkz-1002` ... `mrkz-1009` | `Demo1234!` |
-| Öğretmen (Kemal Aksoy) | `ogretmen@dershane.local` | `Demo1234!` |
-| Veli (Fatma Yılmaz, Ayşe'nin velisi) | `05551234567` | `Demo1234!` |
-| Super-admin | `superadmin@dershane.local` | `admin` |
+| Rol | Ad | Kullanıcı adı | Şifre | AYT alanı | Not |
+|---|---|---|---|---|---|
+| Öğrenci | Ayşe Yılmaz | `mrkz-1001` | `Demo1234!` | SAY | Ana öğrenci: velisi, yoklama geçmişi, teslim ve notlanan ödevleri var |
+| Öğrenci | Mehmet Kaya | `mrkz-1002` | `Demo1234!` | SAY | Sınıfın en iyisi |
+| Öğrenci | Elif Demir | `mrkz-1003` | `Demo1234!` | SAY | |
+| Öğrenci | Can Öztürk | `mrkz-1004` | `Demo1234!` | EA | |
+| Öğrenci | Zeynep Arslan | `mrkz-1005` | `Demo1234!` | SAY | |
+| Öğrenci | Burak Şahin | `mrkz-1006` | `Demo1234!` | EA | |
+| Öğrenci | Selin Çelik | `mrkz-1007` | `Demo1234!` | SAY | |
+| Öğrenci | Emre Yıldız | `mrkz-1008` | `Demo1234!` | EA | |
+| Öğrenci | Deniz Aydın | `mrkz-1009` | `Demo1234!` | EA | En düşük netler |
+| Öğrenci | Merve Koç | `mrkz-1010` | `Gecici123!` | SAY | Geçici şifre: ilk girişte "şifre belirle" sayfası |
+| Öğretmen | Kemal Aksoy | `ogretmen@dershane.local` | `Demo1234!` | | Demo 12-A'nın Matematik ve Türkçe öğretmeni |
+| Veli | Fatma Yılmaz | `05551234567` | `Demo1234!` | | Ayşe'nin velisi (anne) |
+| Super-admin | | `superadmin@dershane.local` | `admin` | | Bütün şubeler, denemeler ve kullanıcılar |
+
+AYT alanı: SAY öğrencileri AYT'de Matematik ve Fen'i, EA öğrencileri Matematik ve Edebiyat–Sosyal Bilimler-1'i
+yanıtlar (80 sorunun 60–74'ü doğru, 2–5'i boş); diğer iki teste girmezler. Girilmeyen test boş sayılmaz ve sonuç
+oluşturmaz; SAY öğrencisinin SÖZ puanı "0,5 net şartı" nedeniyle hesaplanmaz.
 
 Şube olarak var olan `MRKZ` kullanılır (yoksa "Demo Şube" / `DMO` açılır); kullanıcı adı `{şubekodu}-{öğrencino}`
 kuralıyla `mrkz-1001` olur.
@@ -213,7 +224,8 @@ Ne oluşur:
 - **API ile:** ders kataloğu (Matematik, Türkçe), `Demo 12-A` (12. sınıf), öğretmen ve atamaları, 10 öğrenci
   (üyelik 2026-09-01'den), veli bağı; exam-analysis: şube zayıf konu ayarı (son 3 deneme, eşik 0,5), 4 TYT
   denemesi (kurum içi puanlama, cevap anahtarı, optik dosya yükleme, açıklama; Ayşe'nin neti denemeden denemeye
-  artar, bazı konularda zayıf kalır; açıklama bildirimlerini üretir); attendance: pazartesi/çarşamba/cuma haftalık
+  artar, bazı konularda zayıf kalır; açıklama bildirimlerini üretir), 2 AYT denemesi (19 ve 5 gün önce, `ayt-fwf-v1`;
+  6 SAY, 4 EA öğrencisi; SAY/EA/SÖZ puanları TYT Deneme 3 ve 4'ün netleriyle birleşir); attendance: pazartesi/çarşamba/cuma haftalık
   program, son 4 haftanın oturumları (yönetici geçmiş tarihli oturum açıp gerekçeyle yoklama alır; Ayşe: 8 var,
   2 geç, 1 yok, 1 izinli) ve `generate-sessions` işiyle gelecek 7 günün oturumları; task: 7 görev (tek seferlik,
   günlük), Ayşe 3 teslim yapar, öğretmen 2'sini notlar.

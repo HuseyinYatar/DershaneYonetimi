@@ -1,4 +1,4 @@
-import { useProgress, useStudentResults } from "@/api/queries/exam";
+import { useProgress, useStudentTytResults } from "@/api/queries/exam";
 import { DeltaBadge } from "@/components/DeltaBadge";
 import { NetProgress } from "@/components/NetProgress";
 import { Card, CardTitle } from "@/components/ui/Card";
@@ -8,7 +8,7 @@ import { formatNet } from "@/lib/format";
 import { netDelta } from "@/lib/progress";
 
 export function ProgressCard({ studentId }: { studentId: string }) {
-  const results = useStudentResults(studentId);
+  const results = useStudentTytResults(studentId);
   const examTypeId = results.data?.[0]?.examTypeId;
   const progress = useProgress(studentId, examTypeId);
   const points = progress.data?.points ?? [];

@@ -29,6 +29,14 @@ class NationalStatisticsUpdate(ApiModel):
     items: list[NationalStatisticItem] = Field(min_length=1)
 
 
+class ScorePart(ApiModel):
+    """One part of a coefficient score: "Sabit puan", "TYT netleri (…)" or one AYT subject. The parts
+    add up to the score (before the 500 cap)."""
+
+    label: str
+    points: Decimal
+
+
 class ScoreRead(ApiModel):
     """Always an estimate. With coefficient_year the UI labels it "tahmini (2026 katsayılarıyla)";
     otherwise (standard-score model) "tahmini (kurum içi)" or "tahmini (Türkiye geneli)"."""
@@ -41,11 +49,13 @@ class ScoreRead(ApiModel):
     source: ScoringSource | None
     branch_rank: int | None
     coefficient_year: int | None = None
-    # Why estimated_score is null: MINIMUM_NET_NOT_MET, SUBJECT_MISSING, LINKED_RESULT_MISSING
+    # Why estimated_score is null: MINIMUM_NET_NOT_MET, LINKED_RESULT_MISSING
     # (no published TYT yet), LINKED_MINIMUM_NOT_MET (the linked TYT has no score).
     not_computed_reason: str | None = None
     # Name of the exam whose TYT nets were counted (AYT/YDT score types).
     linked_exam_name: str | None = None
+    # Where a computed coefficient score comes from; filled on the student's result detail only.
+    breakdown: list[ScorePart] = Field(default_factory=list)
 
 
 class ExamResultRow(ApiModel):
@@ -77,6 +87,11 @@ class SubjectResultRead(ApiModel):
     wrong: int
     blank: int
     net: Decimal
+    # False: an optional test the student did not take (AYT) that still counts, as 0 net, in one of
+    # the student's computed scores. Its counts are 0, question_count says how many questions it has,
+    # and it is not part of the totals.
+    taken: bool = True
+    question_count: int | None = None
 
 
 class TopicResultRead(ApiModel):

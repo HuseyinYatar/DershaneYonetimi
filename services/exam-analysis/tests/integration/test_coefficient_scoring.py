@@ -8,18 +8,29 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
+from app.auth.keycloak import CurrentUser
 from app.cli import DEFAULT_CATALOG, seed_catalog
-from app.models import ExamType, MockExam, ScoreType, StudentResult, StudentScore, Subject, SubjectResult
-from app.models.enums import ExamStatus, ScoringSource
-from app.services import scoring_service
+from app.models import (
+    AnswerKeyItem,
+    ExamType,
+    MockExam,
+    ScoreType,
+    StudentResult,
+    StudentScore,
+    Subject,
+    SubjectResult,
+    Topic,
+)
+from app.models.enums import ExamStatus, Role, ScoringSource
+from app.services import report_service, scoring_service
 
 pytestmark = pytest.mark.integration
 
 BRANCH = uuid.uuid4()
 AYSE, MEHMET, CAN = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 TYT_NETS_AYSE = {"TUR": 19.25, "SOS": 13.75, "MAT": 20, "FEN": 8.75}
-AYT_NETS = {"MAT": 20, "FIZ": 7, "KIM": 6, "BIY": 5, "EDB": 0, "TAR1": 0, "COG1": 0, "TAR2": 0, "COG2": 0}
-AYT_NETS |= {"FEL": 0, "DIN": 0}
+# A SAY student: the two social tests were not taken, so the import keeps no results for them.
+AYT_NETS = {"MAT": 20, "FIZ": 7, "KIM": 6, "BIY": 5}
 
 
 def subjects_of(session, exam_type_code: str) -> dict[str, uuid.UUID]:
@@ -141,8 +152,13 @@ def test_ayt_counts_the_latest_published_tyt_on_or_before_its_date(db_session, s
     )  # fmt: skip
     assert float(say.estimated_score) == pytest.approx(expected, abs=0.005)
     assert say.linked_mock_exam_id == linked_tyt.id
-    # EA: AYT Matematik reaches 0,5 net; SÖZ: both of its tests are empty.
-    assert result[(AYSE, "EA")].estimated_score is not None
+    # EA: AYT Matematik reaches 0,5 net, the untaken TDE-SB1 counts as 0 net; SÖZ: none of its tests taken.
+    ea_expected = (
+        126.15
+        + 1.20 * 19.25 + 1.38 * 13.75 + 1.43 * 20 + 1.13 * 8.75
+        + 2.93 * 20
+    )  # fmt: skip
+    assert float(result[(AYSE, "EA")].estimated_score) == pytest.approx(ea_expected, abs=0.005)
     assert result[(AYSE, "SOZ")].not_computed_reason == "MINIMUM_NET_NOT_MET"
     # Mehmet has no TYT score (neither Türkçe nor Temel Matematik), so no AYT score either.
     assert result[(MEHMET, "SAY")].not_computed_reason == "LINKED_MINIMUM_NOT_MET"
@@ -150,6 +166,51 @@ def test_ayt_counts_the_latest_published_tyt_on_or_before_its_date(db_session, s
     # Can has no published TYT at all.
     assert result[(CAN, "SAY")].not_computed_reason == "LINKED_RESULT_MISSING"
     assert result[(CAN, "SAY")].linked_mock_exam_id is None
+
+
+def test_result_detail_shows_where_an_ayt_score_comes_from(db_session, seeded) -> None:
+    """A SAY student's EA counts the untaken TDE-SB1 as 0: its subjects are listed as not taken, and
+    the score parts (constant, TYT, each AYT subject) add up to the score."""
+    tyt_subjects, ayt_subjects = seeded
+    tyt = add_exam(db_session, "TYT", date(2026, 11, 1), ExamStatus.PUBLISHED)
+    add_result(db_session, tyt, AYSE, tyt_subjects, TYT_NETS_AYSE)
+    ayt = add_exam(db_session, "AYT", date(2026, 11, 8), ExamStatus.PUBLISHED)
+    add_result(db_session, ayt, AYSE, ayt_subjects, AYT_NETS)
+    topic_id = db_session.scalar(select(Topic.id).where(Topic.subject_id == ayt_subjects["EDB"]))
+    db_session.add_all(
+        AnswerKeyItem(
+            mock_exam_id=ayt.id,
+            subject_id=ayt_subjects["EDB"],
+            topic_id=topic_id,
+            booklet="A",
+            question_no=number,
+            correct_answer="A",
+        )
+        for number in range(1, 25)
+    )
+    db_session.flush()
+    scoring_service.recalculate_exam(db_session, ayt, refresh_institutional=True)
+    db_session.commit()
+    student = CurrentUser(id=AYSE, roles=frozenset({Role.STUDENT}), branch_id=BRANCH)
+
+    detail = report_service.student_result_detail(db_session, student, AYSE, ayt.id)
+
+    subjects = {subject.subject_name: subject for subject in detail.subjects}
+    assert {name for name, s in subjects.items() if not s.taken} == {
+        "Türk Dili ve Edebiyatı",
+        "Tarih-1",
+        "Coğrafya-1",
+    }  # EA's TDE-SB1; SÖZ-only subjects are not listed because SÖZ is not computed
+    assert subjects["Türk Dili ve Edebiyatı"].question_count == 24
+    assert subjects["Matematik"].taken
+    ea = next(score for score in detail.scores if score.score_type_code == "EA")
+    labels = [part.label for part in ea.breakdown]
+    assert labels[:2] == ["Sabit puan", f"TYT netleri ({tyt.name})"]
+    assert float(sum(part.points for part in ea.breakdown)) == pytest.approx(
+        float(ea.estimated_score), abs=0.02
+    )
+    assert next(part for part in ea.breakdown if part.label == "Matematik").points == Decimal("58.60")
+    assert next(part for part in ea.breakdown if part.label == "Türk Dili ve Edebiyatı").points == 0
 
 
 def test_lgs_keeps_the_standard_score_model(db_session, seeded) -> None:

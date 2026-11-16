@@ -47,6 +47,17 @@ def get_optical_format(session: Session, optical_format_id: uuid.UUID) -> Optica
     return optical_format
 
 
+def optional_test_subject_ids(session: Session, exam_type: ExamType) -> list[set[uuid.UUID]]:
+    """Subject ids per optional test of the exam type (ExamType.optional_tests); empty when every
+    subject is compulsory."""
+    if not exam_type.optional_tests:
+        return []
+    ids = dict(
+        session.execute(select(Subject.code, Subject.id).where(Subject.exam_type_id == exam_type.id)).all()
+    )
+    return [{ids[code] for code in test if code in ids} for test in exam_type.optional_tests]
+
+
 def subject_ids_of_exam_type(session: Session, exam_type_id: uuid.UUID) -> set[uuid.UUID]:
     return set(session.scalars(select(Subject.id).where(Subject.exam_type_id == exam_type_id)))
 

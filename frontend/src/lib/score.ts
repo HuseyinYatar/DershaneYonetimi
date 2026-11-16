@@ -9,7 +9,6 @@ export const SCORE_PENDING_TEXT = "Türkiye geneli istatistik henüz girilmedi";
 export const NOT_COMPUTED_TEXT: Record<string, string> = {
   MINIMUM_NET_NOT_MET:
     "Puan hesaplanmadı: bu puan türünün testlerinin birinde en az 0,5 net gerekir",
-  SUBJECT_MISSING: "Puan hesaplanmadı: bu puan türünün bir testinin sonucu yok",
   LINKED_RESULT_MISSING: "Puan hesaplanmadı: açıklanmış bir TYT denemesi yok",
   LINKED_MINIMUM_NOT_MET: "Puan hesaplanmadı: TYT puanı hesaplanamadı",
 };

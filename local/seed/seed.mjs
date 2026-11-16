@@ -326,11 +326,24 @@ const AYT_EXAMS = [
   ['Demo AYT Deneme 1', ymd(addDays(today, -19)), 2],
   ['Demo AYT Deneme 2', ymd(addDays(today, -5)), 3],
 ];
-const AYT_DIFFICULTY = 0.12; // AYT questions are harder: the TYT skill drops by this much
+// Every student answers the 80 questions of their two tests; at least 60 are correct (60-74 by TYT skill).
+const AYT_MIN_CORRECT = 60;
+const AYT_MAX_CORRECT = 74;
 
-function aytSkill(no, tytIndex) {
+function aytCorrectCount(no, tytIndex) {
   const tyt = no === MAIN_STUDENT_NO ? 0.5 + 0.075 * tytIndex : SKILL[no][0] + SKILL[no][1] * tytIndex;
-  return Math.max(0.1, Math.min(0.9, tyt - AYT_DIFFICULTY));
+  const share = Math.max(0, Math.min(1, (tyt - 0.3) / 0.6)); // TYT skill 0.3..0.9 -> 0..1
+  return Math.round(AYT_MIN_CORRECT + share * (AYT_MAX_CORRECT - AYT_MIN_CORRECT));
+}
+
+/** Fisher-Yates with the seeded PRNG, so a student's correct questions are spread over both tests. */
+function shuffled(items, rng) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 async function seedAytExams(admin, ctx) {
@@ -388,13 +401,17 @@ async function seedAytExams(admin, ctx) {
       const lines = students.map((s) => {
         const no = s.studentNumber;
         const tests = TRACK_TESTS[TRACK[no]];
-        const p = aytSkill(no, tytIndex);
-        const sheet = answers.map((right, qi) => {
-          if (!tests.has(subjectOfQuestion[qi])) return ' ';
-          const roll = sheetRng();
-          if (roll < 0.1) return ' ';
-          if (sheetRng() < p) return right;
-          return 'ABCDE'.replace(right, '')[Math.floor(sheetRng() * 4)];
+        // The questions of the student's two tests, in random order: the first `correct` are right,
+        // the next 2-5 blank, the rest wrong. The other two tests stay blank (not taken).
+        const own = shuffled(answers.map((_, qi) => qi).filter((qi) => tests.has(subjectOfQuestion[qi])), sheetRng);
+        const correct = aytCorrectCount(no, tytIndex);
+        const blanks = 2 + Math.floor(sheetRng() * 4);
+        const sheet = answers.map(() => ' ');
+        own.forEach((qi, rank) => {
+          const right = answers[qi];
+          if (rank < correct) sheet[qi] = right;
+          else if (rank < correct + blanks) sheet[qi] = ' ';
+          else sheet[qi] = 'ABCDE'.replace(right, '')[Math.floor(sheetRng() * 4)];
         });
         return `${no.padEnd(10)}A${sheet.join('')}`;
       });

@@ -43,7 +43,7 @@ class StudentScore(Base):
     # Statistics source of a standard-score result; null for the coefficient model.
     source: Mapped[ScoringSource | None] = mapped_column(enum_column(ScoringSource, "scoring_source"))
     branch_rank: Mapped[int | None]
-    # MINIMUM_NET_NOT_MET, SUBJECT_MISSING, LINKED_RESULT_MISSING, LINKED_MINIMUM_NOT_MET.
+    # MINIMUM_NET_NOT_MET, LINKED_RESULT_MISSING, LINKED_MINIMUM_NOT_MET.
     not_computed_reason: Mapped[str | None] = mapped_column(String(32))
     # The exam whose nets filled the subjects of another exam type (AYT/YDT: the student's latest
     # published TYT of the branch on or before this exam's date).

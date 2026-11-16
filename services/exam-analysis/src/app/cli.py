@@ -82,6 +82,7 @@ def _upsert_exam_type(session: Session, data: dict[str, Any]) -> ExamType:
         session.add(exam_type)
     exam_type.name = data["name"]
     exam_type.wrong_divisor = Decimal(str(data["wrongDivisor"]))
+    exam_type.optional_tests = data.get("optionalTests")
     session.flush()
     return exam_type
 
