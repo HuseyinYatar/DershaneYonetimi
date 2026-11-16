@@ -39,6 +39,7 @@ docker compose -f local/docker-compose.yml --profile services up -d --build
 |---|---|---|
 | Frontend (`cd frontend && npm run dev`) | http://localhost:3000 | Keycloak'a yönlendirir |
 | notification (API / Swagger UI) | http://localhost:8003, http://localhost:8003/docs | "Authorize" → Keycloak |
+| file (API / Swagger UI) | http://localhost:8004, http://localhost:8004/docs | "Authorize" → Keycloak |
 | API gateway (tek giriş noktası) | http://localhost:8000/api/v1/... | `Authorization: Bearer <token>` |
 | Gateway metrik, sağlık, build bilgisi | http://localhost:8002/metrics, `/health/readiness`, `/info` | — |
 | Swagger UI (user) | http://localhost:8080/swagger-ui.html | "Authorize" → Keycloak |
@@ -139,6 +140,42 @@ user servisinden (`:8080`) aynı şubede aç. Akış: öğrenci token'ıyla `POS
 (inceleme kuyruğu `local-inspect-messaging-events`). `local/postgres/init.sql` yalnızca boş volume'da
 çalışır: var olan bir ortamda `docker compose down -v` yap veya `messaging_service` kullanıcı ve veritabanını
 elle oluştur.
+
+## file
+
+```bash
+cd services/file
+cp .env.example .env
+uv sync
+uv run alembic upgrade head
+uv run uvicorn app.main:create_app --factory --port 8004
+```
+
+Dosya içerikleri `file-uploads` bucket'ında (`floci-init` açar), dosya bilgisi ve paylaşım listesi
+`file_service` veritabanındadır. Optik okuma servisi ve exam-analysis, Keycloak'taki kendi servis
+hesaplarıyla (`omr-service`, `exam-analysis-service`; rol `internal-service`) token alır:
+
+```bash
+curl -s -d grant_type=client_credentials -d client_id=omr-service -d client_secret=omr-service-local-secret \
+  http://localhost:8180/realms/dershane/protocol/openid-connect/token
+```
+
+Var olan bir ortamda (`down -v` yapmadan) eksik olanları ekle. `init.sql` ve realm dosyası yalnızca ilk
+açılışta okunur:
+
+```bash
+# file_service kullanıcı ve veritabanı
+docker compose -f local/docker-compose.yml exec -T postgres psql -U postgres \
+  -c "CREATE USER file_service WITH PASSWORD 'file_service'" -c "CREATE DATABASE file_service OWNER file_service"
+# Realm'de olmayan rol, istemci ve servis hesaplarını ekler; var olanlara dokunmaz (SKIP)
+docker compose -f local/docker-compose.yml exec -T keycloak bash -c '
+  K=/opt/keycloak/bin/kcadm.sh; C="--config /tmp/kcadm.config"
+  $K config credentials $C --server http://localhost:8080 --realm master --user admin --password admin &&
+  $K create partialImport $C -r dershane -s ifResourceExists=SKIP -o -f /opt/keycloak/data/import/dershane-realm.json'
+```
+
+Var olan `dershane-swagger` istemcisi atlandığı için `http://localhost:8004/docs/*` adresini Keycloak
+konsolunda (Clients → dershane-swagger → Valid redirect URIs ve Web origins) elle ekle.
 
 ## Port çakışması
 

@@ -3,7 +3,7 @@ emulator                 = true
 create_inspection_queues = true
 
 topics  = ["user", "attendance", "task", "exam-analysis", "messaging"]
-buckets = ["exam-analysis-optical-files"]
+buckets = ["exam-analysis-optical-files", "file-uploads"]
 
 # Event lists follow the table in shared/events/README.md. A consumer that starts handling a new
 # event type must add it here, otherwise SNS drops the event before it reaches the queue.
