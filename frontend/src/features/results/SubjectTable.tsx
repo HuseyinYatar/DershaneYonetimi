@@ -87,6 +87,26 @@ export function SubjectTable({
       </div>
       <Head />
       {subjects.map((subject, i) => {
+        // An AYT test the student did not take, listed because it counts (0 net) in a computed score.
+        if (subject.taken === false)
+          return (
+            <TableRow key={subject.subjectId} cols={COLS} className="anim-fade text-dim">
+              <Td>
+                <div className="text-sm font-medium">{subject.subjectName}</div>
+                <div className="text-[13px]">
+                  {subject.questionCount ? `${formatInt(subject.questionCount)} soru · ` : ""}
+                  girilmedi
+                </div>
+              </Td>
+              <Td className="text-sm">—</Td>
+              <Td className="text-sm">—</Td>
+              <Td className="text-sm">—</Td>
+              <Td className="text-[15px]">{formatNet(0)}</Td>
+              <Td divider className="hidden items-center sm:flex">
+                <span className="text-[13px]">Girilmedi</span>
+              </Td>
+            </TableRow>
+          );
         const questions = subject.correct + subject.wrong + subject.blank;
         const percent = questions > 0 ? (Number(subject.net) / questions) * 100 : 0;
         return (

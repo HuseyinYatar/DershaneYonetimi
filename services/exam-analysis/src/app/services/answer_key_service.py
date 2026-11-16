@@ -159,7 +159,13 @@ def rescore_exam(session: Session, exam: MockExam) -> int:
         logger.info("answer_key.rescore_skipped", reason="no_results", mock_exam_id=str(exam.id))
         return 0
     exam_type = catalog_repo.get_exam_type(session, exam.exam_type_id)
-    changed = result_writer.rewrite_after_regrade(session, exam.id, regraded, float(exam_type.wrong_divisor))
+    changed = result_writer.rewrite_after_regrade(
+        session,
+        exam.id,
+        regraded,
+        float(exam_type.wrong_divisor),
+        catalog_repo.optional_test_subject_ids(session, exam_type),
+    )
     scoring_service.recalculate_exam(session, exam, refresh_institutional=True)
     if exam.status == ExamStatus.PUBLISHED:
         weak_topic_service.recompute_for_students(

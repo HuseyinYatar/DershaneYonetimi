@@ -1,6 +1,7 @@
 """Bulk persistence of scored sheets (Core executemany, no per-row ORM objects)."""
 
 import uuid
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 import pandas as pd
@@ -11,7 +12,7 @@ from app.models import StudentAnswer, StudentResult, SubjectResult, TopicResult,
 from app.models.enums import MatchStatus
 from app.repositories.frames import to_records
 from app.repositories.results import result_ids_statement
-from app.scoring.aggregation import aggregate_subjects, aggregate_topics, aggregate_totals
+from app.scoring.aggregation import aggregate_subjects, aggregate_topics, aggregate_totals, drop_untaken_tests
 from app.services.sheet_scoring import ScoredSheets
 
 SUBJECT_COLUMNS = ["id", "student_result_id", "subject_id", "correct", "wrong", "blank", "net"]
@@ -122,12 +123,17 @@ def _as_uuid(value: object) -> uuid.UUID | None:
 
 
 def rewrite_after_regrade(
-    session: Session, mock_exam_id: uuid.UUID, regraded: pd.DataFrame, wrong_divisor: float
+    session: Session,
+    mock_exam_id: uuid.UUID,
+    regraded: pd.DataFrame,
+    wrong_divisor: float,
+    optional_tests: Sequence[Collection[uuid.UUID]] = (),
 ) -> int:
     """Applies new answer statuses after an answer key change and rebuilds all aggregates.
 
     regraded: answer_id, sheet_key (= student_result_id), subject_id, topic_id, previous_status,
-    status. Returns the number of answers whose status changed.
+    status. Returns the number of answers whose status changed. Untaken optional tests are left out
+    of the aggregates, as on import.
     """
     changed = regraded[regraded["status"] != regraded["previous_status"]]
     if not changed.empty:
@@ -135,6 +141,7 @@ def rewrite_after_regrade(
             update(StudentAnswer),
             to_records(changed[["answer_id", "status"]].rename(columns={"answer_id": "id"})),
         )
+    regraded = drop_untaken_tests(regraded, optional_tests)
 
     subjects = aggregate_subjects(regraded, wrong_divisor)
     totals = aggregate_totals(subjects)

@@ -1,7 +1,7 @@
 import { CalendarCheck, ClipboardList, Target } from "lucide-react";
 import { useParams } from "react-router";
 import { useAttendanceSummary } from "@/api/queries/attendance";
-import { useStudentResults } from "@/api/queries/exam";
+import { useStudentTytResults } from "@/api/queries/exam";
 import { useAssignments } from "@/api/queries/task";
 import { useMe } from "@/api/queries/user";
 import { useActor } from "@/auth/useActor";
@@ -32,7 +32,7 @@ export function DashboardPage() {
 function OwnDashboard({ studentId }: { studentId: string }) {
   const me = useMe();
   const assignments = useAssignments(studentId);
-  const results = useStudentResults(studentId);
+  const results = useStudentTytResults(studentId);
   const summary = useAttendanceSummary(studentId);
 
   const now = new Date();

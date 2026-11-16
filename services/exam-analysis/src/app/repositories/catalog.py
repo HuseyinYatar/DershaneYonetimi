@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 
 import pandas as pd
 from sqlalchemy import select
@@ -46,6 +47,17 @@ def get_optical_format(session: Session, optical_format_id: uuid.UUID) -> Optica
     return optical_format
 
 
+def optional_test_subject_ids(session: Session, exam_type: ExamType) -> list[set[uuid.UUID]]:
+    """Subject ids per optional test of the exam type (ExamType.optional_tests); empty when every
+    subject is compulsory."""
+    if not exam_type.optional_tests:
+        return []
+    ids = dict(
+        session.execute(select(Subject.code, Subject.id).where(Subject.exam_type_id == exam_type.id)).all()
+    )
+    return [{ids[code] for code in test if code in ids} for test in exam_type.optional_tests]
+
+
 def subject_ids_of_exam_type(session: Session, exam_type_id: uuid.UUID) -> set[uuid.UUID]:
     return set(session.scalars(select(Subject.id).where(Subject.exam_type_id == exam_type_id)))
 
@@ -58,19 +70,38 @@ def topic_parents(session: Session) -> dict[uuid.UUID, uuid.UUID | None]:
     return dict(session.execute(select(Topic.id, Topic.parent_topic_id)).all())
 
 
-def score_type_weights(
-    session: Session, exam_type_id: uuid.UUID
-) -> tuple[pd.DataFrame, dict[uuid.UUID, float | None], dict[uuid.UUID, str]]:
-    """Returns (weights frame: score_type_id, subject_id, weight), base scores and codes by id."""
-    score_types = session.scalars(select(ScoreType).where(ScoreType.exam_type_id == exam_type_id)).all()
+@dataclass(frozen=True)
+class ScoringCatalog:
+    """Score types of one exam type and their weights.
+
+    weights: score_type_id, subject_id, weight, minimum_net_group, subject_exam_type_id. A subject of
+    another exam type (TYT tests in SAY) has that exam type in subject_exam_type_id.
+    """
+
+    score_types: list[ScoreType]
+    weights: pd.DataFrame
+
+    @property
+    def codes(self) -> dict[uuid.UUID, str]:
+        return {score_type.id: score_type.code for score_type in self.score_types}
+
+
+def scoring_catalog(session: Session, exam_type_id: uuid.UUID) -> ScoringCatalog:
+    score_types = list(session.scalars(select(ScoreType).where(ScoreType.exam_type_id == exam_type_id)))
     weights = read_frame(
         session,
-        select(ScoreTypeWeight.score_type_id, ScoreTypeWeight.subject_id, ScoreTypeWeight.weight)
+        select(
+            ScoreTypeWeight.score_type_id,
+            ScoreTypeWeight.subject_id,
+            ScoreTypeWeight.weight,
+            ScoreTypeWeight.minimum_net_group,
+            Subject.exam_type_id,
+        )
         .join(ScoreType, ScoreType.id == ScoreTypeWeight.score_type_id)
+        .join(Subject, Subject.id == ScoreTypeWeight.subject_id)
         .where(ScoreType.exam_type_id == exam_type_id),
-        ["score_type_id", "subject_id", "weight"],
+        ["score_type_id", "subject_id", "weight", "minimum_net_group", "subject_exam_type_id"],
     )
     weights["weight"] = weights["weight"].astype(float)
-    base_scores = {st.id: (None if st.base_score is None else float(st.base_score)) for st in score_types}
-    codes = {st.id: st.code for st in score_types}
-    return weights, base_scores, codes
+    weights["minimum_net_group"] = weights["minimum_net_group"].astype("Int64")
+    return ScoringCatalog(score_types=score_types, weights=weights)
