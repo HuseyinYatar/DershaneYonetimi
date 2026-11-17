@@ -1,6 +1,6 @@
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { Field, INPUT } from "@/components/ui/form";
-import type { ClassroomFormValues } from "@/lib/classroomForm";
+import { maskTerm, type ClassroomFormValues } from "@/lib/classroomForm";
 
 // `withGrade` is off when editing: a classroom's level cannot change.
 export function ClassroomFields({
@@ -33,6 +33,10 @@ export function ClassroomFields({
         <input
           id="classroom-term"
           placeholder="2026-2027"
+          inputMode="numeric"
+          maxLength={9}
+          // onInput fires before RHF's onChange, so the form stores the masked value.
+          onInput={(e) => (e.currentTarget.value = maskTerm(e.currentTarget.value))}
           className={INPUT}
           {...register("term")}
         />

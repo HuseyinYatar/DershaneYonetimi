@@ -1,7 +1,10 @@
 package com.dershane.userservice.enrollment.adapter.out.persistence;
 
 import com.dershane.userservice.classroom.application.port.out.ClassroomEnrollmentPort;
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -22,6 +25,12 @@ public class ClassroomEnrollmentAdapter implements ClassroomEnrollmentPort {
   @Override
   public long countActiveStudents(UUID classroomId) {
     return memberships.countByClassroomIdAndEndDateIsNull(classroomId);
+  }
+
+  @Override
+  public Map<UUID, Long> countActiveStudents(Collection<UUID> classroomIds) {
+    return memberships.countActiveStudentsOf(classroomIds).stream()
+        .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
   }
 
   @Override
