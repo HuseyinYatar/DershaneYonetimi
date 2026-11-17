@@ -69,8 +69,13 @@ services:
     image: floci/floci:2.3.0
     environment:
       FLOCI_DEFAULT_REGION: eu-central-1
+      # Keeps topics, queues, messages and buckets across restarts, so floci-init is a no-op instead of
+      # recreating everything (~25 s per queue). `down -v` resets it together with terraform-state.
+      FLOCI_STORAGE_MODE: persistent
     ports:
       - "4566:4566"
+    volumes:
+      - floci-data:/app/data
 
   # Applies infra/terraform to Floci (SNS topics, SQS queues, the optical files bucket), then exits.
   # The configuration declares an S3 backend for AWS; here a copy of it gets backend_override.tf, which
@@ -369,7 +374,8 @@ services:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: eu-central-1
-      # Created by floci-init (infra/terraform) with its two SNS subscriptions.
+      # Created by floci-init (infra/terraform), subscribed to the user, exam-analysis, attendance
+      # and task topics.
       SQS_QUEUE_NAME: notification-queue
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
@@ -410,4 +416,5 @@ services:
 
 volumes:
   postgres-data:
+  floci-data:
   terraform-state:

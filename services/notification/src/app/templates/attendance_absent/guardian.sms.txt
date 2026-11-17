@@ -1,0 +1,1 @@
+{{ student_full_name }} {{ session_date }} {{ start_time }}–{{ end_time }} dersinde devamsız: {{ link }}

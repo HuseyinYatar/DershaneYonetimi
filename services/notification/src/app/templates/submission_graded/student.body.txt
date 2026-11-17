@@ -1,0 +1,4 @@
+Merhaba {{ recipient_first_name }},
+
+"{{ task_title }}" ödevin öğretmenin tarafından değerlendirildi. Sonucu ve geri bildirimi görmek için:
+{{ link }}

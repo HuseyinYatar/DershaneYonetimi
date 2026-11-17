@@ -1,9 +1,10 @@
-// All user-facing numbers and dates go through here (tr-TR: "72,5", "%94", "Cuma 13 Kasım").
+// All user-facing numbers and dates go through here (tr-TR: "72,50", "%94", "Cuma 13 Kasım").
 const LOCALE = "tr-TR";
 
-const decimal1 = new Intl.NumberFormat(LOCALE, {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
+// Nets are multiples of 0,25 (wrong ÷ 4) and scores need two digits too: "8,75", "330,33".
+const netDigits = new Intl.NumberFormat(LOCALE, {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 const decimal2 = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 });
 const integer = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 0 });
@@ -28,7 +29,7 @@ function toNumber(value: number | string | null | undefined): number | null {
 
 export function formatNet(value: number | string | null | undefined): string {
   const n = toNumber(value);
-  return n === null ? "—" : decimal1.format(n);
+  return n === null ? "—" : netDigits.format(n);
 }
 
 export function formatInt(value: number | string | null | undefined): string {

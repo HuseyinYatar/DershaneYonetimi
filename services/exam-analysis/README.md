@@ -59,7 +59,8 @@ worker died is requeued after `WORKER_STALE_JOB_TIMEOUT_SECONDS`. Liveness:
 3. Admin uploads the optical file → `ImportJob` `QUEUED` → worker → `COMPLETED` / `FAILED` with `errorMessage`.
    Matched rows become results; the rest become `UnmatchedRow`s with a reason. The exam becomes `PROCESSED`.
 4. Admin matches (`STUDENT_NOT_FOUND`, `DUPLICATE_STUDENT`) or ignores unmatched rows.
-5. Admin enters national statistics when the publisher announces them (NATIONAL exams only get scores then).
+5. Admin enters national statistics when the publisher announces them. They feed the standard-score
+   model only (LGS); TYT/AYT/YDT scores come from coefficients and are there right after the import.
 6. Admin publishes → `PUBLISHED`, `ExamResultsPublished` event, weak topics recomputed.
    Later matches publish `StudentResultAdded` for that student only.
 
@@ -137,13 +138,34 @@ queue existed need the user service to publish their events again (backfill, not
 The `omr-canonical-v1` optical format is the contract with the omr service: 12-char student
 number, booklet, 36-char sheet image file id, 200 answer columns (`*` = multiple marks, wrong).
 
+## Estimated scores
+
+Score types with `coefficientYear` (TYT, SAY, EA, SÖZ, DİL) use `app/scoring/coefficient_score.py`:
+
+```
+score = baseScore + Σ weight × max(net, 0)      capped at maxScore (500)
+```
+
+`baseScore` is the score at zero net, `weight` the points per net (2026 estimates, see
+`_scoreTypes` in `seed/catalog.json`). A score type needs `minimumNet` (0,5) in one of its
+`minimumNetGroups`, otherwise it stays empty with `not_computed_reason`. AYT/YDT score types also
+count the TYT tests (`"TYT:MAT"`): the nets come from the student's latest published TYT of the
+branch dated on or before the exam (`student_score.linked_mock_exam_id`); no TYT, or a TYT without a
+score, leaves the AYT/YDT score empty. LGS has no coefficients yet and keeps the standard-score model
+(`app/scoring/standard_score.py`, placeholder weights, `weightsVerified: false`).
+
+After changing the coefficients:
+
+```bash
+uv run python -m app.cli seed-catalog
+uv run python -m app.cli rescore        # every exam with results, oldest first (TYT before AYT)
+```
+
 ## Open points
 
-- Score type weights and base scores in `seed/catalog.json` are placeholders (`weightsVerified: false`)
-  until checked against the ÖSYM/MEB guides; the final scaling formula is isolated in
-  `app/scoring/standard_score.py::_apply_base_score`.
-- Changing weights does not rescore existing exams until they are recalculated (new import,
-  late match, national statistics, question cancellation).
+- LGS coefficients (MEB) are missing; until then LGS uses placeholder weights.
+- An AYT/YDT score is refreshed when that exam is recalculated; a late match in the linked TYT
+  shows up after the next recalculation or `rescore`.
 
 ## Glossary (UML → code)
 

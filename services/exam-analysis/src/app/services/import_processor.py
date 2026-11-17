@@ -236,7 +236,13 @@ def run_import(session: Session, storage: FileStorage, job_id: uuid.UUID) -> Imp
     matched = classification.matched
     if not matched.empty:
         exam_type = catalog_repo.get_exam_type(session, exam.exam_type_id)
-        scored = score_sheets(matched, answer_key, definition, float(exam_type.wrong_divisor))
+        scored = score_sheets(
+            matched,
+            answer_key,
+            definition,
+            float(exam_type.wrong_divisor),
+            catalog_repo.optional_test_subject_ids(session, exam_type),
+        )
         result_writer.insert_results(session, mock_exam_id=exam.id, matched=matched, scored=scored)
     unmatched_outcome = result_writer.insert_unmatched_rows(session, job.id, classification.unmatched)
     session.flush()

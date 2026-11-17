@@ -3,20 +3,25 @@
 Three simple queries, each on one table, then the rows are put together in Python:
   1. guardian_link_replica   student -> guardian
   2. contact_replica         person  -> name, e-mail, phone, active
-  3. notification_preference channels the person turned off for this event type
-The recipient list itself comes from the event (studentIds); this service keeps no exam data.
+  3. notification_preference channels the person turned off for this kind of notification
+The recipient list itself comes from the event (studentIds / studentId); this service keeps no exam,
+attendance or task data. What differs between events (texts, guardians or not, channels) comes from
+app.delivery.kinds; the event-specific template values come from the handler (`values_for`).
 """
 
 import uuid
 from collections import Counter
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.delivery.templates import Audience, render, turkish_date
+from app.delivery.kinds import ALL_CHANNELS, KINDS
+from app.delivery.templates import Audience, render
 from app.models import ContactReplica, GuardianLinkReplica, Notification, NotificationPreference
 from app.models.base import utcnow
 from app.models.enums import Channel, DeliveryStatus
@@ -24,8 +29,9 @@ from app.observability.metrics import NOTIFICATIONS_CREATED, NOTIFICATIONS_SKIPP
 
 logger = structlog.get_logger(__name__)
 
-# A late result is still an exam result: one preference ("exam results") covers both events.
-PREFERENCE_EVENT_TYPES = {"StudentResultAdded": "ExamResultsPublished"}
+# Template values that depend on the event, given the student the notification is about.
+# recipient_first_name and student_full_name are added by the planner for every kind.
+ValuesFor = Callable[[uuid.UUID], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -43,12 +49,20 @@ class ExamInfo:
 
 
 def choose_channels(
-    person: ContactReplica, disabled: set[tuple[uuid.UUID, Channel]]
+    person: ContactReplica,
+    disabled: set[tuple[uuid.UUID, Channel]],
+    allowed: Collection[Channel] = ALL_CHANNELS,
 ) -> tuple[list[Channel], list[tuple[Channel, str]]]:
-    """Channels to write for an active person, and the skipped ones with their reason."""
+    """Channels to write for an active person, and the skipped ones with their reason.
+
+    `allowed` is the kind's channel list: a channel outside it is not considered at all (a design
+    choice, not a skip), so it is neither written nor counted.
+    """
     channels = [Channel.IN_APP]  # cannot be turned off
     skipped: list[tuple[Channel, str]] = []
     for channel, address in ((Channel.EMAIL, person.email), (Channel.SMS, person.phone)):
+        if channel not in allowed:
+            continue
         if not address:
             skipped.append((channel, "no_address"))
         elif (person.user_id, channel) in disabled:
@@ -58,26 +72,28 @@ def choose_channels(
     return channels, skipped
 
 
-def create_exam_result_notifications(
+def plan_notifications(
     session: Session,
     *,
     event_id: uuid.UUID,
     event_type: str,
     student_ids: list[uuid.UUID],
-    exam: ExamInfo,
-    frontend_base_url: str,
+    values_for: ValuesFor,
 ) -> int:
     """Adds the notification rows to the session (the consumer commits). Returns how many were added."""
+    kind = KINDS[event_type]
     student_ids = list(dict.fromkeys(student_ids))  # drop duplicates, keep order
 
-    # 1. Guardians of the students
-    guardians = dict(
-        session.execute(
-            select(GuardianLinkReplica.student_id, GuardianLinkReplica.guardian_id).where(
-                GuardianLinkReplica.student_id.in_(student_ids)
-            )
-        ).all()
-    )
+    # 1. Guardians of the students (only for kinds that reach the guardian)
+    guardians: dict[uuid.UUID, uuid.UUID] = {}
+    if kind.include_guardians:
+        guardians = dict(
+            session.execute(
+                select(GuardianLinkReplica.student_id, GuardianLinkReplica.guardian_id).where(
+                    GuardianLinkReplica.student_id.in_(student_ids)
+                )
+            ).all()
+        )
     everyone = [*student_ids, *guardians.values()]
 
     # 2. Names and contact details of the students and the guardians
@@ -87,13 +103,12 @@ def create_exam_result_notifications(
     }
 
     # 3. Channels they turned off for this kind of notification
-    preference_event_type = PREFERENCE_EVENT_TYPES.get(event_type, event_type)
     disabled = {
         (user_id, channel)
         for user_id, channel in session.execute(
             select(NotificationPreference.user_id, NotificationPreference.channel).where(
                 NotificationPreference.user_id.in_(everyone),
-                NotificationPreference.event_type == preference_event_type,
+                NotificationPreference.event_type == kind.preference,
             )
         ).all()
     }
@@ -106,6 +121,7 @@ def create_exam_result_notifications(
         audiences: list[tuple[uuid.UUID, Audience]] = [(student_id, "student")]
         if student_id in guardians:
             audiences.append((guardians[student_id], "guardian"))
+        event_values = values_for(student_id)
 
         for recipient_id, audience in audiences:
             person = people.get(recipient_id)
@@ -124,7 +140,7 @@ def create_exam_result_notifications(
                 )
                 continue
 
-            channels, skipped_channels = choose_channels(person, disabled)
+            channels, skipped_channels = choose_channels(person, disabled, kind.channels)
             for channel, reason in skipped_channels:
                 skipped[reason] += 1
                 logger.debug(
@@ -137,9 +153,7 @@ def create_exam_result_notifications(
             values = {
                 "recipient_first_name": person.first_name,
                 "student_full_name": f"{student.first_name} {student.last_name}" if student else "Öğrenciniz",
-                "exam_name": exam.display_name,
-                "exam_date": turkish_date(exam.exam_date),
-                "link": f"{frontend_base_url}/students/{student_id}/results/{exam.mock_exam_id}",
+                **event_values,
             }
             for channel in channels:
                 text = render(event_type, audience, channel, values)
@@ -165,6 +179,7 @@ def create_exam_result_notifications(
     # One summary line per event: every skip reason is counted here (details are DEBUG lines above).
     logger.info(
         "notification.planned",
+        event_type=event_type,
         students=len(student_ids),
         guardians=len(guardians),
         created=len(rows),

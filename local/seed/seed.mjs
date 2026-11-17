@@ -303,6 +303,136 @@ async function seedExams(admin, ctx) {
   return { tyt };
 }
 
+// --- 3b. AYT ----------------------------------------------------------------------------------------
+// ayt-fwf-v1 has one 160-column segment in booklet order. Groups are the ÖSYM tests of the 0,5 net rule.
+const AYT_SECTIONS = [
+  ['EDB', 24], ['TAR1', 10], ['COG1', 6], // Türk Dili ve Edebiyatı-Sosyal Bilimler-1
+  ['TAR2', 11], ['COG2', 11], ['FEL', 12], ['DIN', 6], // Sosyal Bilimler-2
+  ['MAT', 40],
+  ['FIZ', 14], ['KIM', 13], ['BIY', 13], // Fen Bilimleri
+];
+// SAY students answer Matematik + Fen, EA students Matematik + TDE-SB1; every other test stays blank.
+const TRACK_TESTS = {
+  SAY: new Set(['MAT', 'FIZ', 'KIM', 'BIY']),
+  EA: new Set(['MAT', 'EDB', 'TAR1', 'COG1']),
+};
+const TRACK = {
+  1001: 'SAY', 1002: 'SAY', 1003: 'SAY', 1005: 'SAY', 1007: 'SAY', 1010: 'SAY',
+  1004: 'EA', 1006: 'EA', 1008: 'EA', 1009: 'EA',
+};
+// [name, date, index of the TYT exam it follows]. Each AYT links to the latest published TYT on or before
+// its date (exam-analysis), so Deneme 1 counts the nets of TYT Deneme 3 and Deneme 2 those of TYT Deneme 4.
+const AYT_EXAMS = [
+  ['Demo AYT Deneme 1', ymd(addDays(today, -19)), 2],
+  ['Demo AYT Deneme 2', ymd(addDays(today, -5)), 3],
+];
+// Every student answers the 80 questions of their two tests; at least 60 are correct (60-74 by TYT skill).
+const AYT_MIN_CORRECT = 60;
+const AYT_MAX_CORRECT = 74;
+
+function aytCorrectCount(no, tytIndex) {
+  const tyt = no === MAIN_STUDENT_NO ? 0.5 + 0.075 * tytIndex : SKILL[no][0] + SKILL[no][1] * tytIndex;
+  const share = Math.max(0, Math.min(1, (tyt - 0.3) / 0.6)); // TYT skill 0.3..0.9 -> 0..1
+  return Math.round(AYT_MIN_CORRECT + share * (AYT_MAX_CORRECT - AYT_MIN_CORRECT));
+}
+
+/** Fisher-Yates with the seeded PRNG, so a student's correct questions are spread over both tests. */
+function shuffled(items, rng) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+async function seedAytExams(admin, ctx) {
+  step('AYT exams (6 SAY, 4 EA students)');
+  const { branch, students } = ctx;
+  const ayt = (await api(admin, 'GET', '/exam-types')).find((t) => t.code === 'AYT');
+  const leaves = {};
+  const subjectId = {};
+  for (const s of await api(admin, 'GET', `/exam-types/${ayt.id}/subjects`)) {
+    const topics = await api(admin, 'GET', `/subjects/${s.id}/topics`);
+    const parents = new Set(topics.map((t) => t.parentTopicId));
+    leaves[s.code] = topics.filter((t) => !parents.has(t.id)).sort((a, b) => (a.name < b.name ? -1 : 1));
+    subjectId[s.code] = s.id;
+  }
+  const format = (await api(admin, 'GET', '/optical-formats')).find((f) => f.code === 'ayt-fwf-v1');
+  const existing = await api(admin, 'GET', `/mock-exams?branchId=${branch.id}`);
+  const list = Array.isArray(existing) ? existing : (existing.items ?? existing.content ?? []);
+
+  for (let e = 0; e < AYT_EXAMS.length; e++) {
+    const [name, examDate, tytIndex] = AYT_EXAMS[e];
+    let exam = list.find((x) => x.name === name);
+    if (!exam) {
+      exam = await api(admin, 'POST', '/mock-exams', {
+        examTypeId: ayt.id, name, publisher: 'Örnek Yayınları', examDate, branchId: branch.id, scoringSource: 'INSTITUTIONAL',
+      });
+      log(`created ${name}`);
+    }
+    if (exam.status === 'PUBLISHED') {
+      log(`${name}: already published`);
+      continue;
+    }
+    const rng = mulberry32(7200 + e);
+    const items = [];
+    const answers = [];
+    const subjectOfQuestion = [];
+    let qNo = 0;
+    for (const [code, count] of AYT_SECTIONS) {
+      for (let i = 0; i < count; i++) {
+        qNo++;
+        const topic = leaves[code][i % leaves[code].length];
+        const correct = 'ABCDE'[Math.floor(rng() * 5)];
+        answers.push(correct);
+        subjectOfQuestion.push(code);
+        for (const booklet of 'AB') {
+          items.push({ booklet, questionNo: qNo, subjectId: subjectId[code], topicId: topic.id, correctAnswer: correct });
+        }
+      }
+    }
+    if (exam.status === 'DRAFT') {
+      await api(admin, 'PUT', `/mock-exams/${exam.id}/answer-key`, { items });
+      log(`${name}: answer key uploaded (160 questions)`);
+    }
+    if (['DRAFT', 'KEY_READY'].includes(exam.status) || !exam.status) {
+      const sheetRng = mulberry32(9200 + e);
+      const lines = students.map((s) => {
+        const no = s.studentNumber;
+        const tests = TRACK_TESTS[TRACK[no]];
+        // The questions of the student's two tests, in random order: the first `correct` are right,
+        // the next 2-5 blank, the rest wrong. The other two tests stay blank (not taken).
+        const own = shuffled(answers.map((_, qi) => qi).filter((qi) => tests.has(subjectOfQuestion[qi])), sheetRng);
+        const correct = aytCorrectCount(no, tytIndex);
+        const blanks = 2 + Math.floor(sheetRng() * 4);
+        const sheet = answers.map(() => ' ');
+        own.forEach((qi, rank) => {
+          const right = answers[qi];
+          if (rank < correct) sheet[qi] = right;
+          else if (rank < correct + blanks) sheet[qi] = ' ';
+          else sheet[qi] = 'ABCDE'.replace(right, '')[Math.floor(sheetRng() * 4)];
+        });
+        return `${no.padEnd(10)}A${sheet.join('')}`;
+      });
+      const form = new FormData();
+      form.set('opticalFormatId', format.id);
+      form.set('file', new Blob([Buffer.from(lines.join('\n') + '\n', 'latin1')], { type: 'text/plain' }), `ayt-deneme-${e + 1}.txt`);
+      const job = await api(admin, 'POST', `/mock-exams/${exam.id}/import-jobs`, undefined, { form });
+      log(`${name}: import job ${job.id} queued`);
+      let final;
+      await waitFor(`import job of ${name}`, async () => {
+        final = await api(admin, 'GET', `/import-jobs/${job.id}`);
+        return { done: ['COMPLETED', 'FAILED'].includes(final.status), info: final.status };
+      }, { timeoutMs: 120_000 });
+      if (final.status !== 'COMPLETED') throw new Error(`import job of ${name} failed: ${final.errorMessage}`);
+      log(`${name}: ${final.succeededRows}/${final.totalRows} rows scored`);
+    }
+    await api(admin, 'POST', `/mock-exams/${exam.id}/publish`, {});
+    log(`${name}: published`);
+  }
+}
+
 // --- 4. attendance ----------------------------------------------------------------------------------
 const SCHEDULE = [['MONDAY', 'MAT'], ['WEDNESDAY', 'TUR'], ['FRIDAY', 'MAT']];
 const TIMES = ['16:00:00', '17:30:00'];
@@ -448,6 +578,7 @@ async function main() {
   const ctx = await seedPeople(admin);
   await waitForReplicas(ctx);
   await seedExams(await login(ADMIN.user, ADMIN.password), ctx);
+  await seedAytExams(await login(ADMIN.user, ADMIN.password), ctx);
   await seedAttendance(await login(ADMIN.user, ADMIN.password), ctx);
   const teacherToken = await login(TEACHER_EMAIL, PASSWORD);
   const ayseToken = await login(ctx.ayse.username, PASSWORD);

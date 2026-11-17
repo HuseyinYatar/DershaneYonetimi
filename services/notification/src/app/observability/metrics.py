@@ -22,7 +22,7 @@ REPLICA_EVENTS_IGNORED = Counter(
 )
 
 NOTIFICATIONS_CREATED = Counter("notifications_created_total", "Notification rows written", ["channel"])
-# reason: recipient_missing / inactive / no_address / preference_off
+# reason: recipient_missing / inactive / no_address / preference_off / past_due (whole event)
 NOTIFICATIONS_SKIPPED = Counter(
     "notifications_skipped_total", "Recipient/channel pairs no notification was written for", ["reason"]
 )

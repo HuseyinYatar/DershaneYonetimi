@@ -18,16 +18,31 @@ export function useExamTypes() {
   });
 }
 
+const fetchStudentResults = (studentId: string) =>
+  unwrap(
+    examApi.GET("/api/v1/students/{student_id}/results", {
+      params: { path: { student_id: studentId } },
+    }),
+  );
+
 // Published results of one student, newest first.
 export function useStudentResults(studentId: string) {
   return useQuery({
     queryKey: ["exam", "results", studentId],
-    queryFn: () =>
-      unwrap(
-        examApi.GET("/api/v1/students/{student_id}/results", {
-          params: { path: { student_id: studentId } },
-        }),
-      ),
+    queryFn: () => fetchStudentResults(studentId),
+  });
+}
+
+// Published TYT results of one student, newest first (same cache entry, filtered). The dashboard
+// follows TYT: AYT nets are on another scale and an AYT has up to 11 subjects.
+export function useStudentTytResults(studentId: string) {
+  const types = useExamTypes();
+  const tytId = types.data?.find((type) => type.code === "TYT")?.id;
+  return useQuery({
+    queryKey: ["exam", "results", studentId],
+    queryFn: () => fetchStudentResults(studentId),
+    enabled: !types.isPending,
+    select: (results) => results.filter((result) => result.examTypeId === tytId),
   });
 }
 

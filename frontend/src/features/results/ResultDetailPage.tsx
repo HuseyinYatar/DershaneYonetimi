@@ -101,7 +101,8 @@ export function ResultDetailPage() {
 
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-2 wide:grid-cols-3">
         <TopicBreakdown
-          subjects={subjects}
+          // An untaken AYT test has no topics: it is listed in the subject table only.
+          subjects={subjects.filter((s) => s.taken !== false)}
           topics={data.topics}
           topicIdsBySubject={topicIds.bySubject}
           loading={topicIds.isPending}

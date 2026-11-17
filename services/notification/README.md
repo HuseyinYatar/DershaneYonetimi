@@ -4,8 +4,8 @@ Turns events of the other services into e-mail, SMS and in-app notifications. Fa
 SQLAlchemy 2 (sync, psycopg 3), PostgreSQL, events from SQS, e-mail over SMTP.
 
 The service never asks another service for data: names, contact details and guardian links are
-local copies fed by the user service's events; the recipients of an exam notification come in the
-event itself (`studentIds`).
+local copies fed by the user service's events; the students a notification is about come in the
+event itself (`studentIds` / `studentId`).
 
 ## Run locally
 
@@ -45,9 +45,13 @@ Worker liveness: `python -m app.worker.healthcheck` (heartbeat file).
 
 ```
 user-events ──(filter: UserUpdated, GuardianLinked, GuardianUnlinked)──┐
-                                                                        ├─> notification-queue ─> worker
-exam-analysis-events ──(no filter)──────────────────────────────────────┘        └─ DLQ after 5 receives
+exam-analysis-events ──(no filter)──────────────────────────────────────┤
+attendance-events ──(no filter)─────────────────────────────────────────├─> notification-queue ─> worker
+task-events ──(no filter)───────────────────────────────────────────────┘        └─ DLQ after 5 receives
 ```
+
+`messaging-events` (`NewMessage`) is deliberately not subscribed: one e-mail per chat message would
+be dozens a day per teacher (CLAUDE.md, notification rules).
 
 | Event | Effect |
 |---|---|
@@ -56,13 +60,24 @@ exam-analysis-events ──(no filter)──────────────
 | `GuardianUnlinked` | delete the link only if the guardian matches |
 | `ExamResultsPublished` | notifications for every student and their guardian |
 | `StudentResultAdded` | notifications for one late-matched student and their guardian |
+| `StudentAbsent` | student + guardian: absent in a class session |
+| `StudentExcusedByTeacher` | student + guardian: the teacher excused the student |
+| `TaskAssigned` | student: new assignment with its deadline |
+| `TaskDueSoon` | student: reminder; skipped if read after the deadline (`reason=past_due`) |
+| `TaskOverdue` | student + guardian: deadline passed without a submission |
+| `SubmissionGraded` | student: the submission was graded (no score in the text) |
+
+Who gets which kind on which channels, and which on/off switch covers it, is one table:
+`src/app/delivery/kinds.py`. Task deadlines arrive in UTC and are written in
+`INSTITUTION_TIME_ZONE` (default `Europe/Istanbul`).
 
 Per message, in one transaction: validate → `processed_event` (duplicates skipped) → handler →
 commit → delete the message. Invalid or failing messages are not deleted; SQS moves them to
 `notification-queue-dlq` after 5 receives.
 
-Channels per recipient: `IN_APP` always (written as `SENT`); `EMAIL` / `SMS` only with an address
-and unless turned off in `notification_preference` (written as `PENDING`). Inactive or unknown
+Channels per recipient: `IN_APP` always (written as `SENT`); `EMAIL` / `SMS` only if the kind uses
+the channel (tasks: no SMS), with an address and unless turned off in `notification_preference`
+(written as `PENDING`). Inactive or unknown
 recipients get nothing; every skip is counted in `notifications_skipped_total{reason}` and in the
 `notification.planned` log line.
 
@@ -83,8 +98,8 @@ Any logged-in user; everyone sees and changes only their own data (`recipient_id
 | `GET /notifications/unread-count` | polled by the frontend |
 | `POST /notifications/{id}/read` | 204; someone else's id answers 404 |
 | `POST /notifications/read-all` | `{"updated": n}` |
-| `GET /notification-preferences` | e-mail/SMS on/off per notification kind |
-| `PUT /notification-preferences` | `IN_APP` cannot be turned off (422 `CHANNEL_NOT_CONFIGURABLE`) |
+| `GET /notification-preferences` | e-mail/SMS on/off per group: `ExamResultsPublished`, `StudentAbsent` (attendance), `TaskAssigned` (tasks) |
+| `PUT /notification-preferences` | `IN_APP` cannot be turned off (422 `CHANNEL_NOT_CONFIGURABLE`); SMS for tasks is never sent (422 `CHANNEL_NOT_USED`) |
 
 Errors are RFC 9457 ProblemDetail (`application/problem+json`) with an English `errorCode` and a
 Turkish `detail` (`Accept-Language: en` for English).

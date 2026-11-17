@@ -13,7 +13,15 @@ COPY src ./src
 RUN uv sync --frozen --no-dev
 
 FROM python:3.14-slim
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app
+# Debian security fixes the base image does not carry yet (the Trivy step fails on HIGH/CRITICAL).
+# pip (with the urllib3, msgpack and setuptools code vendored in it) only installs packages; the
+# service runs from /app/.venv, so the base interpreter's pip and ensurepip are removed.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall -y pip \
+    && rm -rf /usr/local/lib/python3.14/ensurepip \
+    && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src

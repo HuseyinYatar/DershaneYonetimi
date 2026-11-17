@@ -5,11 +5,12 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PillLink } from "@/components/ui/Pill";
 import { BarsSkeleton } from "@/components/ui/ChartSkeletons";
-import { useProgress, useStudentResult, useStudentResults } from "@/api/queries/exam";
+import { useProgress, useStudentResult, useStudentTytResults } from "@/api/queries/exam";
 import { formatDayMonthLong, formatNet, parseDateOnly } from "@/lib/format";
 
 export function LastExamCard({ studentId }: { studentId: string }) {
-  const results = useStudentResults(studentId);
+  // The latest TYT, not an AYT: the card is built for the four TYT tests (see useStudentTytResults).
+  const results = useStudentTytResults(studentId);
   const latest = results.data?.[0];
   const detail = useStudentResult(studentId, latest?.mockExamId);
   const progress = useProgress(studentId, latest?.examTypeId);

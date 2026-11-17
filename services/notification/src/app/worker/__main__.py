@@ -10,6 +10,7 @@ import signal
 import threading
 from pathlib import Path
 from types import FrameType
+from zoneinfo import ZoneInfo
 
 import structlog
 from prometheus_client import start_http_server
@@ -44,7 +45,8 @@ def build_consumer(settings: Settings) -> EventConsumer | None:
     queue_url = client.get_queue_url(QueueName=settings.sqs_queue_name)["QueueUrl"]
     logger.info("consumer.queue_resolved", queue_name=settings.sqs_queue_name)
     queue = SqsQueue(client, queue_url, settings.sqs_max_messages, settings.sqs_wait_seconds)
-    return EventConsumer(get_session_factory(), queue, EventHandlers(settings.frontend_base_url))
+    handlers = EventHandlers(settings.frontend_base_url, ZoneInfo(settings.institution_time_zone))
+    return EventConsumer(get_session_factory(), queue, handlers)
 
 
 def run(settings: Settings, stop: threading.Event) -> None:

@@ -91,7 +91,13 @@ def match_row(  session: Session, user: CurrentUser, row_id: uuid.UUID, student_
 
     exam_type = catalog_repo.get_exam_type(session, exam.exam_type_id)
 
-    scored = score_sheets(sheets, answer_key, definition, float(exam_type.wrong_divisor))
+    scored = score_sheets(
+        sheets,
+        answer_key,
+        definition,
+        float(exam_type.wrong_divisor),
+        catalog_repo.optional_test_subject_ids(session, exam_type),
+    )
     result_writer.insert_results(session, mock_exam_id=exam.id, matched=sheets, scored=scored)
 
     row.status = MatchStatus.MATCHED
