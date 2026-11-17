@@ -19,6 +19,7 @@ import type { components } from "@/api/schema/attendance";
 import { useBranchId } from "@/auth/useBranchId";
 import { Card } from "@/components/ui/Card";
 import { QueryError } from "@/components/ui/EmptyState";
+import { INPUT } from "@/components/ui/form";
 import { PillButton, SegButton } from "@/components/ui/Pill";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -168,8 +169,8 @@ export function ScheduleBoard() {
       move.mutate({
         scheduleId: dragged.id,
         body: {
-          teacherId: s.teacherId,
-          subjectId: s.subjectId,
+          teacherId: dragged.teacherId,
+          subjectId: dragged.subjectId,
           dayOfWeek: day,
           ...times,
           validFrom: s.validFrom ?? validFrom,
@@ -429,7 +430,7 @@ export function ScheduleBoard() {
                 </div>
               ))}
               {days.map((d, col) =>
-                SLOTS.map((slot, i) => {
+                SLOTS.map((_, i) => {
                   const key = `${d.value}-${i}`;
                   return (
                     <div

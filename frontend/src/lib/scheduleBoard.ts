@@ -25,7 +25,8 @@ export function spanOf(startsAt: string, endsAt: string): SlotSpan | undefined {
   const start = toMinutes(startsAt);
   const end = toMinutes(endsAt);
   const first = SLOTS.findIndex((s) => toMinutes(s.endsAt) > start);
-  const last = SLOTS.findLastIndex((s) => toMinutes(s.startsAt) < end);
+  // The project's TS lib has no findLastIndex: the last slot that starts before the range ends.
+  const last = SLOTS.reduce((found, s, i) => (toMinutes(s.startsAt) < end ? i : found), -1);
   return first === -1 || last < first ? undefined : { first, last };
 }
 
