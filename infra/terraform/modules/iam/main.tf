@@ -91,7 +91,7 @@ resource "aws_iam_instance_profile" "node" {
   role     = each.value.name
 }
 
-# etcd snapshots, the IRSA public keys and the kubeconfig/join secrets are written from the control plane.
+# etcd snapshots, the IRSA public keys and the kubeconfig secret are written from the control plane.
 resource "aws_iam_role_policy" "control_plane" {
   name = "cluster-maintenance"
   role = aws_iam_role.node["control-plane"].name

@@ -1,0 +1,29 @@
+# Writes a kubeconfig for this computer. admin.conf points at the private address (10.0.1.10), which is
+# unreachable from outside the VPC; the copy points at the control plane's Elastic IP instead (it is in
+# the API server certificate, see control_plane). Port 6443 is open to admin_cidrs only (Terraform).
+# Use it with: export KUBECONFIG={{ local_kubeconfig }}
+
+- name: Read admin.conf on the control plane
+  ansible.builtin.slurp:
+    src: "{{ kubeconfig_admin }}"
+  register: kubeconfig_admin_conf_file
+  no_log: true
+
+- name: Create ~/.kube on this computer
+  ansible.builtin.file:
+    path: "{{ local_kubeconfig | dirname }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Write the kubeconfig with the public API address
+  ansible.builtin.copy:
+    content: >-
+      {{ kubeconfig_admin_conf_file.content | b64decode
+         | regex_replace('server: https://\S+', 'server: https://' ~ control_plane_public_ip ~ ':6443') }}
+    dest: "{{ local_kubeconfig }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  no_log: true

@@ -4,7 +4,7 @@ Aynı kök iki yere uygulanır:
 - **Floci** (yerel geliştirme): yalnızca SNS topic'leri, SQS kuyrukları ve optik dosya bucket'ı. Servisler laptop'ta bunlarla çalışır.
 - **AWS** (`eu-central-1`, free plan): bunlara ek olarak kubeadm kümesi için platformun tamamı.
 
-Kubernetes kurulumunun kendisi (`kubeadm init/join`, CNI, Traefik) burada değildir. Terraform sunucuları hazırlanmış olarak verir ve kümenin ihtiyaç duyduğu AWS kaynaklarını açar.
+Kubernetes kurulumunun kendisi burada değildir. Terraform sunucuları boş Ubuntu olarak açar ve kümenin ihtiyaç duyduğu AWS kaynaklarını kurar; node hazırlığı ve küme (`kubeadm init/join`, Calico, Argo CD) `infra/ansible`'dadır, Traefik ve uygulamalar `k8s/`'tedir.
 
 ```
 infra/terraform/
@@ -17,7 +17,7 @@ infra/terraform/
 │   ├── events/           SNS topic, SQS kuyruk, DLQ
 │   ├── storage/          S3 bucket'ları (optik dosyalar, etcd yedeği)
 │   ├── network/          VPC, public/private subnet, security group'lar (NAT yok)
-│   ├── nodes/            cp + worker EC2, control plane EIP, user-data (node hazırlığı)
+│   ├── nodes/            cp + worker EC2 (boş Ubuntu), control plane EIP
 │   ├── iam/              node rolleri, servis izinleri, IRSA (OIDC bucket'ı, servis rolleri)
 │   ├── registry/         ECR repoları, GitHub'dan push rolü
 │   ├── database/         RDS PostgreSQL 17, servis başına DB secret'ı
@@ -109,46 +109,17 @@ terraform apply tfplan
 
 ## Küme kurulumunda Terraform çıktıları
 
-Node'lar açılınca user-data şunları yapar:
-- swap'ı kapatır
-- kernel modüllerini ve sysctl ayarlarını yükler
-- containerd 2.x'i (`SystemdCgroup = true`) kurar
-- kubelet/kubeadm/kubectl'i kurar ve kilitler (`apt-mark hold`)
-- `ecr-credential-provider`'ı ve AWS CLI'yi (cp) kurar
+Sunucular boş Ubuntu olarak açılır. Node hazırlığı (swap, kernel ayarları, containerd, kubelet/kubeadm/kubectl, `ecr-credential-provider`) ve küme kurulumu (`kubeadm init/join`, Calico, `keys.json`, etcd yedeği, Argo CD) `infra/ansible`'dadır; ayrıntılar `infra/ansible/README.md`'de. Ansible şu çıktıları okur:
 
-Kuruluma başlamadan önce her node'da:
+| Çıktı | Ansible'da kullanıldığı yer |
+|---|---|
+| `ansible_inventory` | `inventory.sh` → `inventory.ini` (sunucular ve IP'leri) |
+| `control_plane_public_ip` | API server sertifikası (`certSANs`) ve laptop kubeconfig'i |
+| `oidc_issuer` | kube-apiserver `--service-account-issuer` / `--service-account-jwks-uri` (IRSA) |
+| `oidc_bucket` | `keys.json`'ın yüklendiği bucket |
+| `bucket_names["etcd-backups"]` | etcd snapshot'larının yüklendiği bucket |
 
-```bash
-cloud-init status --wait && test -f /var/lib/node-prep.done
-```
-
-Örnek kubeadm yapılandırması (`terraform output` değerleriyle; sürüm için `kubeadm config print init-defaults`):
-
-```yaml
-apiVersion: kubeadm.k8s.io/v1beta4
-kind: InitConfiguration
-localAPIEndpoint:
-  advertiseAddress: 10.0.1.10              # control_plane_private_ip
----
-apiVersion: kubeadm.k8s.io/v1beta4
-kind: ClusterConfiguration
-controlPlaneEndpoint: 10.0.1.10:6443
-networking:
-  podSubnet: 192.168.0.0/16                # VPC 10.0.0.0/16 ile çakışmaz
-apiServer:
-  certSANs: ["<control_plane_public_ip>"]
-  extraArgs:                               # IRSA
-    - name: service-account-issuer
-      value: <oidc_issuer>
-    - name: service-account-jwks-uri
-      value: <oidc_issuer>/keys.json
-```
-
-`kubeadm init`'ten sonra control plane'de:
-
-```bash
-kubectl get --raw /openid/v1/jwks | aws s3 cp - s3://<oidc_bucket>/keys.json --content-type application/json
-```
+Sürümler (Kubernetes, ecr-credential-provider, Calico, Helm, Argo CD) Terraform'da değil, `infra/ansible/group_vars/all/main.yml`'dedir. Değişince sunucu yeniden yaratılmaz; `ansible-playbook site.yml` mevcut node'lara uygular.
 
 Diğer ayarlar:
 - **Traefik:** Helm değerleri `service.type: NodePort`, `ports.web.nodePort: 30080`, `ports.websecure.nodePort: 30443` olmalı (NLB target group'larıyla aynı).
@@ -162,7 +133,7 @@ Diğer ayarlar:
 | `rds!db-...` | RDS ana kullanıcı şifresi | RDS |
 | `dershane/redis` | `password` (AUTH token) | Terraform (write-only) |
 | `dershane/notification/smtp` | SES SMTP sunucusu, kullanıcı adı, şifre | Terraform (IAM access key'den türer, state'te bulunur) |
-| `dershane/cluster/kubeconfig`, `dershane/cluster/join` | boş açılır | control plane |
+| `dershane/cluster/kubeconfig` | boş açılır; admin kubeconfig | control plane (Ansible `control_plane` rolü) |
 
 Pod'lara External Secrets Operator ile gelirler. Veritabanlarını ve rollerini RDS içinde `k8s/` altındaki `db-init` Job'u açar.
 

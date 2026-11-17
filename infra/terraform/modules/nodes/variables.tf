@@ -44,14 +44,6 @@ variable "imds_hop_limit" {
   type = number
 }
 
-variable "kubernetes_version" {
-  type = string
-}
-
-variable "ecr_credential_provider_version" {
-  type = string
-}
-
 variable "secret_prefix" {
   type = string
 }

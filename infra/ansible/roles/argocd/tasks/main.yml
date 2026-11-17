@@ -1,0 +1,81 @@
+# Installs Argo CD with Helm and creates the root Application. This is the last thing done to the
+# cluster by hand: Traefik, cert-manager, Keycloak and the services come from k8s/ through Argo CD.
+
+- name: Check the installed Helm version
+  ansible.builtin.command: helm version --short
+  register: argocd_helm_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install Helm {{ helm_version }}
+  when: argocd_helm_installed.rc != 0 or helm_version not in argocd_helm_installed.stdout
+  block:
+    - name: Download Helm
+      ansible.builtin.get_url:
+        url: "{{ argocd_helm_url }}"
+        dest: /tmp/helm.tar.gz
+        checksum: "sha256:{{ argocd_helm_url }}.sha256sum"
+        mode: "0644"
+
+    - name: Unpack Helm
+      ansible.builtin.unarchive:
+        src: /tmp/helm.tar.gz
+        dest: /tmp
+        remote_src: true
+
+    - name: Put the helm binary on the PATH
+      ansible.builtin.copy:
+        src: "/tmp/linux-{{ deb_arch }}/helm"
+        dest: /usr/local/bin/helm
+        remote_src: true
+        mode: "0755"
+
+- name: Install Argo CD
+  environment:
+    KUBECONFIG: "{{ kubeconfig_admin }}"
+  block:
+    - name: Write the Argo CD values
+      ansible.builtin.template:
+        src: argocd-values.yaml.j2
+        dest: "{{ argocd_values_file }}"
+        mode: "0644"
+      register: argocd_values
+
+    - name: Look up the Argo CD release
+      ansible.builtin.command: helm list --namespace {{ argocd_namespace }} --filter '^{{ argocd_release }}$' --output json
+      register: argocd_release_list
+      changed_when: false
+
+    # helm upgrade always writes a new revision, so it runs only when the release is missing, has
+    # another chart version, is not deployed, or the values changed.
+    - name: Install or upgrade the Argo CD chart {{ argocd_chart_version }}
+      ansible.builtin.command: >-
+        helm upgrade --install {{ argocd_release }} argo-cd
+        --repo {{ argocd_chart_repo }} --version {{ argocd_chart_version }}
+        --namespace {{ argocd_namespace }} --create-namespace
+        --values {{ argocd_values_file }} --wait --timeout 10m
+      when: >-
+        argocd_deployed | length == 0
+        or argocd_deployed[0].chart != 'argo-cd-' ~ argocd_chart_version
+        or argocd_deployed[0].status != 'deployed'
+        or argocd_values.changed
+      vars:
+        argocd_deployed: "{{ argocd_release_list.stdout | from_json }}"
+      changed_when: true
+
+    - name: Write the root Application
+      ansible.builtin.template:
+        src: root-app.yaml.j2
+        dest: "{{ argocd_root_app_file }}"
+        mode: "0644"
+
+    - name: Compare the root Application with the cluster
+      ansible.builtin.command: kubectl diff --server-side -f {{ argocd_root_app_file }}
+      register: argocd_root_app_diff
+      changed_when: false
+      failed_when: argocd_root_app_diff.rc > 1
+
+    - name: Apply the root Application
+      ansible.builtin.command: kubectl apply --server-side -f {{ argocd_root_app_file }}
+      when: argocd_root_app_diff.rc == 1
+      changed_when: true

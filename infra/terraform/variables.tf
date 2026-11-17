@@ -114,18 +114,6 @@ variable "node_volume_size" {
   default     = 30
 }
 
-variable "kubernetes_version" {
-  description = "Minor version of the kubelet, kubeadm and kubectl packages (pkgs.k8s.io)."
-  type        = string
-  default     = "1.37"
-}
-
-variable "ecr_credential_provider_version" {
-  description = "Release of kubernetes/cloud-provider-aws whose ecr-credential-provider lets the kubelet pull from ECR."
-  type        = string
-  default     = "1.37.0"
-}
-
 variable "ingress_http_node_port" {
   description = "NodePort of Traefik's web entry point; the NLB forwards port 80 here."
   type        = number

@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Daily etcd snapshot to S3
+
+[Timer]
+OnCalendar={{ etcd_backup_schedule }}
+# The instances are stopped outside working hours (infra/scripts/power.sh), so 03:00 is often missed.
+# A snapshot is also taken 10 minutes after every start, once etcd is up.
+OnBootSec=10min
+
+[Install]
+WantedBy=timers.target

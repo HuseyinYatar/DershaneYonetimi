@@ -1,0 +1,36 @@
+# {{ ansible_managed }}
+# Read only by the first `kubeadm init`. Changing it later does not reconfigure a running cluster.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ private_ip }}
+  bindPort: 6443
+nodeRegistration:
+  name: {{ inventory_hostname }}
+  criSocket: {{ control_plane_containerd_socket }}
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+clusterName: dershane
+kubernetesVersion: {{ control_plane_kubeadm_version.stdout }}
+# Workers join through this address; it is the fixed private IP from Terraform.
+controlPlaneEndpoint: {{ private_ip }}:6443
+networking:
+  podSubnet: {{ pod_cidr }}
+  serviceSubnet: {{ service_cidr }}
+apiServer:
+  # kubectl from a laptop connects to the Elastic IP, so it has to be in the API server certificate.
+  certSANs:
+    - {{ control_plane_public_ip }}
+    - {{ private_ip }}
+  extraArgs:
+    # IRSA: service account tokens carry the S3 issuer, and AWS STS checks their signature with the
+    # public keys this playbook uploads as keys.json.
+    - name: service-account-issuer
+      value: {{ oidc_issuer }}
+    - name: service-account-jwks-uri
+      value: {{ oidc_issuer }}/keys.json
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd

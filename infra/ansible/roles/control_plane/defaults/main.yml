@@ -1,0 +1,2 @@
+control_plane_containerd_socket: unix:///run/containerd/containerd.sock
+control_plane_kubeadm_config: /etc/kubernetes/kubeadm-config.yaml

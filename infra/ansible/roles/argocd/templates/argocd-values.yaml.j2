@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# Helm values for argo-helm/argo-cd {{ argocd_chart_version }}. The UI is reached with
+#   kubectl -n {{ argocd_namespace }} port-forward svc/{{ argocd_release }}-server 8080:443
+# no Ingress until Traefik and cert-manager run (they come from k8s/ through Argo CD itself).
+
+# No single sign-on yet: log in as admin (initial password in the argocd-initial-admin-secret Secret).
+dex:
+  enabled: false
+
+# Slack/e-mail notifications about syncs are not used; saves a pod.
+notifications:
+  enabled: false

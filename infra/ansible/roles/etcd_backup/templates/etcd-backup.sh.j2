@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Saves an etcd snapshot (the whole cluster state) and uploads it to S3 with the control plane's instance
+# role. The bucket keeps snapshots for 14 days (Terraform). Run by etcd-backup.timer; by hand:
+#   sudo systemctl start etcd-backup.service && journalctl -u etcd-backup.service
+#
+# etcdctl runs inside the etcd static pod, so its version always matches the cluster's etcd. /var/lib/etcd
+# and the etcd certificates are mounted at the same paths inside that container.
+set -euo pipefail
+
+export CONTAINER_RUNTIME_ENDPOINT={{ etcd_backup_containerd_socket }}
+snapshot="etcd-$(date -u +%Y%m%dT%H%M%SZ).db"
+host_path="/var/lib/etcd/${snapshot}"
+trap 'rm -f "${host_path}"' EXIT
+
+container_id="$(crictl ps --name '^etcd$' --state running -q | head -n 1)"
+if [ -z "${container_id}" ]; then
+  echo "etcd-backup: no running etcd container" >&2
+  exit 1
+fi
+
+crictl exec "${container_id}" etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save "${host_path}"
+# terrafromda tanımlanıyor bu s3 geliyor tf-vars.sh  →  group_vars/all/terraform.json
+aws s3 cp "${host_path}" "s3://{{ etcd_backup_bucket }}/{{ inventory_hostname }}/${snapshot}" \
+  --region {{ aws_region }} --only-show-errors
+echo "etcd-backup: uploaded ${snapshot}"
