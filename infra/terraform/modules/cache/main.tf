@@ -18,12 +18,11 @@ resource "aws_elasticache_replication_group" "this" {
   replication_group_id = "${var.name}-redis"
   description          = "Rate limits, chat Pub/Sub and tickets, exam-analysis cache"
 
-  engine               = "redis"
-  engine_version       = var.engine_version
-  node_type            = var.node_type
-  num_cache_clusters   = 1
-  port                 = 6379
-  parameter_group_name = "default.redis7"
+  engine             = "redis"
+  engine_version     = var.engine_version
+  node_type          = var.node_type
+  num_cache_clusters = 1
+  port               = 6379
 
   subnet_group_name  = aws_elasticache_subnet_group.this.name
   security_group_ids = [var.security_group_id]
