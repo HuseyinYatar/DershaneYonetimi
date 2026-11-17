@@ -1,0 +1,63 @@
+name: terraform
+
+# Static checks only: format, validate, test (mocked providers), lint, IaC scan. No AWS access.
+# plan and apply are run by hand from a team member's own IAM user (infra/terraform/README.md).
+on:
+  pull_request:
+    paths:
+      - infra/terraform/**
+      - .github/workflows/terraform.yml
+  push:
+    branches: [main]
+    paths:
+      - infra/terraform/**
+      - .github/workflows/terraform.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+defaults:
+  run:
+    working-directory: infra/terraform
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.15.0"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform -chdir=bootstrap init -backend=false && terraform -chdir=bootstrap validate
+      - run: terraform init -backend=false && terraform validate
+      - name: terraform test (mocked providers, no AWS)
+        run: terraform test
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.66.0
+      - name: tflint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init --config "$PWD/.tflint.hcl"
+          tflint --recursive --config "$PWD/.tflint.hcl"
+      # Report only until the first findings are reviewed: the public NLB (0.0.0.0/0 on 80/443),
+      # public node IPs and open egress are deliberate (no NAT gateway). Each accepted finding then
+      # goes into .trivyignore with its reason, and exit-code becomes 1.
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infra/terraform
+          severity: HIGH,CRITICAL
+          exit-code: 0
+

@@ -5,3 +5,7 @@ output "topic_arns" {
 output "queue_urls" {
   value = { for name, queue in aws_sqs_queue.this : name => queue.url }
 }
+
+output "queue_arns" {
+  value = { for name, queue in aws_sqs_queue.this : name => queue.arn }
+}
