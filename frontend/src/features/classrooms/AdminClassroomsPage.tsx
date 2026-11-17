@@ -31,6 +31,7 @@ function NewClassroomForm({ onDone }: { onDone: () => void }) {
   const idempotency = useIdempotencyKey();
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<ClassroomFormValues>({
@@ -56,7 +57,7 @@ function NewClassroomForm({ onDone }: { onDone: () => void }) {
     <Card className="p-5">
       <CardHeader title="Yeni sınıf" />
       <form onSubmit={onSubmit} noValidate className="mt-4 flex flex-col gap-4">
-        <ClassroomFields register={register} errors={errors} withGrade />
+        <ClassroomFields register={register} control={control} errors={errors} withGrade />
         <div className="flex gap-2">
           <button type="submit" disabled={create.isPending || !branchId} className={PRIMARY_BUTTON}>
             {create.isPending ? "Oluşturuluyor…" : "Sınıfı oluştur"}

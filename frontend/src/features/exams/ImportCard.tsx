@@ -5,7 +5,8 @@ import type { components } from "@/api/schema/exam-analysis";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { QueryError } from "@/components/ui/EmptyState";
-import { INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { PRIMARY_BUTTON } from "@/components/ui/form";
+import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatInt } from "@/lib/format";
 import { jobBadge, jobIsRunning } from "@/lib/status/admin";
@@ -97,19 +98,14 @@ export function ImportCard({
         </p>
       ) : (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <select
+          <Select
             aria-label="Optik format"
+            placeholder="Optik format seç"
             value={formatId}
-            onChange={(e) => setFormatId(e.target.value)}
-            className={`${INPUT} sm:max-w-56`}
-          >
-            <option value="">Optik format seç</option>
-            {(formats.data ?? []).map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
+            onChange={setFormatId}
+            options={(formats.data ?? []).map((f) => ({ value: f.id, label: f.name }))}
+            className="w-full sm:w-56"
+          />
           <input
             type="file"
             aria-label="Optik okuyucu dosyası"

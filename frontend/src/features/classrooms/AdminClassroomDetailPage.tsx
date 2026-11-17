@@ -31,6 +31,7 @@ function EditCard({ classroom }: { classroom: Classroom }) {
   const deactivate = useDeactivateClassroom(classroom.id ?? "");
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isDirty },
   } = useForm<ClassroomFormValues>({
@@ -69,7 +70,7 @@ function EditCard({ classroom }: { classroom: Classroom }) {
         noValidate
         className="mt-4 flex flex-col gap-4"
       >
-        <ClassroomFields register={register} errors={errors} withGrade={false} />
+        <ClassroomFields register={register} control={control} errors={errors} withGrade={false} />
         <p className="text-[13px] text-dim">
           Seviye: {classroom.gradeLevel}. sınıf (sonradan değişmez).
         </p>

@@ -36,6 +36,7 @@ function CreateForm({
   const idempotency = useIdempotencyKey();
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<UserFormValues>({
@@ -61,7 +62,7 @@ function CreateForm({
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-      <UserFields kind={kind} register={register} errors={errors} />
+      <UserFields kind={kind} register={register} control={control} errors={errors} />
       <div>
         <button type="submit" disabled={create.isPending || !branchId} className={PRIMARY_BUTTON}>
           {create.isPending ? "Oluşturuluyor…" : "Hesabı oluştur"}

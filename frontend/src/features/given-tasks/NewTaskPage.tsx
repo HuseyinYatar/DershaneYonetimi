@@ -7,6 +7,7 @@ import { useCreateTask } from "@/api/queries/task";
 import { useClassroomStudents, useMyClassrooms } from "@/api/queries/user";
 import { Card } from "@/components/ui/Card";
 import { Field, INPUT, PRIMARY_BUTTON, TEXTAREA } from "@/components/ui/form";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { Breadcrumb, PageHeader } from "@/components/ui/PageHeader";
 import {
   RECURRENCE_LABELS,
@@ -91,52 +92,56 @@ export function NewTaskPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Kime" htmlFor="task-target">
-              <select id="task-target" className={INPUT} {...register("targetType")}>
-                <option value="CLASSROOM">Sınıf</option>
-                <option value="STUDENT">Öğrenci</option>
-              </select>
+              <FormSelect
+                id="task-target"
+                control={control}
+                name="targetType"
+                options={[
+                  { value: "CLASSROOM", label: "Sınıf" },
+                  { value: "STUDENT", label: "Öğrenci" },
+                ]}
+              />
             </Field>
             <Field label="Sınıf" htmlFor="task-classroom" error={errors.classroomId?.message}>
-              <select
+              <FormSelect
                 id="task-classroom"
-                className={INPUT}
-                {...register("classroomId", { onChange: () => setValue("studentId", "") })}
-              >
-                <option value="">Seçin</option>
-                {(classrooms.data ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                control={control}
+                name="classroomId"
+                onValueChange={() => setValue("studentId", "")}
+                options={(classrooms.data ?? []).map((c) => ({
+                  value: c.id ?? "",
+                  label: c.name ?? "",
+                }))}
+              />
             </Field>
           </div>
           {targetType === "STUDENT" && (
             <Field label="Öğrenci" htmlFor="task-student" error={errors.studentId?.message}>
-              <select
+              <FormSelect
                 id="task-student"
-                disabled={!classroomId || students.isPending}
-                className={INPUT}
-                {...register("studentId")}
-              >
-                <option value="">{classroomId ? "Seçin" : "Önce sınıf seçin"}</option>
-                {(students.data ?? []).map((s) => (
-                  <option key={s.studentId} value={s.studentId}>
-                    {s.firstName} {s.lastName}
-                  </option>
-                ))}
-              </select>
+                control={control}
+                name="studentId"
+                disabled={!classroomId}
+                loading={!!classroomId && students.isPending}
+                placeholder={classroomId ? "Seçin" : "Önce sınıf seçin"}
+                options={(students.data ?? []).map((s) => ({
+                  value: s.studentId ?? "",
+                  label: `${s.firstName} ${s.lastName}`,
+                }))}
+              />
             </Field>
           )}
 
           <Field label="Tekrar" htmlFor="task-recurrence">
-            <select id="task-recurrence" className={INPUT} {...register("recurrence")}>
-              {Object.entries(RECURRENCE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <FormSelect
+              id="task-recurrence"
+              control={control}
+              name="recurrence"
+              options={Object.entries(RECURRENCE_LABELS).map(([value, label]) => ({
+                value,
+                label,
+              }))}
+            />
           </Field>
           {recurrence === "WEEKLY" && (
             <Field label="Günler" error={errors.recurrenceDays?.message}>

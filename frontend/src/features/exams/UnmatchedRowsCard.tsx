@@ -4,8 +4,8 @@ import { useIgnoreRow, useMatchRow, useUnmatchedRows } from "@/api/queries/exam"
 import { useBranchStudents } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
-import { INPUT } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { Select } from "@/components/ui/Select";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { isMatchable, unmatchedReasonLabel } from "@/lib/status/admin";
 import { fullName } from "@/lib/userForm";
@@ -73,19 +73,17 @@ export function UnmatchedRowsCard({ jobId }: { jobId: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 {isMatchable(row.reason) && (
                   <>
-                    <select
+                    <Select
                       aria-label={`Satır ${row.lineNo} için öğrenci`}
+                      placeholder="Öğrenci seç"
                       value={choice[row.id] ?? ""}
-                      onChange={(e) => setChoice({ ...choice, [row.id]: e.target.value })}
-                      className={`${INPUT} lg:w-64`}
-                    >
-                      <option value="">Öğrenci seç</option>
-                      {options.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {fullName(s)} · {s.studentNumber}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => setChoice({ ...choice, [row.id]: value })}
+                      options={options.map((s) => ({
+                        value: s.id ?? "",
+                        label: `${fullName(s)} · ${s.studentNumber}`,
+                      }))}
+                      className="w-full lg:w-64"
+                    />
                     <PillButton
                       disabled={!choice[row.id] || match.isPending}
                       onClick={() => match.mutate({ rowId: row.id, studentId: choice[row.id] })}

@@ -5,6 +5,7 @@ import { useBranchClassrooms, useBranchTeachers, useUserSubjects } from "@/api/q
 import { useBranchId } from "@/auth/useBranchId";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Field, INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { PillButton } from "@/components/ui/Pill";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { fullName } from "@/lib/userForm";
@@ -33,6 +34,7 @@ export function NewSessionForm({ day, onDone }: { day: string; onDone: () => voi
   const idempotency = useIdempotencyKey();
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<SessionFormValues>({
@@ -71,40 +73,34 @@ export function NewSessionForm({ day, onDone }: { day: string; onDone: () => voi
       <form onSubmit={onSubmit} noValidate className="mt-4 flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Sınıf" htmlFor="session-classroom" error={errors.classroomId?.message}>
-            <select id="session-classroom" className={INPUT} {...register("classroomId")}>
-              <option value="">Seçin</option>
-              {(classrooms.data ?? [])
+            <FormSelect
+              id="session-classroom"
+              control={control}
+              name="classroomId"
+              options={(classrooms.data ?? [])
                 .filter((c) => c.active)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
+                .map((c) => ({ value: c.id ?? "", label: c.name ?? "" }))}
+            />
           </Field>
           <Field label="Öğretmen" htmlFor="session-teacher" error={errors.teacherId?.message}>
-            <select id="session-teacher" className={INPUT} {...register("teacherId")}>
-              <option value="">Seçin</option>
-              {(teachers.data ?? [])
+            <FormSelect
+              id="session-teacher"
+              control={control}
+              name="teacherId"
+              options={(teachers.data ?? [])
                 .filter((t) => t.active)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {fullName(t)}
-                  </option>
-                ))}
-            </select>
+                .map((t) => ({ value: t.id ?? "", label: fullName(t) }))}
+            />
           </Field>
           <Field label="Ders" htmlFor="session-subject" error={errors.subjectId?.message}>
-            <select id="session-subject" className={INPUT} {...register("subjectId")}>
-              <option value="">Seçin</option>
-              {(subjects.data ?? [])
+            <FormSelect
+              id="session-subject"
+              control={control}
+              name="subjectId"
+              options={(subjects.data ?? [])
                 .filter((s) => s.active)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
+                .map((s) => ({ value: s.id ?? "", label: s.name ?? "" }))}
+            />
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">

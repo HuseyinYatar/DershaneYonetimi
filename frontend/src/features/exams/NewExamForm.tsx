@@ -5,6 +5,7 @@ import { useCreateMockExam, useExamTypes } from "@/api/queries/exam";
 import { useBranchId } from "@/auth/useBranchId";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Field, INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { PillButton } from "@/components/ui/Pill";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
@@ -34,6 +35,7 @@ export function NewExamForm({ onDone }: { onDone: () => void }) {
   const create = useCreateMockExam();
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<MockExamFormValues>({
@@ -79,26 +81,23 @@ export function NewExamForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Sınav türü" htmlFor="exam-type" error={errors.examTypeId?.message}>
-            <select id="exam-type" className={INPUT} {...register("examTypeId")}>
-              <option value="">Seçin</option>
-              {(examTypes.data ?? []).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <FormSelect
+              id="exam-type"
+              control={control}
+              name="examTypeId"
+              options={(examTypes.data ?? []).map((t) => ({ value: t.id, label: t.name }))}
+            />
           </Field>
           <Field label="Tarih" htmlFor="exam-date" error={errors.examDate?.message}>
             <input id="exam-date" type="date" className={INPUT} {...register("examDate")} />
           </Field>
           <Field label="Puanlama" htmlFor="exam-scoring">
-            <select id="exam-scoring" className={INPUT} {...register("scoringSource")}>
-              {SCORING_SOURCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <FormSelect
+              id="exam-scoring"
+              control={control}
+              name="scoringSource"
+              options={SCORING_SOURCE_OPTIONS}
+            />
           </Field>
         </div>
         <div className="flex gap-2">
