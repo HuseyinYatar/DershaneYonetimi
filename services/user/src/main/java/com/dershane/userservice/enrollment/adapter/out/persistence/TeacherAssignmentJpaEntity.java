@@ -33,4 +33,7 @@ class TeacherAssignmentJpaEntity extends AuditableJpaEntity {
 
   @Column(name = "subject_id", nullable = false, updatable = false)
   private UUID subjectId;
+
+  @Column(name = "weekly_hours", nullable = false)
+  private int weeklyHours;
 }

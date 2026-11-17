@@ -549,7 +549,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Set the weekly lesson hours the classroom needs for an assignment */
+        put: operations["updateWeeklyHours"];
         post?: never;
         /** Remove an assignment */
         delete: operations["delete"];
@@ -664,6 +665,10 @@ export interface components {
             /** Format: uuid */
             subjectId: string;
         };
+        UpdateTeacherAssignmentRequest: {
+            /** Format: int32 */
+            weeklyHours: number;
+        };
         TeacherAssignmentResponse: {
             /** Format: uuid */
             id?: string;
@@ -675,6 +680,8 @@ export interface components {
             /** Format: uuid */
             subjectId?: string;
             subjectName?: string;
+            /** Format: int32 */
+            weeklyHours?: number;
             /** Format: date-time */
             createdAt?: string;
         };
@@ -934,6 +941,8 @@ export interface components {
             /** Format: uuid */
             subjectId?: string;
             subjectName?: string;
+            /** Format: int32 */
+            weeklyHours?: number;
         };
         ClassroomStudentResponse: {
             /** Format: uuid */
@@ -2072,6 +2081,33 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ClassroomStudentResponse"][];
+                };
+            };
+        };
+    };
+    updateWeeklyHours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teacherId: string;
+                assignmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeacherAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeacherAssignmentResponse"];
                 };
             };
         };

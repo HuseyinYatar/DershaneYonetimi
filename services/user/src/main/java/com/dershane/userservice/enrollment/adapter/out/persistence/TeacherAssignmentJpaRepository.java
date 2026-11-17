@@ -37,7 +37,7 @@ interface TeacherAssignmentJpaRepository extends JpaRepository<TeacherAssignment
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.ClassroomTeacherView(
-          a.id, t.id, t.info.firstName, t.info.lastName, s.id, s.name)
+          a.id, t.id, t.info.firstName, t.info.lastName, s.id, s.name, a.weeklyHours)
       from TeacherAssignmentJpaEntity a
         join TeacherJpaEntity t on t.id = a.teacherId
         join SubjectJpaEntity s on s.id = a.subjectId
@@ -49,7 +49,7 @@ interface TeacherAssignmentJpaRepository extends JpaRepository<TeacherAssignment
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView(
-          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.createdAt)
+          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.weeklyHours, a.createdAt)
       from TeacherAssignmentJpaEntity a
         join ClassroomJpaEntity c on c.id = a.classroomId
         join SubjectJpaEntity s on s.id = a.subjectId
@@ -61,7 +61,7 @@ interface TeacherAssignmentJpaRepository extends JpaRepository<TeacherAssignment
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView(
-          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.createdAt)
+          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.weeklyHours, a.createdAt)
       from TeacherAssignmentJpaEntity a
         join ClassroomJpaEntity c on c.id = a.classroomId
         join SubjectJpaEntity s on s.id = a.subjectId
