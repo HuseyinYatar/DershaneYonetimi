@@ -13,6 +13,16 @@ const ADMIN = { user: 'superadmin@dershane.local', password: 'admin' };
 const TEACHER_EMAIL = 'ogretmen@dershane.local';
 const CLASSROOM = 'Demo 12-A'; // marker of the seed
 const MEMBER_SINCE = '2026-09-01';
+// Extra branches (each with one classroom) and two more teachers of MRKZ / Demo 12-A, with weekly hours for the schedule demo.
+const EXTRA_BRANCHES = [
+  { code: 'KDKY', name: 'Kadıköy Şubesi', classroom: { name: 'Kadıköy 12-A', gradeLevel: 12 } },
+  { code: 'CNKY', name: 'Çankaya Şubesi', classroom: { name: 'Çankaya 11-A', gradeLevel: 11 } },
+];
+const EXTRA_SUBJECTS = [['FIZ', 'Fizik'], ['KIM', 'Kimya']];
+const EXTRA_TEACHERS = [
+  { email: 'zeynep.karaca@dershane.local', firstName: 'Zeynep', lastName: 'Karaca', phone: '05553334466', subject: 'FIZ', weeklyHours: 4 },
+  { email: 'murat.erdem@dershane.local', firstName: 'Murat', lastName: 'Erdem', phone: '05553334477', subject: 'KIM', weeklyHours: 3 },
+];
 
 const STUDENTS = [
   ['1001', 'Ayşe', 'Yılmaz'],
@@ -142,6 +152,54 @@ async function seedPeople(admin) {
   log('passwords set');
 
   return { branch, subjects, classroom, teacher, students, ayse, guardian };
+}
+
+/** Extra branches and teachers; runs after seedPeople, which owns the main branch and classroom. */
+async function seedExtras(admin, ctx) {
+  step('Extra branches and teachers');
+  const branches = await listAll(admin, '/branches');
+  for (const b of EXTRA_BRANCHES) {
+    let branch = branches.find((x) => x.code === b.code);
+    if (!branch) {
+      branch = await api(admin, 'POST', '/branches', { name: b.name, code: b.code });
+      log(`created branch ${b.code}`);
+    }
+    const rooms = await listAll(admin, '/classrooms', { branchId: branch.id });
+    if (!rooms.some((c) => c.name === b.classroom.name)) {
+      await api(admin, 'POST', '/classrooms', { branchId: branch.id, name: b.classroom.name, gradeLevel: b.classroom.gradeLevel, term: '2026-2027' });
+      log(`created classroom ${b.classroom.name}`);
+    }
+  }
+
+  const all = await listAll(admin, '/subjects');
+  const subjects = {};
+  for (const [code, name] of EXTRA_SUBJECTS) {
+    subjects[code] = all.find((s) => s.code === code) ?? (await api(admin, 'POST', '/subjects', { code, name }));
+  }
+
+  const teachers = await listAll(admin, '/teachers');
+  for (const t of EXTRA_TEACHERS) {
+    let teacher = teachers.find((x) => x.email === t.email);
+    if (!teacher) {
+      teacher = (await api(admin, 'POST', '/teachers', {
+        branchId: ctx.branch.id, firstName: t.firstName, lastName: t.lastName, email: t.email, phone: t.phone,
+        specialtySubjectId: subjects[t.subject].id,
+      })).user;
+      log(`created teacher ${t.email}`);
+    }
+    const res = await api(admin, 'GET', `/teachers/${teacher.id}/assignments`);
+    const rows = Array.isArray(res) ? res : (res.content ?? []);
+    let row = rows.find((a) => a.classroomId === ctx.classroom.id && a.subjectId === subjects[t.subject].id);
+    if (!row) {
+      row = await api(admin, 'POST', `/teachers/${teacher.id}/assignments`, { classroomId: ctx.classroom.id, subjectId: subjects[t.subject].id });
+      log(`assigned ${t.email} to ${CLASSROOM} / ${t.subject}`);
+    }
+    if (row.weeklyHours !== t.weeklyHours) {
+      await api(admin, 'PUT', `/teachers/${teacher.id}/assignments/${row.id}`, { weeklyHours: t.weeklyHours });
+      log(`weekly hours of ${t.email}: ${t.weeklyHours}`);
+    }
+    await setPassword(t.email, PASSWORD, false);
+  }
 }
 
 // --- 2. wait until the other services have the events -----------------------------------------------
@@ -446,6 +504,7 @@ async function retryTask(fn) {
 async function main() {
   const admin = await login(ADMIN.user, ADMIN.password);
   const ctx = await seedPeople(admin);
+  await seedExtras(admin, ctx);
   await waitForReplicas(ctx);
   await seedExams(await login(ADMIN.user, ADMIN.password), ctx);
   await seedAttendance(await login(ADMIN.user, ADMIN.password), ctx);

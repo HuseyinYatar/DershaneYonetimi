@@ -203,6 +203,8 @@ kopyaları (`StudentReplica`, `MembershipReplica`, iletişim kopyaları) dolar; 
 | Geçici şifreli öğrenci (Merve Koç; ilk girişte "şifre belirle" sayfası) | `mrkz-1010` | `Gecici123!` |
 | Diğer öğrenciler (1002–1009) | `mrkz-1002` ... `mrkz-1009` | `Demo1234!` |
 | Öğretmen (Kemal Aksoy) | `ogretmen@dershane.local` | `Demo1234!` |
+| Öğretmen (Zeynep Karaca, Fizik) | `zeynep.karaca@dershane.local` | `Demo1234!` |
+| Öğretmen (Murat Erdem, Kimya) | `murat.erdem@dershane.local` | `Demo1234!` |
 | Veli (Fatma Yılmaz, Ayşe'nin velisi) | `05551234567` | `Demo1234!` |
 | Super-admin | `superadmin@dershane.local` | `admin` |
 
@@ -210,7 +212,9 @@ kopyaları (`StudentReplica`, `MembershipReplica`, iletişim kopyaları) dolar; 
 kuralıyla `mrkz-1001` olur.
 
 Ne oluşur:
-- **API ile:** ders kataloğu (Matematik, Türkçe), `Demo 12-A` (12. sınıf), öğretmen ve atamaları, 10 öğrenci
+- **API ile:** ders kataloğu (Matematik, Türkçe, Fizik, Kimya), `Demo 12-A` (12. sınıf), öğretmen ve atamaları,
+  iki ek şube (`KDKY` Kadıköy Şubesi / `Kadıköy 12-A`, `CNKY` Çankaya Şubesi / `Çankaya 11-A`) ve `MRKZ`'de `Demo 12-A`'ya
+  atanmış iki ek öğretmen (Fizik haftada 4, Kimya haftada 3 saat; haftalık program demosu için), 10 öğrenci
   (üyelik 2026-09-01'den), veli bağı; exam-analysis: şube zayıf konu ayarı (son 3 deneme, eşik 0,5), 4 TYT
   denemesi (kurum içi puanlama, cevap anahtarı, optik dosya yükleme, açıklama; Ayşe'nin neti denemeden denemeye
   artar, bazı konularda zayıf kalır; açıklama bildirimlerini üretir); attendance: pazartesi/çarşamba/cuma haftalık
