@@ -245,6 +245,47 @@ export function useClassroomTeachers(classroomId: string) {
   });
 }
 
+// Teacher–subject assignments of several classrooms at once (the timetable plans the whole branch).
+// Shares its cache key with useClassroomTeachers, so both screens read the same data.
+export function useClassroomsTeachers(classroomIds: string[]) {
+  return useQueries({
+    queries: classroomIds.map((classroomId) => ({
+      queryKey: ["user", "classroom-teachers", classroomId],
+      queryFn: () =>
+        unwrap(
+          userApi.GET("/api/v1/classrooms/{classroomId}/teachers", {
+            params: { path: { classroomId } },
+          }),
+        ),
+    })),
+    combine: (results) => ({
+      pending: results.some((r) => r.isPending),
+      byClassroom: new Map(classroomIds.map((id, i) => [id, results[i].data ?? []])),
+    }),
+  });
+}
+
+export function useSetWeeklyHours() {
+  return useUserMutation(
+    ({
+      teacherId,
+      assignmentId,
+      weeklyHours,
+    }: {
+      teacherId: string;
+      assignmentId: string;
+      weeklyHours: number;
+    }) =>
+      unwrap(
+        userApi.PUT("/api/v1/teachers/{teacherId}/assignments/{assignmentId}", {
+          params: { path: { teacherId, assignmentId } },
+          body: { weeklyHours },
+        }),
+      ),
+    undefined,
+  );
+}
+
 export function useTeacherAssignments(teacherId: string) {
   return useQuery({
     queryKey: ["user", "teacher-assignments", teacherId],

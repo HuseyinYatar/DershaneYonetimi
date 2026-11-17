@@ -133,6 +133,21 @@ export function useSchedules(active: boolean | undefined, page: number, size: nu
   });
 }
 
+// Every active weekly schedule of the branch, for the automatic distribution (teachers are shared across classrooms).
+// shortcut: one page of 1000; a branch has a few hundred schedules at most, page it if that ever changes.
+export function useBranchSchedules() {
+  return useQuery({
+    queryKey: ["attendance", "schedules", "branch"],
+    queryFn: () =>
+      unwrap(
+        attendanceApi.GET("/api/v1/class-schedules", {
+          params: { query: { active: true, pageable: { page: 0, size: 1000 } } },
+        }),
+      ),
+    select: (page) => page.content ?? [],
+  });
+}
+
 // Writes refresh everything attendance-related; the screens are few and the data small.
 function useAttendanceMutation<Variables, Result>(
   mutationFn: (variables: Variables) => Promise<Result>,
@@ -167,9 +182,43 @@ export function useCreateSchedule() {
   );
 }
 
+// Saves a whole draft timetable. One by one, stopping at the first failure; whatever was saved stays,
+// so the data is refreshed either way and the caller re-plans from what exists.
+export function useCreateSchedules() {
+  const queryClient = useQueryClient();
+  return useAttendanceMutation(async (bodies: Schemas["CreateScheduleRequest"][]) => {
+    try {
+      for (const body of bodies) {
+        await unwrap(
+          attendanceApi.POST("/api/v1/class-schedules", {
+            params: { header: { "Idempotency-Key": crypto.randomUUID() } },
+            body,
+          }),
+        );
+      }
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    }
+  }, "Haftalık program kaydedildi.");
+}
+
 export function useUpdateSchedule(scheduleId: string) {
   return useAttendanceMutation(
     (body: Schemas["UpdateScheduleRequest"]) =>
+      unwrap(
+        attendanceApi.PUT("/api/v1/class-schedules/{scheduleId}", {
+          params: { path: { scheduleId } },
+          body,
+        }),
+      ),
+    "Program güncellendi.",
+  );
+}
+
+// Same call as useUpdateSchedule, but the id comes with each call (the board moves any block).
+export function useMoveSchedule() {
+  return useAttendanceMutation(
+    ({ scheduleId, body }: { scheduleId: string; body: Schemas["UpdateScheduleRequest"] }) =>
       unwrap(
         attendanceApi.PUT("/api/v1/class-schedules/{scheduleId}", {
           params: { path: { scheduleId } },
