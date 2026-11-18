@@ -9,6 +9,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { Breadcrumb, PageHeader } from "@/components/ui/PageHeader";
 import { PillButton, SegButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { TableHead, TableRow, Td, Th } from "@/components/ui/Table";
 import { formatDayMonth, parseDateOnly } from "@/lib/format";
@@ -39,6 +40,7 @@ export function ExcusesPage() {
   const [page, setPage] = useState(0);
   const excuses = useExcuses(status, page, PAGE_SIZE);
   const students = useBranchStudents();
+  const ask = useConfirm();
   const decide = useDecideExcuse();
   const names = new Map((students.data ?? []).map((s) => [s.id, fullName(s)]));
   const list = excuses.data?.content ?? [];
@@ -134,8 +136,15 @@ export function ExcusesPage() {
                       </PillButton>
                       <PillButton
                         disabled={decide.isPending}
-                        onClick={() => {
-                          if (window.confirm("Mazeret reddedilsin mi? Karar sonradan değişmez.")) {
+                        onClick={async () => {
+                          if (
+                            await ask({
+                              title: "Mazeret reddedilsin mi?",
+                              text: "Karar sonradan değişmez.",
+                              confirmLabel: "Reddet",
+                              danger: true,
+                            })
+                          ) {
                             decide.mutate({ excuseId: id, approve: false });
                           }
                         }}

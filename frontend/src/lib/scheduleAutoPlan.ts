@@ -1,4 +1,4 @@
-import { SLOT_COUNT, type SlotSpan } from "./scheduleBoard";
+import type { SlotSpan } from "./scheduleBoard";
 
 // A classroom's need for a subject: `hours` lesson hours still to place this week, taught by `teacherId`.
 export interface Demand {
@@ -28,13 +28,16 @@ const clash = (a: SlotSpan, b: SlotSpan) => a.first <= b.last && b.first <= a.la
  * Greedy weekly distribution. A subject goes in blocks of up to `maxBlock` hours, each block on a
  * different day when possible; no classroom and no teacher is ever in two places at once.
  * Teachers with the most hours are placed first (they are the hardest to fit).
+ * `blockedSlot` (the lunch break) is never used by a lesson, on any day.
  * shortcut: greedy, not optimal; a tight timetable may leave hours in `missing`, which the admin fixes by hand.
  */
 export function planWeek(
   demands: Demand[],
   existing: Lesson[],
   days: string[],
+  slotCount: number,
   maxBlock = 2,
+  blockedSlot?: number,
 ): Plan {
   const all = [...existing];
   const lessons: Lesson[] = [];
@@ -68,8 +71,9 @@ export function planWeek(
       const teacherLoad = all
         .filter((l) => l.teacherId === d.teacherId && l.dayOfWeek === day)
         .reduce((n, l) => n + l.span.last - l.span.first + 1, 0);
-      for (let first = 0; first + size <= SLOT_COUNT; first++) {
+      for (let first = 0; first + size <= slotCount; first++) {
         const span = { first, last: first + size - 1 };
+        if (blockedSlot !== undefined && first <= blockedSlot && blockedSlot <= span.last) continue;
         if (!free("classroomId", d, day, span) || !free("teacherId", d, day, span)) continue;
         const touching =
           ofClass.length === 0 ||

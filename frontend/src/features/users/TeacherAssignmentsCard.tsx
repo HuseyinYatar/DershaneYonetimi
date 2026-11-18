@@ -11,6 +11,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { Select } from "@/components/ui/Select";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { useIdempotencyKey } from "@/lib/useIdempotencyKey";
@@ -38,6 +39,7 @@ export function TeacherAssignmentsCard({
   const classrooms = useBranchClassrooms();
   const subjects = useUserSubjects();
   const create = useCreateTeacherAssignment(teacherId);
+  const ask = useConfirm();
   const remove = useDeleteTeacherAssignment(teacherId);
   const idempotency = useIdempotencyKey();
   const [classroomId, setClassroomId] = useState("");
@@ -78,8 +80,15 @@ export function TeacherAssignmentsCard({
               </div>
               <PillButton
                 disabled={remove.isPending}
-                onClick={() => {
-                  if (window.confirm("Atama kaldırılsın mı?")) remove.mutate(a.id ?? "");
+                onClick={async () => {
+                  if (
+                    await ask({
+                      title: "Atama kaldırılsın mı?",
+                      confirmLabel: "Kaldır",
+                      danger: true,
+                    })
+                  )
+                    remove.mutate(a.id ?? "");
                 }}
               >
                 Kaldır

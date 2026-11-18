@@ -13,6 +13,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PRIMARY_BUTTON, TEXTAREA } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { parseAnswerKey } from "@/lib/answerKey";
 
@@ -48,6 +49,7 @@ export function AnswerKeyCard({
   const subjectList = subjects.data ?? [];
   const topics = useSubjectTopics(subjectList.map((s) => s.id));
   const replace = useReplaceAnswerKey(mockExamId);
+  const ask = useConfirm();
   const cancel = useCancelQuestion(mockExamId);
   const [text, setText] = useState("");
 
@@ -162,11 +164,14 @@ export function AnswerKeyCard({
               ) : (
                 <PillButton
                   disabled={cancel.isPending}
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      window.confirm(
-                        "Bu soru iptal edilsin mi? Soru doğru/yanlış/boş sayılmaz, sonuçlar yeniden hesaplanır.",
-                      )
+                      await ask({
+                        title: "Bu soru iptal edilsin mi?",
+                        text: "Soru doğru/yanlış/boş sayılmaz, sonuçlar yeniden hesaplanır.",
+                        confirmLabel: "İptal et",
+                        danger: true,
+                      })
                     ) {
                       cancel.mutate(item.id);
                     }

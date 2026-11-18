@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { attendanceApi, unwrap } from "../client";
+import type { TimetableSetting } from "@/lib/scheduleBoard";
 import type { components } from "../schema/attendance";
 
 export interface DateRange {
@@ -148,6 +149,24 @@ export function useBranchSchedules() {
   });
 }
 
+// Lesson-hour grid of a branch (a super-admin has no branch of their own, so it is always passed).
+// No local default while loading or on error: a wrong grid would show lessons on the wrong rows.
+export function useTimetableSetting(branchId: string | undefined) {
+  return useQuery({
+    queryKey: ["attendance", "timetable-setting", branchId],
+    enabled: !!branchId,
+    queryFn: () =>
+      unwrap(attendanceApi.GET("/api/v1/timetable-setting", { params: { query: { branchId } } })),
+    select: (r): TimetableSetting => ({
+      firstLessonStart: (r.firstLessonStart ?? "").slice(0, 5),
+      lessonMinutes: r.lessonMinutes ?? 0,
+      breakMinutes: r.breakMinutes ?? 0,
+      lessonCount: r.lessonCount ?? 0,
+      lunchLesson: r.lunchLesson ?? 0,
+    }),
+  });
+}
+
 // Writes refresh everything attendance-related; the screens are few and the data small.
 function useAttendanceMutation<Variables, Result>(
   mutationFn: (variables: Variables) => Promise<Result>,
@@ -161,6 +180,14 @@ function useAttendanceMutation<Variables, Result>(
       await queryClient.invalidateQueries({ queryKey: ["attendance"] });
     },
   });
+}
+
+export function useSaveTimetableSetting(branchId: string) {
+  return useAttendanceMutation(
+    (setting: TimetableSetting) =>
+      unwrap(attendanceApi.PUT("/api/v1/timetable-setting", { body: { ...setting, branchId } })),
+    "Ders saatleri kaydedildi.",
+  );
 }
 
 export function useCreateSchedule() {
@@ -215,16 +242,25 @@ export function useUpdateSchedule(scheduleId: string) {
   );
 }
 
-// Same call as useUpdateSchedule, but the id comes with each call (the board moves any block).
-export function useMoveSchedule() {
+// Same call as useUpdateSchedule for several lessons at once (a merged box moves them together); one by
+// one, one toast, refreshed even when one fails.
+export function useMoveSchedules() {
+  const queryClient = useQueryClient();
   return useAttendanceMutation(
-    ({ scheduleId, body }: { scheduleId: string; body: Schemas["UpdateScheduleRequest"] }) =>
-      unwrap(
-        attendanceApi.PUT("/api/v1/class-schedules/{scheduleId}", {
-          params: { path: { scheduleId } },
-          body,
-        }),
-      ),
+    async (moves: { scheduleId: string; body: Schemas["UpdateScheduleRequest"] }[]) => {
+      try {
+        for (const { scheduleId, body } of moves) {
+          await unwrap(
+            attendanceApi.PUT("/api/v1/class-schedules/{scheduleId}", {
+              params: { path: { scheduleId } },
+              body,
+            }),
+          );
+        }
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      }
+    },
     "Program güncellendi.",
   );
 }
@@ -240,6 +276,23 @@ export function useDeactivateSchedule() {
       ),
     "Program pasife alındı.",
   );
+}
+
+export function useDeactivateSchedules() {
+  const queryClient = useQueryClient();
+  return useAttendanceMutation(async (scheduleIds: string[]) => {
+    try {
+      for (const scheduleId of scheduleIds) {
+        await unwrap(
+          attendanceApi.DELETE("/api/v1/class-schedules/{scheduleId}", {
+            params: { path: { scheduleId } },
+          }),
+        );
+      }
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    }
+  }, "Program pasife alındı.");
 }
 
 export function useCreateSession() {

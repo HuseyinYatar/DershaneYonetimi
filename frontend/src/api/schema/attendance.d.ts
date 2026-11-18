@@ -156,6 +156,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/timetable-setting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lesson-hour grid of a branch (defaults when never customized) */
+        get: operations["getTimetableSetting"];
+        /** Save the lesson-hour grid of a branch (admins of the branch) */
+        put: operations["saveTimetableSetting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/class-schedules": {
         parameters: {
             query?: never;
@@ -495,6 +513,35 @@ export interface components {
             sessionStatus?: "PLANNED" | "COMPLETED" | "CANCELLED" | "EXPIRED";
             students?: components["schemas"]["RosterRowResponse"][];
         };
+        SaveTimetableSettingRequest: {
+            /** Format: uuid */
+            branchId?: string;
+            /** Format: time-local */
+            firstLessonStart: string;
+            /** Format: int32 */
+            lessonMinutes: number;
+            /** Format: int32 */
+            breakMinutes: number;
+            /** Format: int32 */
+            lessonCount: number;
+            /** Format: int32 */
+            lunchLesson?: number;
+        };
+        TimetableSettingResponse: {
+            /** Format: uuid */
+            branchId?: string;
+            /** Format: time-local */
+            firstLessonStart?: string;
+            /** Format: int32 */
+            lessonMinutes?: number;
+            /** Format: int32 */
+            breakMinutes?: number;
+            /** Format: int32 */
+            lessonCount?: number;
+            /** Format: int32 */
+            lunchLesson?: number;
+            customized?: boolean;
+        };
         PagedModelScheduleResponse: {
             content?: components["schemas"]["ScheduleResponse"][];
             page?: components["schemas"]["PageMetadata"];
@@ -530,6 +577,52 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getTimetableSetting: {
+        parameters: {
+            query?: {
+                branchId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TimetableSettingResponse"];
+                };
+            };
+        };
+    };
+    saveTimetableSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveTimetableSettingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TimetableSettingResponse"];
+                };
+            };
+        };
+    };
     reassign: {
         parameters: {
             query?: never;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Lesson, planWeek } from "./scheduleAutoPlan";
-import { SLOT_COUNT } from "./scheduleBoard";
+const SLOT_COUNT = 12;
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"];
 const hours = (l: Lesson) => l.span.last - l.span.first + 1;
@@ -30,7 +30,7 @@ describe("planWeek", () => {
   });
 
   it("places one teacher's 4 hours in each of 3 classrooms (12 hours) without clashes", () => {
-    const plan = planWeek([geometry("a"), geometry("b"), geometry("c")], [], DAYS);
+    const plan = planWeek([geometry("a"), geometry("b"), geometry("c")], [], DAYS, SLOT_COUNT);
 
     expect(plan.missing).toEqual([]);
     expectNoClash(plan.lessons);
@@ -49,7 +49,7 @@ describe("planWeek", () => {
       dayOfWeek,
       span: { first: 0, last: 5 },
     }));
-    const plan = planWeek([geometry("a")], existing, DAYS);
+    const plan = planWeek([geometry("a")], existing, DAYS, SLOT_COUNT);
 
     expectNoClash([...existing, ...plan.lessons]);
     expect(plan.lessons.every((l) => l.span.first > 5)).toBe(true);
@@ -57,16 +57,34 @@ describe("planWeek", () => {
 
   it("reports the hours that cannot fit", () => {
     const tooMany = { ...geometry("a"), hours: SLOT_COUNT + 3 };
-    const plan = planWeek([tooMany], [], ["MONDAY"]);
+    const plan = planWeek([tooMany], [], ["MONDAY"], SLOT_COUNT);
 
     expect(plan.lessons.reduce((n, l) => n + hours(l), 0)).toBe(SLOT_COUNT);
     expect(plan.missing).toEqual([{ ...tooMany, missing: 3 }]);
   });
 
   it("ignores demands with no hours", () => {
-    expect(planWeek([{ ...geometry("a"), hours: 0 }], [], DAYS)).toEqual({
+    expect(planWeek([{ ...geometry("a"), hours: 0 }], [], DAYS, SLOT_COUNT)).toEqual({
       lessons: [],
       missing: [],
     });
+  });
+});
+
+describe("planWeek with a lunch break", () => {
+  const demand = { classroomId: "a", teacherId: "t", subjectId: "s", hours: 4 };
+
+  it("never places a lesson on the lunch slot, even inside a two-hour block", () => {
+    const plan = planWeek([demand], [], DAYS, SLOT_COUNT, 2, 3);
+
+    expect(plan.missing).toEqual([]);
+    expect(plan.lessons.some((l) => l.span.first <= 3 && 3 <= l.span.last)).toBe(false);
+  });
+
+  it("reports the hours that only fit on the lunch slot", () => {
+    const plan = planWeek([{ ...demand, hours: 3 }], [], ["MONDAY"], 3, 2, 1);
+
+    expect(plan.lessons.reduce((n, l) => n + hours(l), 0)).toBe(2);
+    expect(plan.missing).toEqual([{ ...demand, hours: 3, missing: 1 }]);
   });
 });

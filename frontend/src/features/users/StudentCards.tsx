@@ -12,6 +12,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { RELATIONSHIP_LABELS, fullName, type Relationship } from "@/lib/userForm";
@@ -37,6 +38,7 @@ export function GuardianCard({ studentId, active }: { studentId: string; active:
   const current = useStudentGuardian(studentId);
   const guardians = useBranchGuardians();
   const link = useLinkGuardian(studentId);
+  const ask = useConfirm();
   const unlink = useUnlinkGuardian(studentId);
   const [guardianId, setGuardianId] = useState("");
   const [relationship, setRelationship] = useState<Relationship>("MOTHER");
@@ -60,8 +62,15 @@ export function GuardianCard({ studentId, active }: { studentId: string; active:
           guardian && (
             <PillButton
               disabled={unlink.isPending}
-              onClick={() => {
-                if (window.confirm("Veli bağı kaldırılsın mı?")) unlink.mutate();
+              onClick={async () => {
+                if (
+                  await ask({
+                    title: "Veli bağı kaldırılsın mı?",
+                    confirmLabel: "Bağı kaldır",
+                    danger: true,
+                  })
+                )
+                  unlink.mutate();
               }}
             >
               Bağı kaldır
@@ -134,6 +143,7 @@ export function EnrollmentCard({
 }) {
   const classrooms = useBranchClassrooms();
   const assign = useAssignClassroom(studentId);
+  const ask = useConfirm();
   const remove = useRemoveFromClassroom();
   const [classroomId, setClassroomId] = useState("");
 
@@ -156,8 +166,15 @@ export function EnrollmentCard({
           active && (
             <PillButton
               disabled={remove.isPending}
-              onClick={() => {
-                if (window.confirm("Öğrenci sınıftan çıkarılsın mı?")) remove.mutate(studentId);
+              onClick={async () => {
+                if (
+                  await ask({
+                    title: "Öğrenci sınıftan çıkarılsın mı?",
+                    confirmLabel: "Sınıftan çıkar",
+                    danger: true,
+                  })
+                )
+                  remove.mutate(studentId);
               }}
             >
               Sınıftan çıkar

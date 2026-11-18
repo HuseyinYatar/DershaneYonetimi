@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router";
 import { Toaster } from "sonner";
 import { queryClient } from "@/api/queryClient";
 import { AuthRoot } from "@/auth/AuthRoot";
+import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 import "@fontsource-variable/inter";
 import { App } from "./App";
 import "./index.css";
@@ -14,7 +15,9 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <AuthRoot>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <ConfirmProvider>
+            <App />
+          </ConfirmProvider>
           <Toaster />
         </QueryClientProvider>
       </AuthRoot>

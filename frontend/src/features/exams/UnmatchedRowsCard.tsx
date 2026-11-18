@@ -5,6 +5,7 @@ import { useBranchStudents } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { Select } from "@/components/ui/Select";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { isMatchable, unmatchedReasonLabel } from "@/lib/status/admin";
@@ -27,6 +28,7 @@ export function UnmatchedRowsCard({ jobId }: { jobId: string }) {
   const rows = useUnmatchedRows(jobId, "PENDING");
   const students = useBranchStudents();
   const match = useMatchRow();
+  const ask = useConfirm();
   const ignore = useIgnoreRow();
   const [choice, setChoice] = useState<Record<string, string>>({});
 
@@ -94,8 +96,16 @@ export function UnmatchedRowsCard({ jobId }: { jobId: string }) {
                 )}
                 <PillButton
                   disabled={ignore.isPending}
-                  onClick={() => {
-                    if (window.confirm("Satır yok sayılsın mı?")) ignore.mutate(row.id);
+                  onClick={async () => {
+                    if (
+                      await ask({
+                        title: "Satır yok sayılsın mı?",
+                        text: "Satır silinmez, yok sayılmış olarak saklanır.",
+                        confirmLabel: "Yok say",
+                      })
+                    ) {
+                      ignore.mutate(row.id);
+                    }
                   }}
                 >
                   Yok say

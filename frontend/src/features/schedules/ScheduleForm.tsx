@@ -4,7 +4,8 @@ import { useCreateSchedule, useUpdateSchedule } from "@/api/queries/attendance";
 import { useBranchClassrooms, useBranchTeachers, useUserSubjects } from "@/api/queries/user";
 import { useBranchId } from "@/auth/useBranchId";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { Field, INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { Field, PRIMARY_BUTTON } from "@/components/ui/form";
+import { FormDatePicker, FormTimePicker } from "@/components/ui/FormPickers";
 import { FormSelect } from "@/components/ui/FormSelect";
 import { PillButton } from "@/components/ui/Pill";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -61,7 +62,6 @@ export function ScheduleForm({
   const idempotency = useIdempotencyKey();
   const editing = !!scheduleId;
   const {
-    register,
     control,
     handleSubmit,
     formState: { errors },
@@ -144,10 +144,10 @@ export function ScheduleForm({
             />
           </Field>
           <Field label="Başlangıç saati" htmlFor="schedule-start" error={errors.startsAt?.message}>
-            <input id="schedule-start" type="time" className={INPUT} {...register("startsAt")} />
+            <FormTimePicker id="schedule-start" control={control} name="startsAt" />
           </Field>
           <Field label="Bitiş saati" htmlFor="schedule-end" error={errors.endsAt?.message}>
-            <input id="schedule-end" type="time" className={INPUT} {...register("endsAt")} />
+            <FormTimePicker id="schedule-end" control={control} name="endsAt" />
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -156,14 +156,20 @@ export function ScheduleForm({
             htmlFor="schedule-from"
             error={errors.validFrom?.message}
           >
-            <input id="schedule-from" type="date" className={INPUT} {...register("validFrom")} />
+            <FormDatePicker id="schedule-from" control={control} name="validFrom" />
           </Field>
           <Field
             label="Geçerli (bitiş, isteğe bağlı)"
             htmlFor="schedule-to"
             error={errors.validTo?.message}
           >
-            <input id="schedule-to" type="date" className={INPUT} {...register("validTo")} />
+            <FormDatePicker
+              id="schedule-to"
+              control={control}
+              name="validTo"
+              clearable
+              placeholder="Süresiz"
+            />
           </Field>
         </div>
         <div className="flex gap-2">

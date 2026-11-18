@@ -1,19 +1,41 @@
-// Time grid of the drag-and-drop weekly timetable: 50-minute lessons, 10-minute breaks.
-// shortcut: the grid is fixed (08:10-20:00); a schedule outside it is not shown, widen SLOT_COUNT if needed.
-const FIRST_START_MINUTES = 8 * 60 + 10;
-const LESSON = 50;
-const STEP = 60;
-export const SLOT_COUNT = 12;
+// Time grid of the drag-and-drop weekly timetable. The branch sets it (first lesson, lesson and break
+// length, lessons per day); a schedule that falls outside the grid is not shown on the board.
+export interface TimetableSetting {
+  firstLessonStart: string; // "HH:mm"
+  lessonMinutes: number;
+  breakMinutes: number;
+  lessonCount: number;
+  // The lesson (1-based) that is the lunch break: that hour is taken on every day and for every
+  // classroom. 0 = no lunch break.
+  lunchLesson: number;
+}
 
-const clock = (minutes: number) =>
+// What the service answers for a branch that never customized it.
+export const DEFAULT_TIMETABLE: TimetableSetting = {
+  firstLessonStart: "08:10",
+  lessonMinutes: 50,
+  breakMinutes: 10,
+  lessonCount: 12,
+  lunchLesson: 0,
+};
+
+export const clock = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
-const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+export const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 
-export const SLOTS = Array.from({ length: SLOT_COUNT }, (_, i) => {
-  const start = FIRST_START_MINUTES + i * STEP;
-  return { startsAt: clock(start), endsAt: clock(start + LESSON) };
-});
+export interface Slot {
+  startsAt: string;
+  endsAt: string;
+}
+
+export function buildSlots(setting: TimetableSetting): Slot[] {
+  const first = toMinutes(setting.firstLessonStart);
+  return Array.from({ length: setting.lessonCount }, (_, i) => {
+    const start = first + i * (setting.lessonMinutes + setting.breakMinutes);
+    return { startsAt: clock(start), endsAt: clock(start + setting.lessonMinutes) };
+  });
+}
 
 export interface SlotSpan {
   first: number;
@@ -21,17 +43,17 @@ export interface SlotSpan {
 }
 
 // Slots a "HH:mm" time range touches; a range that falls outside the grid has no span.
-export function spanOf(startsAt: string, endsAt: string): SlotSpan | undefined {
+export function spanOf(slots: Slot[], startsAt: string, endsAt: string): SlotSpan | undefined {
   const start = toMinutes(startsAt);
   const end = toMinutes(endsAt);
-  const first = SLOTS.findIndex((s) => toMinutes(s.endsAt) > start);
+  const first = slots.findIndex((s) => toMinutes(s.endsAt) > start);
   // The project's TS lib has no findLastIndex: the last slot that starts before the range ends.
-  const last = SLOTS.reduce((found, s, i) => (toMinutes(s.startsAt) < end ? i : found), -1);
+  const last = slots.reduce((found, s, i) => (toMinutes(s.startsAt) < end ? i : found), -1);
   return first === -1 || last < first ? undefined : { first, last };
 }
 
-export function timesOf({ first, last }: SlotSpan): { startsAt: string; endsAt: string } {
-  return { startsAt: SLOTS[first].startsAt, endsAt: SLOTS[last].endsAt };
+export function timesOf(slots: Slot[], { first, last }: SlotSpan): Slot {
+  return { startsAt: slots[first].startsAt, endsAt: slots[last].endsAt };
 }
 
 export interface Placed {
@@ -45,11 +67,11 @@ export function overlaps(
   placed: Placed[],
   day: string,
   span: SlotSpan,
-  ignoreId?: string,
+  ignoreId?: string | string[],
 ): boolean {
   return placed.some(
     (p) =>
-      p.id !== ignoreId &&
+      !(Array.isArray(ignoreId) ? ignoreId.includes(p.id) : p.id === ignoreId) &&
       p.dayOfWeek === day &&
       p.span.first <= span.last &&
       span.first <= p.span.last,

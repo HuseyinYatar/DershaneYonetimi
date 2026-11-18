@@ -4,6 +4,7 @@ import { useBranchTeachers } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { fullName } from "@/lib/userForm";
@@ -29,6 +30,7 @@ export function SessionAdminActions({
   teacherId: string;
 }) {
   const teachers = useBranchTeachers();
+  const ask = useConfirm();
   const cancel = useCancelSession(sessionId);
   const reassign = useReassignTeacher(sessionId);
   const [substitute, setSubstitute] = useState("");
@@ -61,8 +63,16 @@ export function SessionAdminActions({
       <div className="mt-4 border-t border-line pt-4">
         <PillButton
           disabled={cancel.isPending}
-          onClick={() => {
-            if (window.confirm("Bu ders iptal edilsin mi? Yoklama alınmayacak.")) cancel.mutate();
+          onClick={async () => {
+            if (
+              await ask({
+                title: "Bu ders iptal edilsin mi?",
+                text: "Yoklama alınmayacak.",
+                confirmLabel: "Dersi iptal et",
+                danger: true,
+              })
+            )
+              cancel.mutate();
           }}
         >
           Dersi iptal et

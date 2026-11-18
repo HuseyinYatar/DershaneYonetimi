@@ -8,6 +8,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { Breadcrumb, PageHeader } from "@/components/ui/PageHeader";
 import { PillButton, SegButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { TableHead, TableRow, Td, Th } from "@/components/ui/Table";
 import { formatClock, formatDayMonth, parseDateOnly } from "@/lib/format";
@@ -47,6 +48,7 @@ export function SchedulesPage() {
   const classrooms = useBranchClassrooms();
   const teachers = useBranchTeachers();
   const subjects = useUserSubjectNames();
+  const ask = useConfirm();
   const deactivate = useDeactivateSchedule();
   const classroomNames = new Map((classrooms.data ?? []).map((c) => [c.id, c.name]));
   const teacherNames = new Map((teachers.data ?? []).map((t) => [t.id, fullName(t)]));
@@ -178,9 +180,14 @@ export function SchedulesPage() {
                           </PillButton>
                           <PillButton
                             disabled={deactivate.isPending}
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                window.confirm("Program pasife alınsın mı? Oluşmuş dersler kalır.")
+                                await ask({
+                                  title: "Program pasife alınsın mı?",
+                                  text: "Oluşmuş dersler kalır.",
+                                  confirmLabel: "Pasife al",
+                                  danger: true,
+                                })
                               ) {
                                 deactivate.mutate(id);
                               }
