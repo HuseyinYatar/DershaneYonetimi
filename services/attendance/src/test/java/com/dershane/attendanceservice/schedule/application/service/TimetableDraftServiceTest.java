@@ -17,6 +17,7 @@ import com.dershane.attendanceservice.schedule.application.port.in.GenerateTimet
 import com.dershane.attendanceservice.schedule.application.port.in.MoveDraftLessonCommand;
 import com.dershane.attendanceservice.schedule.application.port.in.ScheduleView;
 import com.dershane.attendanceservice.schedule.application.port.in.TimetableDraftView;
+import com.dershane.attendanceservice.schedule.application.port.out.BranchScheduleLockPort;
 import com.dershane.attendanceservice.schedule.application.port.out.LoadTimetableDraftPort;
 import com.dershane.attendanceservice.schedule.application.port.out.LoadTimetableSettingPort;
 import com.dershane.attendanceservice.schedule.application.port.out.SaveTimetableDraftPort;
@@ -56,6 +57,7 @@ class TimetableDraftServiceTest {
   @Mock private LoadTimetableDraftPort loadDraft;
   @Mock private SaveTimetableDraftPort saveDraft;
   @Mock private CreateScheduleUseCase createSchedule;
+  @Mock private BranchScheduleLockPort branchLock;
 
   private final UUID branchId = UUID.randomUUID();
   private final UUID classroom = UUID.randomUUID();
@@ -75,7 +77,8 @@ class TimetableDraftServiceTest {
             loadDraft,
             saveDraft,
             createSchedule,
-            new BranchAccessPolicy());
+            new BranchAccessPolicy(),
+            branchLock);
   }
 
   private static LocalTime t(String hhmm) {
@@ -115,6 +118,12 @@ class TimetableDraftServiceTest {
     return draft;
   }
 
+  /** The user service still knows the assignment every lesson of the tests names. */
+  private void assignmentsStillExist() {
+    when(userDirectory.loadBranchAssignments(branchId))
+        .thenReturn(List.of(new BranchAssignment(teacher, classroom, subject, 4)));
+  }
+
   private void defaultGrid() {
     when(loadSetting.findByBranchId(branchId)).thenReturn(Optional.empty());
   }
@@ -139,7 +148,8 @@ class TimetableDraftServiceTest {
     TimetableDraftView view =
         service.generate(admin, new GenerateTimetableDraftCommand(null, null));
 
-    InOrder order = inOrder(saveDraft);
+    InOrder order = inOrder(branchLock, saveDraft);
+    order.verify(branchLock).lock(branchId);
     order.verify(saveDraft).deleteByBranchId(branchId);
     order.verify(saveDraft).save(any());
     assertThat(view.missing()).isEmpty();
@@ -342,6 +352,7 @@ class TimetableDraftServiceTest {
 
   @Test
   void commitOpensOneScheduleForEveryLessonAndDropsTheDraft() {
+    assignmentsStillExist();
     defaultGrid();
     existingSchedules();
     draftWith(
@@ -366,6 +377,7 @@ class TimetableDraftServiceTest {
 
   @Test
   void commitFailureLeavesTheDraftAndPropagatesSoTheTransactionRollsBack() {
+    assignmentsStillExist();
     defaultGrid();
     existingSchedules();
     draftWith(
@@ -384,6 +396,7 @@ class TimetableDraftServiceTest {
 
   @Test
   void commitRevalidatesAgainstTheTimetableAsItIsNowAndWritesNothingOnAClash() {
+    assignmentsStillExist();
     defaultGrid();
     existingSchedules(schedule(classroom, UUID.randomUUID(), DayOfWeek.MONDAY, "08:10", "09:00"));
     draftWith(lesson(classroom, DayOfWeek.MONDAY, "08:10", "09:00"));
@@ -394,5 +407,96 @@ class TimetableDraftServiceTest {
     assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.CLASSROOM_BUSY);
     verify(createSchedule, never()).create(any(), any());
     verify(saveDraft, never()).deleteByBranchId(any());
+  }
+
+  @Test
+  void commitRefusesADraftWhoseAssignmentIsGoneAndKeepsIt() {
+    when(userDirectory.loadBranchAssignments(branchId)).thenReturn(List.of());
+    draftWith(lesson(classroom, DayOfWeek.MONDAY, "08:10", "09:00"));
+
+    DomainException thrown =
+        thrownBy(() -> service.commit(admin, null, LocalDate.of(2026, 11, 23)));
+
+    assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.TIMETABLE_DRAFT_STALE);
+    verify(createSchedule, never()).create(any(), any());
+    verify(saveDraft, never()).deleteByBranchId(any());
+  }
+
+  @Test
+  void commitRefusesADraftWhenOnlyOneOfItsAssignmentsIsGone() {
+    when(userDirectory.loadBranchAssignments(branchId))
+        .thenReturn(List.of(new BranchAssignment(teacher, classroom, subject, 4)));
+    draftWith(
+        lesson(classroom, DayOfWeek.MONDAY, "08:10", "09:00"),
+        lesson(UUID.randomUUID(), DayOfWeek.TUESDAY, "08:10", "09:00"));
+
+    DomainException thrown =
+        thrownBy(() -> service.commit(admin, null, LocalDate.of(2026, 11, 23)));
+
+    assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.TIMETABLE_DRAFT_STALE);
+    verify(createSchedule, never()).create(any(), any());
+  }
+
+  @Test
+  void commitAsksTheUserServiceBeforeTakingTheBranchLock() {
+    assignmentsStillExist();
+    defaultGrid();
+    existingSchedules();
+    draftWith(lesson(classroom, DayOfWeek.MONDAY, "08:10", "09:00"));
+
+    service.commit(admin, null, LocalDate.of(2026, 11, 23));
+
+    InOrder order = inOrder(userDirectory, branchLock, createSchedule, saveDraft);
+    order.verify(userDirectory).loadBranchAssignments(branchId);
+    order.verify(branchLock).lock(branchId);
+    order.verify(createSchedule).create(eq(admin), any());
+    order.verify(saveDraft).deleteByBranchId(branchId);
+  }
+
+  @Test
+  void aSecondCommitFindsNoDraftAndOpensNothingMore() {
+    assignmentsStillExist();
+    defaultGrid();
+    existingSchedules();
+    TimetableDraft draft =
+        TimetableDraft.create(
+            branchId, List.of(lesson(classroom, DayOfWeek.MONDAY, "08:10", "09:00")), List.of());
+    when(loadDraft.findByBranchId(branchId))
+        .thenReturn(Optional.of(draft))
+        .thenReturn(Optional.empty());
+
+    service.commit(admin, null, LocalDate.of(2026, 11, 23));
+    DomainException thrown =
+        thrownBy(() -> service.commit(admin, null, LocalDate.of(2026, 11, 23)));
+
+    assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.TIMETABLE_DRAFT_NOT_FOUND);
+    verify(branchLock, times(2)).lock(branchId);
+    verify(createSchedule, times(1)).create(any(), any());
+  }
+
+  @Test
+  void commitIgnoresASchedulePeriodThatEndsBeforeTheDraftStarts() {
+    assignmentsStillExist();
+    defaultGrid();
+    existingSchedules(
+        new ScheduleView(
+            UUID.randomUUID(),
+            branchId,
+            classroom,
+            UUID.randomUUID(),
+            subject,
+            DayOfWeek.MONDAY,
+            t("08:10"),
+            t("09:00"),
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 6, 30),
+            true,
+            null,
+            null));
+    draftWith(lesson(classroom, DayOfWeek.MONDAY, "08:10", "09:00"));
+
+    int created = service.commit(admin, null, LocalDate.of(2026, 11, 23));
+
+    assertThat(created).isEqualTo(1);
   }
 }

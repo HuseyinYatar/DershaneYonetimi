@@ -54,4 +54,17 @@ class TimetableGridTest {
     assertThat(grid.touchedBy(t("21:00"), t("22:00"))).isEmpty();
     assertThat(grid.touchedBy(t("06:00"), t("07:00"))).isEmpty();
   }
+
+  @Test
+  void aTimeRangeOverlapsTheLunchHourOnlyWhenItSharesAMinuteWithIt() {
+    // Lunch is the 5th hour: 12:10-13:00.
+    TimetableGrid lunch =
+        TimetableGrid.of(new TimetableSetting(branch, 1L, LocalTime.of(8, 10), 50, 10, 12, 5));
+
+    assertThat(lunch.overlapsLunch(t("12:30"), t("13:20"))).isTrue();
+    assertThat(lunch.overlapsLunch(t("11:00"), t("12:20"))).isTrue();
+    assertThat(lunch.overlapsLunch(t("13:00"), t("13:50"))).isFalse();
+    assertThat(lunch.overlapsLunch(t("11:10"), t("12:10"))).isFalse();
+    assertThat(grid.overlapsLunch(t("12:10"), t("13:00"))).isFalse();
+  }
 }

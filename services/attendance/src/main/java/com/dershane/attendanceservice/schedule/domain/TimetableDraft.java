@@ -4,6 +4,7 @@ import com.dershane.attendanceservice.shared.domain.ErrorCode;
 import com.dershane.attendanceservice.shared.domain.Rejections;
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,7 +35,13 @@ public class TimetableDraft {
       LocalTime endsAt) {
 
     ScheduleConflicts.Lesson asLesson() {
-      return new ScheduleConflicts.Lesson(id, classroomId, teacherId, dayOfWeek, startsAt, endsAt);
+      return asLesson(null);
+    }
+
+    /** As it would stand once saved from {@code validFrom} on, with no end date. */
+    ScheduleConflicts.Lesson asLesson(LocalDate validFrom) {
+      return new ScheduleConflicts.Lesson(
+          id, classroomId, teacherId, dayOfWeek, startsAt, endsAt, validFrom, null);
     }
   }
 
@@ -104,6 +111,18 @@ public class TimetableDraft {
    */
   public void requireValid(
       DraftLesson lesson, TimetableGrid grid, Collection<ScheduleConflicts.Lesson> existing) {
+    requireValid(lesson, grid, existing, null);
+  }
+
+  /**
+   * Same check for saving: the lessons would be valid from {@code validFrom} on, so an existing
+   * schedule that ends before then does not clash. Null {@code validFrom} ignores validity.
+   */
+  public void requireValid(
+      DraftLesson lesson,
+      TimetableGrid grid,
+      Collection<ScheduleConflicts.Lesson> existing,
+      LocalDate validFrom) {
     SlotSpan span =
         grid.exactly(lesson.startsAt(), lesson.endsAt())
             .orElseThrow(
@@ -114,9 +133,10 @@ public class TimetableDraft {
     List<ScheduleConflicts.Lesson> others = new ArrayList<>(existing);
     lessons.stream()
         .filter(l -> !l.id().equals(lesson.id()))
-        .map(DraftLesson::asLesson)
+        .map(l -> l.asLesson(validFrom))
         .forEach(others::add);
-    Optional<ScheduleConflicts.Kind> clash = ScheduleConflicts.find(lesson.asLesson(), others);
+    Optional<ScheduleConflicts.Kind> clash =
+        ScheduleConflicts.find(lesson.asLesson(validFrom), others);
     if (clash.isPresent()) {
       boolean classroom = clash.get() == ScheduleConflicts.Kind.CLASSROOM;
       throw rejected(

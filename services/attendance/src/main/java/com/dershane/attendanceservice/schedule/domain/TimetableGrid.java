@@ -48,6 +48,15 @@ public final class TimetableGrid {
     return lunchSlot >= 0 && span.contains(lunchSlot);
   }
 
+  /** True when the time range shares any minute with the lunch hour (no lunch hour: false). */
+  public boolean overlapsLunch(LocalTime startsAt, LocalTime endsAt) {
+    if (lunchSlot < 0 || lunchSlot >= slots.size()) {
+      return false;
+    }
+    Slot lunch = slots.get(lunchSlot);
+    return startsAt.isBefore(lunch.endsAt()) && lunch.startsAt().isBefore(endsAt);
+  }
+
   public LocalTime startOf(SlotSpan span) {
     return slots.get(span.first()).startsAt();
   }

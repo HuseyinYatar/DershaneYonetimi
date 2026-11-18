@@ -12,6 +12,7 @@ import com.dershane.attendanceservice.schedule.application.port.in.MoveDraftLess
 import com.dershane.attendanceservice.schedule.application.port.in.RemoveDraftLessonUseCase;
 import com.dershane.attendanceservice.schedule.application.port.in.ScheduleView;
 import com.dershane.attendanceservice.schedule.application.port.in.TimetableDraftView;
+import com.dershane.attendanceservice.schedule.application.port.out.BranchScheduleLockPort;
 import com.dershane.attendanceservice.schedule.application.port.out.LoadTimetableDraftPort;
 import com.dershane.attendanceservice.schedule.application.port.out.LoadTimetableSettingPort;
 import com.dershane.attendanceservice.schedule.application.port.out.SaveTimetableDraftPort;
@@ -35,7 +36,9 @@ import com.dershane.attendanceservice.shared.domain.Rejections;
 import io.micrometer.observation.annotation.Observed;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +76,7 @@ class TimetableDraftService
   private final SaveTimetableDraftPort saveDraft;
   private final CreateScheduleUseCase createSchedule;
   private final BranchAccessPolicy branchAccess;
+  private final BranchScheduleLockPort branchLock;
 
   @Override
   @Transactional
@@ -134,6 +138,9 @@ class TimetableDraftService
                         m.demand().subjectId(),
                         m.hours()))
             .toList();
+    // Replacing the draft is serialized per branch: two admins generating at once would otherwise
+    // both insert and one would hit the unique key.
+    branchLock.lock(branch);
     saveDraft.deleteByBranchId(branch);
     TimetableDraft saved = saveDraft.save(TimetableDraft.create(branch, lessons, missing));
     log.atInfo()
@@ -202,18 +209,25 @@ class TimetableDraftService
 
   /**
    * One transaction: the schedules are opened through the ordinary create use case (so its rules
-   * apply) and any failure rolls all of them back, draft included.
+   * apply) and any failure rolls all of them back, draft included. The user service is asked first,
+   * before the branch lock and any write, so a slow call never holds the branch; the draft must
+   * still match its assignments (a draft is kept until saved, and assignments can change
+   * meanwhile). shortcut: the transaction (and its connection) is already open during that call;
+   * split the method with a TransactionTemplate if the pool ever runs short.
    */
   @Override
   @Transactional
   @Observed(name = "timetable-draft.commit")
   public int commit(Actor actor, UUID branchId, LocalDate validFrom) {
     UUID branch = branch(actor, branchId, "timetable-draft.commit");
+    List<BranchAssignment> assignments = userDirectory.loadBranchAssignments(branch);
+    branchLock.lock(branch);
     TimetableDraft draft = requireDraft(branch);
+    requireCurrent(draft, assignments);
     TimetableGrid grid = gridOf(branch);
-    List<ScheduleConflicts.Lesson> existing = existingLessons(branch);
+    List<ScheduleConflicts.Lesson> existing = existingLessonsWithValidity(branch);
     for (DraftLesson lesson : draft.getLessons()) {
-      draft.requireValid(lesson, grid, existing);
+      draft.requireValid(lesson, grid, existing, validFrom);
     }
     for (DraftLesson lesson : draft.getLessons()) {
       createSchedule.create(
@@ -249,6 +263,45 @@ class TimetableDraftService
 
   private List<ScheduleView> activeSchedules(UUID branch) {
     return scheduleQuery.findViews(branch, null, null, true, Pageable.unpaged()).getContent();
+  }
+
+  /** Rejects a draft whose lessons name an assignment that no longer exists (or a closed class). */
+  private void requireCurrent(TimetableDraft draft, List<BranchAssignment> assignments) {
+    Set<List<UUID>> current = new HashSet<>();
+    assignments.forEach(a -> current.add(List.of(a.classroomId(), a.teacherId(), a.subjectId())));
+    for (DraftLesson lesson : draft.getLessons()) {
+      if (!current.contains(
+          List.of(lesson.classroomId(), lesson.teacherId(), lesson.subjectId()))) {
+        throw Rejections.reject(
+            log,
+            ErrorCode.TIMETABLE_DRAFT_STALE,
+            "Draft rejected: a lesson names an assignment that no longer exists",
+            "draftId",
+            draft.getId(),
+            "lessonId",
+            lesson.id(),
+            "classroomId",
+            lesson.classroomId(),
+            "teacherId",
+            lesson.teacherId());
+      }
+    }
+  }
+
+  private List<ScheduleConflicts.Lesson> existingLessonsWithValidity(UUID branch) {
+    return activeSchedules(branch).stream()
+        .map(
+            s ->
+                new ScheduleConflicts.Lesson(
+                    s.id(),
+                    s.classroomId(),
+                    s.teacherId(),
+                    s.dayOfWeek(),
+                    s.startsAt(),
+                    s.endsAt(),
+                    s.validFrom(),
+                    s.validTo()))
+        .toList();
   }
 
   private List<ScheduleConflicts.Lesson> existingLessons(UUID branch) {
