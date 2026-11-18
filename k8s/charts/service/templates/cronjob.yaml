@@ -1,0 +1,51 @@
+{{- range $job := .Values.cronJobs }}
+---
+# Scheduled run of the same image with job arguments (Java: --<service>.job=...; it exits when done).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "service.name" $ }}-{{ $job.name }}
+  labels:
+    {{- include "service.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: job
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  schedule: {{ $job.schedule | quote }}
+  timeZone: Europe/Istanbul
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            {{- include "service.labels" $ | nindent 12 }}
+            app.kubernetes.io/component: job
+        spec:
+          {{- include "service.podCommon" $ | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: {{ $job.name }}
+              image: {{ include "service.image" $ }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              args: {{- toYaml $job.args | nindent 16 }}
+              envFrom:
+                {{- include "service.envFrom" $ | nindent 16 }}
+              {{- with include "service.awsEnv" $ }}
+              env:
+                {{- . | trim | nindent 16 }}
+              {{- end }}
+              resources:
+                {{- toYaml $.Values.web.resources | nindent 16 }}
+              securityContext:
+                {{- toYaml $.Values.securityContext | nindent 16 }}
+              volumeMounts:
+                {{- include "service.volumeMounts" $ | nindent 16 }}
+          volumes:
+            {{- include "service.volumes" $ | nindent 12 }}
+{{- end }}

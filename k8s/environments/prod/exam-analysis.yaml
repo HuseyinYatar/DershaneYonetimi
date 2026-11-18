@@ -1,0 +1,68 @@
+# exam-analysis: mock exams, optical files, scores, weak topics
+# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS>, <REDIS_ADDRESS> and <IMAGE_TAG> are filled
+# by k8s/fill-values.sh from the Terraform outputs (k8s/README.md).
+name: exam-analysis
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/exam-analysis
+  tag: <IMAGE_TAG>
+aws:
+  roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-exam-analysis
+
+web:
+  port: 8000
+  probes:
+    port: 8000
+    liveness: /health/live
+    readiness: /health/ready
+    startupFailureThreshold: 24
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+service:
+  port: 8000
+
+worker:
+  enabled: true
+  command: ["python", "-m", "app.worker"]
+  livenessCommand: ["python", "-m", "app.worker.healthcheck"]   # age of the heartbeat file in /tmp
+  env:
+    OUTBOX_RELAY_ENABLED: "true"   # only the worker sends the outbox to SNS
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { memory: 768Mi }      # pandas on a whole optical file
+
+# The load test of the project: more API pods under CPU load, fewer when it ends.
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  cpuUtilization: 70
+
+# Tables, then the exam catalog (exam types, subjects, topics, score coefficients). Both are idempotent.
+migration:
+  enabled: true
+  command: ["sh", "-c", "alembic upgrade head && python -m app.cli seed-catalog"]
+
+env:
+  ENVIRONMENT: prod
+  DB_POOL_SIZE: "5"
+  AWS_REGION: eu-central-1
+  OPTICAL_FILES_BUCKET: dershane-prod-exam-analysis-optical-files
+  SNS_TOPIC_ARN: arn:aws:sns:eu-central-1:<AWS_ACCOUNT_ID>:exam-analysis-events
+  SQS_QUEUE_NAME: exam-analysis-user-events
+  OIDC_ISSUER: https://auth.onlinecourses.site/realms/dershane
+  OIDC_JWKS_URL: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  OIDC_AUDIENCE: dershane-api
+
+secretTemplates:
+  DATABASE_URL:
+    template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@<RDS_ADDRESS>:5432/{{ .dbName }}?sslmode=require"
+    from:
+      dbUser: { key: dershane/db/exam_analysis, property: username }
+      dbPassword: { key: dershane/db/exam_analysis, property: password }
+      dbName: { key: dershane/db/exam_analysis, property: dbname }
+  # rediss = TLS; ":<token>@" = ElastiCache AUTH token.
+  REDIS_URL:
+    template: "rediss://:{{ .redisPassword }}@<REDIS_ADDRESS>:6379/0"
+    from:
+      redisPassword: { key: dershane/redis, property: password }

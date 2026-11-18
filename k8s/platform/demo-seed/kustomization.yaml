@@ -1,0 +1,9 @@
+# Demo data for presentations, loaded through the real APIs by local/seed/seed.mjs (the same script as
+# `local/up.sh --seed`), so events flow and every service's copies fill up. Delete
+# k8s/apps/platform/demo-seed.yaml to install without demo data.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dershane
+resources:
+  - external-secret.yaml
+  - job.yaml

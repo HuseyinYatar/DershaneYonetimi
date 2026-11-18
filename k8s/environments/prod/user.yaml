@@ -1,0 +1,24 @@
+# user: users, branches, classrooms; opens the Keycloak accounts
+# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS>, <REDIS_ADDRESS> and <IMAGE_TAG> are filled
+# by k8s/fill-values.sh from the Terraform outputs (k8s/README.md).
+name: user
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/user
+  tag: <IMAGE_TAG>
+aws:
+  roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-user
+
+env:
+  DB_URL: jdbc:postgresql://<RDS_ADDRESS>:5432/user_service?sslmode=require
+  DB_USERNAME: user_service
+  DB_POOL_SIZE: "5"             # db.t4g.micro allows ~100 connections in total
+  KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
+  KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  KEYCLOAK_PUBLIC_URL: https://auth.onlinecourses.site
+  AWS_REGION: eu-central-1
+  USER_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:<AWS_ACCOUNT_ID>:user-events
+  KEYCLOAK_SERVER_URL: http://keycloak.dershane:8080
+  PASSWORD_SETUP_REDIRECT_URI: https://onlinecourses.site
+secretEnv:
+  DB_PASSWORD: { key: dershane/db/user_service, property: password }
+  KEYCLOAK_ADMIN_CLIENT_SECRET: { key: dershane/keycloak/user-service-client, property: value }

@@ -1,0 +1,13 @@
+# Plain (non-secret) settings as environment variables.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "service.name" . }}-env
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  {{- range $key, $value := .Values.env }}
+  {{ $key }}: {{ $value | toString | quote }}
+  {{- end }}

@@ -176,6 +176,12 @@ variable "db_password_version" {
   default     = 1
 }
 
+variable "app_secret_version" {
+  description = "Increment to generate new Keycloak and demo passwords (app-secrets.tf; sent only when this changes)."
+  type        = number
+  default     = 1
+}
+
 variable "cache_node_type" {
   type    = string
   default = "cache.t4g.micro"
@@ -189,7 +195,7 @@ variable "cache_auth_token_version" {
 
 variable "ecr_repositories" {
   type    = set(string)
-  default = ["api-gateway", "user", "attendance", "task", "messaging", "exam-analysis", "notification", "frontend"]
+  default = ["api-gateway", "user", "attendance", "task", "messaging", "exam-analysis", "notification", "frontend", "keycloak"]
 }
 
 # --- Domain, e-mail, alerts ---------------------------------------------------------------------

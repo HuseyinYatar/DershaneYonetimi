@@ -1,0 +1,41 @@
+# Our services: one Argo CD Application per file in k8s/environments/prod/, all built from the shared chart
+# k8s/charts/service. A new service only adds its own values file there; nothing here changes.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/HuseyinYatar/DershaneYonetimi.git
+        revision: main
+        files:
+          - path: k8s/environments/prod/*.yaml
+  template:
+    metadata:
+      # user.yaml -> Application "user"
+      name: '{{ trimSuffix ".yaml" .path.filename }}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/HuseyinYatar/DershaneYonetimi.git
+        targetRevision: main
+        path: k8s/charts/service
+        helm:
+          releaseName: '{{ trimSuffix ".yaml" .path.filename }}'
+          valueFiles:
+            - '../../environments/prod/{{ .path.filename }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: dershane
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

@@ -1,0 +1,23 @@
+# Keycloak: login and tokens, at https://auth.onlinecourses.site.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/HuseyinYatar/DershaneYonetimi.git
+    targetRevision: main
+    path: k8s/platform/keycloak
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dershane
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

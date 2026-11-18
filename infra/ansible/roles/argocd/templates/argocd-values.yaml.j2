@@ -10,3 +10,20 @@ dex:
 # Slack/e-mail notifications about syncs are not used; saves a pod.
 notifications:
   enabled: false
+
+configs:
+  cm:
+    # k8s/apps installs the platform and the services in order (argocd.argoproj.io/sync-wave on each
+    # Application). The root waits for one wave to be healthy before the next only if Argo CD assesses the
+    # health of Application resources, which it stopped doing by default in 1.8. This restores it.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+      return hs

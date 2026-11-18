@@ -1,0 +1,32 @@
+# Where cert-manager gets certificates: Let's Encrypt, proving domain ownership with the HTTP-01 check
+# (Let's Encrypt fetches http://<host>/.well-known/acme-challenge/... through Traefik).
+# Ingresses use letsencrypt-prod. letsencrypt-staging issues untrusted test certificates with high limits;
+# switch an Ingress's annotation to it while debugging, so failed attempts do not hit the production limits.
+# No contact e-mail: it is optional and would be personal data in a public repository.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik

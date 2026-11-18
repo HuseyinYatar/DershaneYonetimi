@@ -1,0 +1,3 @@
+# The build context is the repository root; only the login theme is needed.
+*
+!local/keycloak/themes/

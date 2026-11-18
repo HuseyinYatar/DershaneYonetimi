@@ -1,0 +1,9 @@
+# Helm values for kubernetes-sigs/metrics-server.
+args:
+  # kubeadm's kubelets serve a self-signed certificate, so metrics-server cannot verify it. Known limit
+  # (k8s/README.md); the alternative is serverTLSBootstrap plus approving the kubelets' certificate requests.
+  - --kubelet-insecure-tls
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
