@@ -122,6 +122,14 @@
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sns</artifactId>
     </dependency>
+    <!-- IRSA in the cluster: the default credential chain trades the pod's ServiceAccount token
+         (AWS_WEB_IDENTITY_TOKEN_FILE) for the service role's temporary keys through STS; without this
+         module the chain skips that step and finds no credentials. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sts</artifactId>
+      <scope>runtime</scope>
+    </dependency>
 
     <!-- API documentation -->
     <dependency>
