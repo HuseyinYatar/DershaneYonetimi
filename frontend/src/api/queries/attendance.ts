@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { attendanceApi, unwrap } from "../client";
 import type { TimetableSetting } from "@/lib/scheduleBoard";
+import { isDraftMissing } from "@/lib/timetableDraft";
 import type { components } from "../schema/attendance";
 
 export interface DateRange {
@@ -170,13 +171,14 @@ export function useTimetableSetting(branchId: string | undefined) {
 // Writes refresh everything attendance-related; the screens are few and the data small.
 function useAttendanceMutation<Variables, Result>(
   mutationFn: (variables: Variables) => Promise<Result>,
-  successText: string,
+  successText: string | ((result: Result) => string) | undefined,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: async () => {
-      toast.success(successText);
+    onSuccess: async (result) => {
+      const text = typeof successText === "function" ? successText(result) : successText;
+      if (text) toast.success(text);
       await queryClient.invalidateQueries({ queryKey: ["attendance"] });
     },
   });
@@ -187,6 +189,109 @@ export function useSaveTimetableSetting(branchId: string) {
     (setting: TimetableSetting) =>
       unwrap(attendanceApi.PUT("/api/v1/timetable-setting", { body: { ...setting, branchId } })),
     "Ders saatleri kaydedildi.",
+  );
+}
+
+// The branch's stored timetable draft; null when there is none (that 404 means "no draft", not a failure).
+export function useCurrentDraft(branchId: string | undefined) {
+  return useQuery({
+    queryKey: ["attendance", "timetable-draft", branchId],
+    enabled: !!branchId,
+    retry: false,
+    queryFn: async () => {
+      try {
+        return await unwrap(
+          attendanceApi.GET("/api/v1/timetable-drafts/current", {
+            params: { query: { branchId } },
+          }),
+        );
+      } catch (error) {
+        if (isDraftMissing(error)) return null;
+        throw error;
+      }
+    },
+  });
+}
+
+// A branch admin's branch comes from the token; "" means the caller has none and the service decides.
+const branchQuery = (branchId: string) => ({ branchId: branchId || undefined });
+
+// The service plans the week and stores the result; the caller decides what to tell the user.
+export function useGenerateDraft(branchId: string) {
+  return useAttendanceMutation(
+    (days: NonNullable<Schemas["GenerateTimetableDraftRequest"]["days"]>) =>
+      unwrap(
+        attendanceApi.POST("/api/v1/timetable-drafts", {
+          body: { ...branchQuery(branchId), days },
+        }),
+      ),
+    undefined,
+  );
+}
+
+// A merged box stands for several lessons: they move one by one (the caller orders them so none lands on
+// a sibling), the first rejection stops the rest, and the data is refreshed either way.
+export function useMoveDraftLessons(branchId: string) {
+  const queryClient = useQueryClient();
+  return useAttendanceMutation(
+    async (moves: { lessonId: string; body: Schemas["MoveTimetableDraftLessonRequest"] }[]) => {
+      try {
+        for (const { lessonId, body } of moves) {
+          await unwrap(
+            attendanceApi.PUT("/api/v1/timetable-drafts/current/lessons/{lessonId}", {
+              params: { path: { lessonId }, query: branchQuery(branchId) },
+              body,
+            }),
+          );
+        }
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      }
+    },
+    undefined,
+  );
+}
+
+export function useDeleteDraftLessons(branchId: string) {
+  const queryClient = useQueryClient();
+  return useAttendanceMutation(async (lessonIds: string[]) => {
+    try {
+      for (const lessonId of lessonIds) {
+        await unwrap(
+          attendanceApi.DELETE("/api/v1/timetable-drafts/current/lessons/{lessonId}", {
+            params: { path: { lessonId }, query: branchQuery(branchId) },
+          }),
+        );
+      }
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    }
+  }, undefined);
+}
+
+export function useDiscardDraft(branchId: string) {
+  return useAttendanceMutation(
+    () =>
+      unwrap(
+        attendanceApi.DELETE("/api/v1/timetable-drafts/current", {
+          params: { query: branchQuery(branchId) },
+        }),
+      ),
+    "Taslak atıldı.",
+  );
+}
+
+// All or nothing on the service side: a conflict rejects the whole draft and writes nothing.
+export function useCommitDraft(branchId: string) {
+  return useAttendanceMutation(
+    (validFrom: string) =>
+      unwrap(
+        attendanceApi.POST("/api/v1/timetable-drafts/current/commit", {
+          params: { query: branchQuery(branchId) },
+          body: { validFrom },
+        }),
+      ),
+    (result) => `Taslak kaydedildi (${result.created ?? 0} ders).`,
   );
 }
 
@@ -207,26 +312,6 @@ export function useCreateSchedule() {
       ),
     "Haftalık program oluşturuldu.",
   );
-}
-
-// Saves a whole draft timetable. One by one, stopping at the first failure; whatever was saved stays,
-// so the data is refreshed either way and the caller re-plans from what exists.
-export function useCreateSchedules() {
-  const queryClient = useQueryClient();
-  return useAttendanceMutation(async (bodies: Schemas["CreateScheduleRequest"][]) => {
-    try {
-      for (const body of bodies) {
-        await unwrap(
-          attendanceApi.POST("/api/v1/class-schedules", {
-            params: { header: { "Idempotency-Key": crypto.randomUUID() } },
-            body,
-          }),
-        );
-      }
-    } finally {
-      await queryClient.invalidateQueries({ queryKey: ["attendance"] });
-    }
-  }, "Haftalık program kaydedildi.");
 }
 
 export function useUpdateSchedule(scheduleId: string) {

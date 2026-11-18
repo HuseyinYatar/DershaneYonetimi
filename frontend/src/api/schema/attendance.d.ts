@@ -174,6 +174,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/timetable-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Distribute the missing lesson hours of the branch into a stored draft (replaces the current one) */
+        post: operations["generateTimetableDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timetable-drafts/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The branch's current draft (404 TIMETABLE_DRAFT_NOT_FOUND when there is none) */
+        get: operations["getCurrentTimetableDraft"];
+        put?: never;
+        post?: never;
+        /** Throw the current draft away */
+        delete: operations["discardTimetableDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timetable-drafts/current/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn the draft into weekly schedules (all or nothing) */
+        post: operations["commitTimetableDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timetable-drafts/current/lessons/{lessonId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Move a lesson of the draft */
+        put: operations["moveTimetableDraftLesson"];
+        post?: never;
+        /** Remove a lesson from the draft */
+        delete: operations["deleteTimetableDraftLesson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/class-schedules": {
         parameters: {
             query?: never;
@@ -542,6 +612,63 @@ export interface components {
             lunchLesson?: number;
             customized?: boolean;
         };
+        GenerateTimetableDraftRequest: {
+            /** Format: uuid */
+            branchId?: string;
+            days?: ("MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY")[];
+        };
+        TimetableDraftLessonResponse: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            classroomId?: string;
+            /** Format: uuid */
+            teacherId?: string;
+            /** Format: uuid */
+            subjectId?: string;
+            /** @enum {string} */
+            dayOfWeek?: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+            /** Format: time-local */
+            startsAt?: string;
+            /** Format: time-local */
+            endsAt?: string;
+        };
+        TimetableDraftMissingResponse: {
+            /** Format: uuid */
+            classroomId?: string;
+            /** Format: uuid */
+            teacherId?: string;
+            /** Format: uuid */
+            subjectId?: string;
+            /** Format: int32 */
+            missingHours?: number;
+        };
+        TimetableDraftResponse: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            branchId?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            lessons?: components["schemas"]["TimetableDraftLessonResponse"][];
+            missing?: components["schemas"]["TimetableDraftMissingResponse"][];
+        };
+        MoveTimetableDraftLessonRequest: {
+            /** @enum {string} */
+            dayOfWeek: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+            /** Format: time-local */
+            startsAt: string;
+            /** Format: time-local */
+            endsAt: string;
+        };
+        CommitTimetableDraftRequest: {
+            /** Format: date */
+            validFrom: string;
+        };
+        CommitTimetableDraftResponse: {
+            /** Format: int32 */
+            created?: number;
+        };
         PagedModelScheduleResponse: {
             content?: components["schemas"]["ScheduleResponse"][];
             page?: components["schemas"]["PageMetadata"];
@@ -577,6 +704,150 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    generateTimetableDraft: {
+        parameters: {
+            query?: {
+                branchId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateTimetableDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TimetableDraftResponse"];
+                };
+            };
+        };
+    };
+    getCurrentTimetableDraft: {
+        parameters: {
+            query?: {
+                branchId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TimetableDraftResponse"];
+                };
+            };
+        };
+    };
+    discardTimetableDraft: {
+        parameters: {
+            query?: {
+                branchId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    commitTimetableDraft: {
+        parameters: {
+            query?: {
+                branchId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitTimetableDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CommitTimetableDraftResponse"];
+                };
+            };
+        };
+    };
+    moveTimetableDraftLesson: {
+        parameters: {
+            query?: {
+                branchId?: string;
+            };
+            header?: never;
+            path: {
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveTimetableDraftLessonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TimetableDraftLessonResponse"];
+                };
+            };
+        };
+    };
+    deleteTimetableDraftLesson: {
+        parameters: {
+            query?: {
+                branchId?: string;
+            };
+            header?: never;
+            path: {
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getTimetableSetting: {
         parameters: {
             query?: {

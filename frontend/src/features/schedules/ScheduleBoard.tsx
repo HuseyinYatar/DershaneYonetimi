@@ -3,9 +3,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   useBranchSchedules,
+  useCommitDraft,
   useCreateSchedule,
-  useCreateSchedules,
+  useCurrentDraft,
   useDeactivateSchedules,
+  useDeleteDraftLessons,
+  useDiscardDraft,
+  useGenerateDraft,
+  useMoveDraftLessons,
   useMoveSchedules,
   useSaveTimetableSetting,
   useTimetableSetting,
@@ -26,7 +31,6 @@ import { PillButton, SegButton } from "@/components/ui/Pill";
 import { useConfirm } from "@/lib/useConfirm";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { type Demand, planWeek } from "@/lib/scheduleAutoPlan";
 import {
   DEFAULT_TIMETABLE,
   buildSlots,
@@ -38,6 +42,7 @@ import {
 } from "@/lib/scheduleBoard";
 import { DAY_LABELS, toCreateSchedule } from "@/lib/scheduleForm";
 import { WEEKDAYS, type Weekday } from "@/lib/taskForm";
+import { draftToBlocks } from "@/lib/timetableDraft";
 import { fullName } from "@/lib/userForm";
 import { cn } from "@/lib/utils";
 import { findConflicts, findLunchConflicts } from "@/lib/scheduleConflicts";
@@ -47,7 +52,7 @@ import { WeekOverviewGrid } from "./WeekOverviewGrid";
 
 type Schedule = components["schemas"]["ScheduleResponse"];
 
-// One lesson on the board: a saved schedule, or a draft the automatic distribution proposed.
+// One lesson on the board: a saved schedule, or a lesson of the stored draft (no `schedule`).
 interface Block extends Placed {
   classroomId: string;
   teacherId: string;
@@ -109,10 +114,14 @@ export function ScheduleBoard() {
   const [showWeekend, setShowWeekend] = useState(false);
   const [drag, setDrag] = useState<Drag>();
   const [over, setOver] = useState("");
-  const [drafts, setDrafts] = useState<Block[]>([]);
-  const [unplaced, setUnplaced] = useState<string[]>([]);
+  // The draft lives on the service (one per branch), so it survives a reload and other admins see it.
+  const draftQuery = useCurrentDraft(branchId);
+  const generate = useGenerateDraft(branchId ?? "");
+  const moveDraft = useMoveDraftLessons(branchId ?? "");
+  const deleteDraft = useDeleteDraftLessons(branchId ?? "");
+  const discardDraft = useDiscardDraft(branchId ?? "");
+  const commitDraft = useCommitDraft(branchId ?? "");
   const create = useCreateSchedule();
-  const saveDrafts = useCreateSchedules();
   const move = useMoveSchedules();
   const ask = useConfirm();
   const deactivate = useDeactivateSchedules();
@@ -151,6 +160,14 @@ export function ScheduleBoard() {
         ]
       : [];
   });
+  const drafts: Block[] = draftToBlocks(draftQuery.data?.lessons, slots);
+  const draftCount = draftQuery.data?.lessons?.length ?? 0;
+  // An empty draft (nothing to place) is no draft: there is nothing to save or throw away.
+  const hasDraft = draftCount > 0 || (draftQuery.data?.missing?.length ?? 0) > 0;
+  const unplaced = (draftQuery.data?.missing ?? []).map(
+    (m) =>
+      `${classroomNames.get(m.classroomId)}: ${subjects.data?.get(m.subjectId ?? "") ?? "Ders"} · ${m.missingHours} saat`,
+  );
   const blocks = [...existing, ...drafts];
   const conflicts = [
     ...findConflicts(blocks),
@@ -203,7 +220,7 @@ export function ScheduleBoard() {
 
   async function removeGroup(g: { ids: string[]; draft: boolean }) {
     if (g.draft) {
-      setDrafts((ds) => ds.filter((d) => !g.ids.includes(d.id)));
+      deleteDraft.mutate(g.ids);
       return;
     }
     const many = g.ids.length > 1;
@@ -296,10 +313,16 @@ export function ScheduleBoard() {
         last: b.span.last + delta,
       });
       if (dragged.draft) {
-        setDrafts((ds) =>
-          ds.map((d) =>
-            dragged.ids.includes(d.id) ? { ...d, dayOfWeek: day, span: shift(d) } : d,
-          ),
+        // The service refuses a lesson that lands on a sibling still in its old place: the ones heading
+        // the way of the move go first (last first when moving later, first first when moving earlier).
+        const members = drafts
+          .filter((d) => dragged.ids.includes(d.id))
+          .sort((a, b) => (delta < 0 ? a.span.first - b.span.first : b.span.first - a.span.first));
+        moveDraft.mutate(
+          members.map((m) => ({
+            lessonId: m.id,
+            body: { dayOfWeek: day, ...timesOf(slots, shift(m)) },
+          })),
         );
         return;
       }
@@ -341,54 +364,32 @@ export function ScheduleBoard() {
     }
   }
 
-  // Distributes what every active classroom still needs, around the lessons that already exist.
-  function autoPlan() {
-    const demands: Demand[] = branchClassrooms.flatMap((c) =>
-      (assignments.byClassroom.get(c.id ?? "") ?? []).map((a) => ({
-        classroomId: c.id ?? "",
-        teacherId: a.teacherId ?? "",
-        subjectId: a.subjectId ?? "",
-        hours: (a.weeklyHours ?? 0) - hoursOf(existing, c.id ?? "", a.teacherId, a.subjectId),
-      })),
-    );
-    const plan = planWeek(
-      demands,
-      existing,
-      days.map((d) => d.value),
-      slots.length,
-      2,
-      lunchSlot,
-    );
-    setDrafts(plan.lessons.map((l) => ({ ...l, id: `draft-${crypto.randomUUID()}` })));
-    setUnplaced(
-      plan.missing.map(
-        (m) =>
-          `${classroomNames.get(m.classroomId)}: ${subjects.data?.get(m.subjectId) ?? "Ders"} · ${m.missing} saat`,
-      ),
-    );
-    if (demands.every((d) => d.hours <= 0)) {
-      toast.info("Yerleştirilecek ders yok. Sınıf seçip kartlardaki haftalık saatleri girin.");
-    }
-  }
-
-  function saveDraft() {
+  // The service distributes what every classroom of the branch still needs around the lessons that
+  // already exist and stores the result as the branch's draft.
+  async function autoPlan() {
     if (!branchId) return;
-    saveDrafts.mutate(
-      drafts.map((d) =>
-        toCreateSchedule(
-          {
-            classroomId: d.classroomId,
-            teacherId: d.teacherId,
-            subjectId: d.subjectId,
-            dayOfWeek: d.dayOfWeek as Weekday,
-            ...timesOf(slots, d.span),
-            validFrom,
-            validTo: "",
-          },
-          branchId,
-        ),
-      ),
-      { onSettled: () => setDrafts([]) },
+    if (
+      hasDraft &&
+      !(await ask({
+        title: "Taslak yeniden dağıtılsın mı?",
+        text: "Mevcut taslak silinir, yerine yenisi hazırlanır.",
+        confirmLabel: "Yeniden dağıt",
+        danger: true,
+      }))
+    ) {
+      return;
+    }
+    generate.mutate(
+      days.map((d) => d.value),
+      {
+        onSuccess: (draft) => {
+          if (draft.lessons?.length || draft.missing?.length) toast.success("Taslak hazırlandı.");
+          else
+            toast.info(
+              "Yerleştirilecek ders yok. Sınıf seçip kartlardaki haftalık saatleri girin.",
+            );
+        },
+      },
     );
   }
 
@@ -490,11 +491,11 @@ export function ScheduleBoard() {
           Hafta sonu
         </SegButton>
         <PillButton
-          disabled={!branchId || assignments.pending || schedules.isPending || drafts.length > 0}
+          disabled={!branchId || generate.isPending || assignments.pending || schedules.isPending}
           onClick={autoPlan}
         >
           <Wand2 size={14} strokeWidth={1.75} aria-hidden="true" />
-          Otomatik dağıt
+          {generate.isPending ? "Dağıtılıyor…" : hasDraft ? "Yeniden dağıt" : "Otomatik dağıt"}
         </PillButton>
         <PillButton
           disabled={!branchId}
@@ -509,23 +510,26 @@ export function ScheduleBoard() {
         <TimetableSettingForm
           branchId={branchId}
           setting={timetable.data}
-          hasDrafts={drafts.length > 0}
-          onSaved={() => setDrafts([])}
+          hasDrafts={hasDraft}
+          onSaved={() => hasDraft && discardDraft.mutate()}
           onDone={() => setSettingsOpen(false)}
         />
       )}
 
-      {drafts.length > 0 && (
+      {hasDraft && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-line bg-sub px-4 py-3 text-[13px]">
           <span>
-            <span className="font-medium">Taslak:</span> {drafts.length} ders yerleştirildi.
-            Kaydedene kadar programa işlenmez; sürükleyerek düzeltebilirsiniz.
+            <span className="font-medium">Taslak:</span> {draftCount} ders yerleştirildi. Kaydedene
+            kadar programa işlenmez; sürükleyerek düzeltebilirsiniz.
           </span>
           <span className="ml-auto flex gap-2">
-            <PillButton disabled={saveDrafts.isPending} onClick={saveDraft}>
-              {saveDrafts.isPending ? "Kaydediliyor…" : "Taslağı kaydet"}
+            <PillButton
+              disabled={commitDraft.isPending || draftCount === 0}
+              onClick={() => commitDraft.mutate(validFrom)}
+            >
+              {commitDraft.isPending ? "Kaydediliyor…" : "Taslağı kaydet"}
             </PillButton>
-            <PillButton disabled={saveDrafts.isPending} onClick={() => setDrafts([])}>
+            <PillButton disabled={commitDraft.isPending} onClick={() => discardDraft.mutate()}>
               Vazgeç
             </PillButton>
           </span>

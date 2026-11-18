@@ -14,7 +14,8 @@ import {
   type TimetableFormValues,
 } from "@/lib/timetableSetting";
 
-// Lesson-hour grid of the branch. A draft holds row numbers, so saving a new grid throws it away.
+// Lesson-hour grid of the branch. The stored draft holds clock times that may not fit a new grid, so
+// saving one discards the draft.
 export function TimetableSettingForm({
   branchId,
   setting,
@@ -46,7 +47,7 @@ export function TimetableSettingForm({
       hasDrafts &&
       !(await ask({
         title: "Kaydedilmemiş taslak silinecek",
-        text: "Ders saatlerini kaydetmek taslağı siler. Devam edilsin mi?",
+        text: "Kaydedilmemiş taslak ızgaraya uymayabilir; ders saatleri kaydedilince sunucudaki taslak atılır. Devam edilsin mi?",
         confirmLabel: "Devam et",
         danger: true,
       }))
