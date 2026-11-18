@@ -194,6 +194,7 @@ services:
       AWS_ENDPOINT_URL: http://floci:4566
       AWS_REGION: eu-central-1
       ATTENDANCE_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:000000000000:attendance-events
+      USER_SERVICE_URL: http://user:8080
     # The CronJobs run the same image once and exit, e.g.
     #   docker compose -f local/docker-compose.yml run --rm attendance --attendance.job=generate-sessions
     #   docker compose -f local/docker-compose.yml run --rm attendance --attendance.job=expire-sessions

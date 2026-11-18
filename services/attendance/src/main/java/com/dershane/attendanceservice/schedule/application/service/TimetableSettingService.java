@@ -9,8 +9,6 @@ import com.dershane.attendanceservice.schedule.application.port.out.SaveTimetabl
 import com.dershane.attendanceservice.schedule.domain.TimetableSetting;
 import com.dershane.attendanceservice.shared.application.Actor;
 import com.dershane.attendanceservice.shared.application.BranchAccessPolicy;
-import com.dershane.attendanceservice.shared.domain.ErrorCode;
-import com.dershane.attendanceservice.shared.domain.Rejections;
 import io.micrometer.observation.annotation.Observed;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -62,20 +60,8 @@ class TimetableSettingService implements GetTimetableSettingQuery, SaveTimetable
     return view(saved, true);
   }
 
-  /** Same branch rule as the schedule list; a super admin with no branch must name one. */
   private UUID resolveBranch(Actor actor, UUID requested, String action) {
-    UUID branch = branchAccess.resolveBranchFilter(actor, requested, action);
-    if (branch == null) {
-      throw Rejections.reject(
-          log,
-          ErrorCode.VALIDATION_FAILED,
-          "Timetable setting needs a branch id",
-          "callerId",
-          actor.id(),
-          "action",
-          action);
-    }
-    return branch;
+    return BranchResolution.resolve(branchAccess, actor, requested, action);
   }
 
   private static TimetableSettingView view(TimetableSetting setting, boolean customized) {

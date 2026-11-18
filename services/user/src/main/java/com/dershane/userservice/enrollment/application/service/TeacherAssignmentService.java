@@ -4,7 +4,9 @@ import com.dershane.userservice.classroom.application.port.in.LoadClassroomQuery
 import com.dershane.userservice.classroom.domain.Classroom;
 import com.dershane.userservice.enrollment.application.port.in.AssignTeacherCommand;
 import com.dershane.userservice.enrollment.application.port.in.AssignTeacherUseCase;
+import com.dershane.userservice.enrollment.application.port.in.BranchAssignmentView;
 import com.dershane.userservice.enrollment.application.port.in.ChangeAssignmentHoursUseCase;
+import com.dershane.userservice.enrollment.application.port.in.ListBranchTeacherAssignmentsQuery;
 import com.dershane.userservice.enrollment.application.port.in.ListTeacherAssignmentsQuery;
 import com.dershane.userservice.enrollment.application.port.in.RemoveTeacherAssignmentUseCase;
 import com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView;
@@ -36,6 +38,7 @@ class TeacherAssignmentService
     implements AssignTeacherUseCase,
         ChangeAssignmentHoursUseCase,
         RemoveTeacherAssignmentUseCase,
+        ListBranchTeacherAssignmentsQuery,
         ListTeacherAssignmentsQuery {
 
   private static final String CREATE = "teacher.assignment.create";
@@ -135,6 +138,13 @@ class TeacherAssignmentService
         "Teacher assignment not found",
         "assignmentId",
         assignmentId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<BranchAssignmentView> listOfBranch(Actor actor, UUID branchId) {
+    branchAccess.requireBranchAdmin(actor, branchId, "teacher.assignment.list-branch");
+    return assignmentQuery.findAssignmentsOfBranch(branchId);
   }
 
   /** Branch admins, or the teacher themself. */

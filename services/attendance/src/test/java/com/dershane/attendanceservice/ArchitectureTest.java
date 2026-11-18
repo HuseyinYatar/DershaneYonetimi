@@ -46,6 +46,7 @@ class ArchitectureTest {
           .adapter("in", "..adapter.in..")
           .adapter("persistence", "..adapter.out.persistence..")
           .adapter("messaging", "..adapter.out.messaging..")
+          .adapter("userdirectory", "..adapter.out.userdirectory..")
           .withOptionalLayers(true);
 
   @ArchTest

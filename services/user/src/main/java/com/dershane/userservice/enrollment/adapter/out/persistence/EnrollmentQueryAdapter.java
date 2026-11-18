@@ -1,5 +1,6 @@
 package com.dershane.userservice.enrollment.adapter.out.persistence;
 
+import com.dershane.userservice.enrollment.application.port.in.BranchAssignmentView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomStudentView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomSummaryView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomTeacherView;
@@ -44,6 +45,11 @@ public class EnrollmentQueryAdapter implements MembershipQueryPort, TeacherAssig
   @Override
   public List<ClassroomTeacherView> findTeachersOfClassroom(UUID classroomId) {
     return assignments.findTeachersOfClassroom(classroomId);
+  }
+
+  @Override
+  public List<BranchAssignmentView> findAssignmentsOfBranch(UUID branchId) {
+    return assignments.findAssignmentsOfBranch(branchId);
   }
 
   @Override
