@@ -30,6 +30,14 @@ providers:
     enabled: false
   kubernetesIngress:
     enabled: true
+    # Traefik writes the address clients reach into every Ingress status. By default it copies its own
+    # Service's load balancer address, but the Service is a NodePort (the NLB is Terraform's), so the status
+    # stayed empty and Argo CD kept the Ingresses (and their Applications) Progressing. The NLB's Elastic IP
+    # (terraform output ingress_public_ip) is the address the DNS A records point to; it is public anyway.
+    publishedService:
+      enabled: false
+    ingressEndpoint:
+      ip: 3.122.142.15
 
 resources:
   requests:
