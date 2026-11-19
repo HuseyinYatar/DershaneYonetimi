@@ -4,7 +4,7 @@
 name: task
 image:
   repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/task
-  tag: <IMAGE_TAG>
+  tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
 aws:
   roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-task
 
