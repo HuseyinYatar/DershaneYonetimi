@@ -30,7 +30,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: keycloak
-          image: <ECR_REGISTRY>/keycloak:<IMAGE_TAG>
+          image: <ECR_REGISTRY>/keycloak:b260ca09e0394428b46579b4c1cb1eda445f1fc3
           args: ["start", "--optimized", "--import-realm"]
           env:
             - name: KC_DB_URL
