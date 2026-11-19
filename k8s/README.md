@@ -30,23 +30,23 @@ Her Application'ın üzerindeki `argocd.argoproj.io/sync-wave` numarası sıray�
 
 Not: ApplicationSet'in kendi sağlık durumu yok, bu yüzden 4 ve 5, servisler tam açılmadan başlayabiliyor. İkisi de bunu bekleyecek şekilde yazıldı: bootstrap tabloları, demo-seed servisleri bekliyor.
 
-## İlk kurulum (Ansible'dan sonra)
+## İlk kurulum
 
 1. **Terraform'u `standby = false` ile uygula.** NLB ve Redis bu adımda açılır. Ardından Güzel Hosting'e `@` ve `*` için A kaydı (`terraform output ingress_public_ip`) ve 3 DKIM CNAME kaydı girilir.
-2. **İmajları ECR'a gönder.** CD henüz yok, bu yüzden elle (repo kökünden, kendi AWS kullanıcınla):
-   ```bash
-   REG=$(terraform -chdir=infra/terraform output -raw ecr_registry)
-   TAG=$(git rev-parse --short=7 HEAD)
-   aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin "$REG"
-   for s in api-gateway user attendance task messaging exam-analysis notification; do
-     docker build --platform linux/amd64 --build-arg GIT_COMMIT_SHA="$TAG" -t "$REG/$s:$TAG" "services/$s" && docker push "$REG/$s:$TAG"
-   done
-   docker build --platform linux/amd64 -t "$REG/frontend:$TAG" frontend && docker push "$REG/frontend:$TAG"
-   docker build --platform linux/amd64 -f infra/keycloak/Dockerfile -t "$REG/keycloak:$TAG" . && docker push "$REG/keycloak:$TAG"
-   ```
-   ECR aynı etiketin üzerine yazılmasına izin vermiyor. Yeni bir sürüm için yeni bir commit'in etiketi kullanılır.
-3. **İşaretleri doldur:** `k8s/fill-values.sh "$TAG"`. Betik hesap numarasını, RDS ve Redis adreslerini, RDS ana secret'ını ve imaj etiketini dosyalara yazar. `git diff k8s/` ile kontrol et, commit et, main'e birleştir.
-4. **ArgoCD gerisini kurar.** Durumu `kubectl -n argocd get applications` ile ya da arayüzden (`infra/ansible/README.md`) izlersin. İlk kurulum, sertifikalar ve demo verisiyle birlikte 15–25 dakika sürer.
+2. **İşaretleri doldur:** `k8s/fill-values.sh`. Betik hesap numarasını, RDS ve Redis adreslerini ve RDS ana secret'ını dosyalara yazar. `git diff k8s/` ile kontrol et, commit et, main'e birleştir.
+3. **İmajlar:** CI gönderiyor (aşağıdaki "İmajlar ve etiketler"). İlk kurulumda imajların hepsi gerekiyor: GitHub'da Actions sekmesinden 9 workflow (7 servis, `frontend`, `keycloak`) main üzerinde **Run workflow** ile bir kez çalıştırılır. Her biri imajı ECR'a gönderir ve `k8s/`'teki etiketini main'e commit'ler. Bitenleri `aws ecr list-images --repository-name <servis>` ile görebilirsin.
+4. **Ansible'ı çalıştır** (`infra/ansible/README.md`); son adımda ArgoCD kurulur ve gerisini kurar. Durumu `kubectl -n argocd get applications` ile ya da arayüzden (`infra/ansible/README.md`) izlersin. İlk kurulum, sertifikalar ve demo verisiyle birlikte 15–25 dakika sürer.
+
+## İmajlar ve etiketler (CD)
+
+Bir servisin kodu main'e birleşince o servisin workflow'u (`.github/workflows/<servis>.yml`) testleri çalıştırır, sonra `_image.yml`:
+1. İmajı derler, SBOM çıkarır, Trivy ile tarar (PR'larda yalnızca bu kadar).
+2. AWS'ye OIDC ile girer: GitHub'ın kısa ömürlü token'ı STS'de `dershane-prod-github-ecr-push` rolünün geçici anahtarlarıyla değiştirilir. Rol yalnızca bu reponun main dalına güveniyor ve yalnızca ECR'a imaj gönderebiliyor. GitHub'da AWS anahtarı yok.
+3. İmajı `<servis>:<commit SHA>` etiketiyle ECR'a gönderir. ECR etiketleri değiştirilemez; aynı commit için yeniden çalıştırılırsa imaj zaten var diye gönderme atlanır.
+4. `k8s/environments/prod/<servis>.yaml`'daki `tag:` satırını (Keycloak'ta `k8s/platform/keycloak/deployment.yaml`'daki imaj satırını) bu SHA ile değiştirip main'e commit'ler (`deploy(<servis>): <sha>`). Bu commit yalnızca `k8s/`'i değiştirdiği ve `GITHUB_TOKEN` ile atıldığı için yeni bir workflow başlatmaz.
+5. ArgoCD commit'i görür ve pod'ları yeni imajla açar.
+
+Elle yeniden dağıtmak için: Actions → servisin workflow'u → **Run workflow** (main).
 
 ## Doldurulan işaretler
 
@@ -57,7 +57,6 @@ Not: ApplicationSet'in kendi sağlık durumu yok, bu yüzden 4 ve 5, servisler t
 | `<RDS_ADDRESS>` | `terraform output rds_address` | veritabanı adresleri, db-init, bootstrap |
 | `<REDIS_ADDRESS>` | `terraform output redis_address` | api-gateway, messaging, exam-analysis |
 | `<RDS_MASTER_SECRET_ARN>` | `terraform output rds_master_secret_arn` | db-init (RDS'in ana kullanıcısı) |
-| `<IMAGE_TAG>` | 2. adımdaki etiket | bütün imajlar |
 
 Hesap numarası ARN'lerde görünüyor ve repo public. Hesap numarası tek başına bir giriş bilgisi değil; bilinçli olarak kabul edildi.
 
@@ -100,7 +99,7 @@ Job tekrar çalışsa veri çoğalmaz: betik her adımda önce var olana bakıyo
 
 ## Yeni bir servis eklemek
 
-`k8s/environments/prod/<servis>.yaml` dosyasını ekle (örnek olarak benzer bir servisinkini al). ApplicationSet onu kendisi bulur; `apps/` ya da chart değişmez. Servisin AWS izni ve IRSA rolü Terraform'da (`infra/terraform/main.tf`, `service_access`), ECR reposu `ecr_repositories`'te açılır.
+`k8s/environments/prod/<servis>.yaml` dosyasını ekle (örnek olarak benzer bir servisinkini al). ApplicationSet onu kendisi bulur; `apps/` ya da chart değişmez. Servisin AWS izni ve IRSA rolü Terraform'da (`infra/terraform/main.tf`, `service_access`), ECR reposu `ecr_repositories`'te açılır. Servisin workflow'u imaj işinde `_image.yml`'i (izinleriyle) çağırır; etiketi CI yazar.
 
 ## Bilinen sınırlar
 
@@ -108,4 +107,5 @@ Job tekrar çalışsa veri çoğalmaz: betik her adımda önce var olana bakıyo
 - Keycloak tek pod. Servislerin çoğu tek pod; exam-analysis API'si yüke göre 1–3 pod.
 - Keycloak realm dosyası yalnızca ilk açılışta içe aktarılıyor. Sonraki değişiklikler yönetim konsolundan ya da realm silinip yeniden içe aktarılarak yapılır.
 - demo-seed main dalındaki betiği çalıştırıyor.
-- CD yok: imajlar elle gönderiliyor ve etiket elle değiştiriliyor (sonraki iş).
+- Bir servisin entegrasyon testleri kırıksa imajı ECR'a gitmez ve kümedeki sürümü eski kalır (CI'da testler imajdan önce çalışıyor).
+- Keycloak imajında bir güvenlik açığı bilerek kabul edildi: Keycloak 26.8.2'nin içindeki Guava 33.6.0 (CVE-2026-102554, hizmet aksatma). Kendi imajımızda değiştirilemiyor; `infra/keycloak/.trivyignore`'da gerekçesiyle ve 2027-01-31 bitiş tarihiyle duruyor. Düzeltilmiş Guava'lı bir Keycloak çıkınca sürüm yükseltilip satır silinir.

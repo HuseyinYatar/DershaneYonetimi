@@ -5,15 +5,14 @@
 #   <RDS_ADDRESS>             terraform output rds_address
 #   <REDIS_ADDRESS>           terraform output redis_address (needs standby = false)
 #   <RDS_MASTER_SECRET_ARN>   terraform output rds_master_secret_arn
-#   <IMAGE_TAG>               the commit whose images were pushed to ECR (argument; default: HEAD)
-# Then review `git diff k8s/` and commit: Argo CD deploys what is on main.
+# Then review `git diff k8s/` and commit: Argo CD deploys what is on main. Image tags are not filled here:
+# CI writes them when it pushes an image (.github/workflows/_image.yml).
 #
-#   k8s/fill-values.sh [image tag]
+#   k8s/fill-values.sh
 # Needs an AWS session and an initialised infra/terraform (prod backend).
 set -euo pipefail
 cd "$(dirname "$0")"
 
-tag="${1:-$(git rev-parse --short=7 HEAD)}"
 out() { terraform -chdir=../infra/terraform output -raw "$1"; }
 
 registry="$(out ecr_registry)"
@@ -31,7 +30,7 @@ done
 
 # This script and the README describe the placeholders; only the manifests and values are filled.
 files="$(grep -rlE --exclude=fill-values.sh --exclude=README.md \
-  '<(AWS_ACCOUNT_ID|ECR_REGISTRY|RDS_ADDRESS|REDIS_ADDRESS|RDS_MASTER_SECRET_ARN|IMAGE_TAG)>' . || true)"
+  '<(AWS_ACCOUNT_ID|ECR_REGISTRY|RDS_ADDRESS|REDIS_ADDRESS|RDS_MASTER_SECRET_ARN)>' . || true)"
 if [ -z "$files" ]; then
   echo "No placeholders left in k8s/."
   exit 0
@@ -44,9 +43,8 @@ for file in $files; do
     -e "s|<RDS_ADDRESS>|${rds}|g" \
     -e "s|<REDIS_ADDRESS>|${redis}|g" \
     -e "s|<RDS_MASTER_SECRET_ARN>|${master_secret}|g" \
-    -e "s|<IMAGE_TAG>|${tag}|g" \
     "$file"
   rm -f "$file.bak"
   echo "filled $file"
 done
-echo "Image tag: ${tag}. Review with: git diff k8s/"
+echo "Review with: git diff k8s/"

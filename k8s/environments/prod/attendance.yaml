@@ -1,6 +1,6 @@
 # attendance: class sessions, attendance, excuses
-# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS>, <REDIS_ADDRESS> and <IMAGE_TAG> are filled
-# by k8s/fill-values.sh from the Terraform outputs (k8s/README.md).
+# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS> and <REDIS_ADDRESS> are filled
+# by k8s/fill-values.sh from the Terraform outputs; image.tag is written by CI (.github/workflows/_image.yml).
 name: attendance
 image:
   repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/attendance
