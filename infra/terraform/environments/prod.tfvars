@@ -18,7 +18,6 @@ standby = false
 cp_instance_type     = "c7i-flex.large"
 worker_instance_type = "m7i-flex.large"
 worker_count         = 2
-kubernetes_version   = "1.37"
 
 pod_identity = "irsa"
 github_repo  = "HuseyinYatar/DershaneYonetimi"

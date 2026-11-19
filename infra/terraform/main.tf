@@ -106,11 +106,9 @@ module "nodes" {
   worker_instance_profile        = module.iam[0].worker_instance_profile
   imds_hop_limit                 = module.iam[0].imds_hop_limit
 
-  ssh_public_key                  = var.ssh_public_key
-  volume_size                     = var.node_volume_size
-  kubernetes_version              = var.kubernetes_version
-  ecr_credential_provider_version = var.ecr_credential_provider_version
-  secret_prefix                   = local.secret_prefix
+  ssh_public_key = var.ssh_public_key
+  volume_size    = var.node_volume_size
+  secret_prefix  = local.secret_prefix
 }
 
 module "registry" {

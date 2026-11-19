@@ -1,0 +1,10 @@
+- name: Restart containerd
+  ansible.builtin.systemd_service:
+    name: containerd
+    state: restarted
+
+# Before kubeadm init/join the kubelet has no configuration and keeps restarting; that is expected.
+- name: Restart kubelet
+  ansible.builtin.systemd_service:
+    name: kubelet
+    state: restarted

@@ -1,6 +1,6 @@
 # EC2 instances for the self-managed kubeadm cluster: one control plane and the workers, all in the
-# public subnet with fixed private IPs. The user-data script only prepares the node (swap off,
-# containerd, kubelet/kubeadm/kubectl); kubeadm init/join, the CNI and Traefik are run by hand.
+# public subnet with fixed private IPs. They start as plain Ubuntu: preparing the nodes and creating the
+# cluster (containerd, kubeadm init/join, Calico, Argo CD) is done by Ansible (infra/ansible).
 
 # Latest Ubuntu 24.04 image, published by Canonical in every region.
 data "aws_ssm_parameter" "ubuntu" {
@@ -27,14 +27,6 @@ resource "aws_instance" "this" {
   # Lets pod traffic leave a node with a pod IP as source (Calico or Cilium without encapsulation).
   source_dest_check = false
 
-  user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    hostname                        = each.key
-    role                            = each.value.role
-    private_ip                      = each.value.private_ip
-    kubernetes_version              = var.kubernetes_version
-    ecr_credential_provider_version = var.ecr_credential_provider_version
-  })
-
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
@@ -54,10 +46,9 @@ resource "aws_instance" "this" {
     Role = each.value.role
   }
 
-  # A new Ubuntu image or an edited script must not replace a running node: replacing the control
-  # plane deletes the cluster. Script changes reach new nodes; existing ones rerun it by hand.
+  # A new Ubuntu image must not replace a running node: replacing the control plane deletes the cluster.
   lifecycle {
-    ignore_changes = [ami, user_data]
+    ignore_changes = [ami]
   }
 }
 
@@ -68,9 +59,13 @@ resource "aws_eip" "control_plane" {
   tags     = { Name = "${var.name}-${var.control_plane_key}" }
 }
 
-# Filled by the control plane after kubeadm init; kubeconfig and certificates never go into Git.
+# Filled by the control plane (infra/ansible); neither ever goes into Git.
+#   kubeconfig             admin kubeconfig, written after kubeadm init
+#   etcd-encryption-key    key kube-apiserver encrypts Secrets with in etcd; written before kubeadm init.
+#                          An etcd backup restored on a rebuilt control plane needs the same key.
+# Join commands are not stored: Ansible creates a one-hour token on the control plane when a worker joins.
 resource "aws_secretsmanager_secret" "cluster" {
-  for_each                = toset(["kubeconfig", "join"])
+  for_each                = toset(["kubeconfig", "etcd-encryption-key"])
   name                    = "${var.secret_prefix}/cluster/${each.key}"
   recovery_window_in_days = 0
 }

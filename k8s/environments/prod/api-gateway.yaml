@@ -1,0 +1,30 @@
+# api-gateway: the only public API address; checks tokens, rate limits, CORS
+# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS>, <REDIS_ADDRESS> and <IMAGE_TAG> are filled
+# by k8s/fill-values.sh from the Terraform outputs (k8s/README.md).
+name: api-gateway
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/api-gateway
+  tag: <IMAGE_TAG>
+# No AWS calls, so no IRSA role.
+
+ingress:
+  enabled: true
+  host: api.onlinecourses.site
+
+env:
+  KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
+  KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  CORS_ALLOWED_ORIGINS: https://onlinecourses.site
+  USER_SERVICE_URL: http://user.dershane:8080
+  ATTENDANCE_SERVICE_URL: http://attendance.dershane:8080
+  TASK_SERVICE_URL: http://task.dershane:8080
+  MESSAGING_SERVICE_URL: http://messaging.dershane:8080
+  EXAM_ANALYSIS_SERVICE_URL: http://exam-analysis.dershane:8000
+  NOTIFICATION_SERVICE_URL: http://notification.dershane:8000
+  # Rate limit counters live in ElastiCache (TLS + AUTH token).
+  REDIS_HOST: <REDIS_ADDRESS>
+  REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_SSL_ENABLED: "true"
+
+secretEnv:
+  SPRING_DATA_REDIS_PASSWORD: { key: dershane/redis, property: password }

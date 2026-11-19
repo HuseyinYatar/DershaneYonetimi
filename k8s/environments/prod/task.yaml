@@ -1,0 +1,32 @@
+# task: tasks, assignments, submissions
+# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS>, <REDIS_ADDRESS> and <IMAGE_TAG> are filled
+# by k8s/fill-values.sh from the Terraform outputs (k8s/README.md).
+name: task
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/task
+  tag: <IMAGE_TAG>
+aws:
+  roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-task
+
+env:
+  DB_URL: jdbc:postgresql://<RDS_ADDRESS>:5432/task_service?sslmode=require
+  DB_USERNAME: task_service
+  DB_POOL_SIZE: "5"             # db.t4g.micro allows ~100 connections in total
+  KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
+  KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  KEYCLOAK_PUBLIC_URL: https://auth.onlinecourses.site
+  AWS_REGION: eu-central-1
+  TASK_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:<AWS_ACCOUNT_ID>:task-events
+  TASK_USER_EVENTS_QUEUE: task-user-events
+secretEnv:
+  DB_PASSWORD: { key: dershane/db/task_service, property: password }
+
+cronJobs:
+  # Today's assignments of the daily and weekly tasks.
+  - name: generate-assignments
+    schedule: "5 0 * * *"
+    args: ["--task.job=generate-assignments"]
+  # Reminders before the deadline, then OVERDUE marking.
+  - name: check-deadlines
+    schedule: "*/15 * * * *"
+    args: ["--task.job=check-deadlines"]

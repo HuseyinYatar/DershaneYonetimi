@@ -1,0 +1,37 @@
+# Helm values for traefik/traefik (chart 42.3.1). The NLB (Terraform, modules/edge) forwards port 80 to
+# NodePort 30080 and port 443 to NodePort 30443 on the workers; these two numbers must match infra/terraform's
+# ingress_http_node_port and ingress_https_node_port. TLS is decrypted here, with cert-manager's certificates.
+service:
+  spec:
+    type: NodePort
+
+ports:
+  web:
+    nodePort: 30080
+    # Plain HTTP is answered with a redirect to HTTPS, except Let's Encrypt's HTTP-01 check
+    # (/.well-known/acme-challenge/), which cert-manager's solver Ingress answers on plain HTTP.
+    allowACMEByPass: true
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    nodePort: 30443
+
+# Routes come from standard Ingress resources (api-gateway, frontend, Keycloak). Rate limiting, CORS and
+# token checks are not done here; the api-gateway does them (CLAUDE.md).
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+providers:
+  kubernetesCRD:
+    enabled: false
+  kubernetesIngress:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi

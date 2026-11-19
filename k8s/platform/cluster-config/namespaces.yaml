@@ -1,0 +1,6 @@
+# Our services, Keycloak and the setup Jobs run here. Terraform's IRSA roles trust the service accounts of
+# this namespace only (system:serviceaccount:dershane:<service>).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dershane

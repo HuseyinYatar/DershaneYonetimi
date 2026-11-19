@@ -1,0 +1,45 @@
+{{- if .Values.migration.enabled }}
+# Database migration before the pods change (Python: alembic upgrade head). An Argo CD Sync hook in wave 1:
+# after the Secret (wave 0) exists, before the Deployments (wave 2). Replaced on every sync.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "service.name" . }}-migrate
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 5               # the database may still be starting
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "service.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      {{- include "service.podCommon" . | nindent 6 }}
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: {{ include "service.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{- toYaml (required "migration.command is required" .Values.migration.command) | nindent 12 }}
+          envFrom:
+            {{- include "service.envFrom" . | nindent 12 }}
+          {{- with include "service.awsEnv" . }}
+          env:
+            {{- . | trim | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            {{- include "service.volumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "service.volumes" . | nindent 8 }}
+{{- end }}

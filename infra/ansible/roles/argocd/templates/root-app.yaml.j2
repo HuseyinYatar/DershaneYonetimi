@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+# The only Argo CD Application created by hand ("app of apps"): it applies every Application under
+# k8s/apps, and those install the platform and the services. After this, the cluster follows Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: {{ argocd_namespace }}
+spec:
+  project: default
+  source:
+    repoURL: {{ argocd_repo_url }}
+    targetRevision: {{ argocd_target_revision }}
+    path: k8s/apps
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ argocd_namespace }}
+  syncPolicy:
+    automated:
+      prune: true     # an Application removed from Git is removed from the cluster
+      selfHeal: true  # a change made by hand in the cluster is reverted to what Git says

@@ -1,0 +1,2 @@
+etcd_backup_containerd_socket: unix:///run/containerd/containerd.sock
+etcd_backup_script: /usr/local/sbin/etcd-backup.sh

@@ -1,0 +1,6 @@
+control_plane_containerd_socket: unix:///run/containerd/containerd.sock
+control_plane_kubeadm_config: /etc/kubernetes/kubeadm-config.yaml
+# Encryption at rest for Secrets: the key and the configuration kube-apiserver reads (root only).
+control_plane_encryption_dir: /etc/kubernetes/encryption
+control_plane_encryption_key_file: "{{ control_plane_encryption_dir }}/key"
+control_plane_encryption_config: "{{ control_plane_encryption_dir }}/encryption-config.yaml"

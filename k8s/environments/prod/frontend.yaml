@@ -1,0 +1,45 @@
+# frontend: the React app (static files served by NGINX)
+# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS>, <REDIS_ADDRESS> and <IMAGE_TAG> are filled
+# by k8s/fill-values.sh from the Terraform outputs (k8s/README.md).
+name: frontend
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/frontend
+  tag: <IMAGE_TAG>
+
+ingress:
+  enabled: true
+  host: onlinecourses.site
+
+web:
+  port: 8080
+  probes:
+    port: 8080
+    liveness: /healthz
+    readiness: /healthz
+    startupFailureThreshold: 12
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { memory: 64Mi }
+
+# The image replaces localhost addresses at runtime: config.js (where the app sends requests) and the
+# Content-Security-Policy (which addresses the browser may call). Both must list the same hosts.
+files:
+  - path: /usr/share/nginx/html/config.js
+    content: |
+      window.__CONFIG__ = { apiBaseUrl: "https://api.onlinecourses.site", keycloakUrl: "https://auth.onlinecourses.site" };
+
+env:
+  # wss://: the chat WebSocket is a separate scheme in connect-src.
+  CSP_CONNECT_SRC: "https://api.onlinecourses.site wss://api.onlinecourses.site https://auth.onlinecourses.site"
+  CSP_FRAME_SRC: "https://auth.onlinecourses.site"
+
+# nginx-unprivileged runs as 101 and renders its templates into conf.d when the container starts.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+  seccompProfile:
+    type: RuntimeDefault
+writableDirs:
+  - /etc/nginx/conf.d

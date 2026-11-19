@@ -1,0 +1,32 @@
+# attendance: class sessions, attendance, excuses
+# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS>, <REDIS_ADDRESS> and <IMAGE_TAG> are filled
+# by k8s/fill-values.sh from the Terraform outputs (k8s/README.md).
+name: attendance
+image:
+  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/attendance
+  tag: <IMAGE_TAG>
+aws:
+  roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-attendance
+
+env:
+  DB_URL: jdbc:postgresql://<RDS_ADDRESS>:5432/attendance_service?sslmode=require
+  DB_USERNAME: attendance_service
+  DB_POOL_SIZE: "5"             # db.t4g.micro allows ~100 connections in total
+  KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
+  KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  KEYCLOAK_PUBLIC_URL: https://auth.onlinecourses.site
+  AWS_REGION: eu-central-1
+  ATTENDANCE_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:<AWS_ACCOUNT_ID>:attendance-events
+  ATTENDANCE_USER_EVENTS_QUEUE: attendance-user-events
+secretEnv:
+  DB_PASSWORD: { key: dershane/db/attendance_service, property: password }
+
+cronJobs:
+  # Sessions of the next 7 days from the weekly schedules (idempotent).
+  - name: generate-sessions
+    schedule: "30 0 * * *"
+    args: ["--attendance.job=generate-sessions"]
+  # Sessions whose day ended without attendance become EXPIRED.
+  - name: expire-sessions
+    schedule: "5 0 * * *"
+    args: ["--attendance.job=expire-sessions"]

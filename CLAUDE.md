@@ -43,7 +43,7 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 
 - **Topoloji:** 1 control plane (`c7i-flex.large`, 2 vCPU / 4 GiB) + 2 worker (`m7i-flex.large`, 2 vCPU / 8 GiB). İkisi de AWS free plan'a uygun tek kubeadm adayıdır (micro tipler kubeadm'in 2 GiB alt sınırının altında, `t4g` ARM). Sabit private IP: cp `10.0.1.10`, worker'lar `.11`, `.12`; cp'nin Elastic IP'si var. Tek control plane bilinçli bir sınırlılıktır, raporda belirtilir.
 - **Ağ:** Node'lar ve NLB tek public subnet'te (tek AZ), RDS ve ElastiCache iki private subnet'te. NAT Gateway yok (ayda ~40 $): node'lar public IP ile dışarı çıkar, gelen trafiği security group sınırlar. Raporda maliyet kararı olarak yazılır.
-- **Kurulum:** Altyapının tamamı Terraform'dadır (`infra/terraform`, kurallar `infra/terraform/README.md`). Node hazırlığı Terraform'un user-data betiğiyle yapılır: swap kapalı, kernel modülleri ve sysctl, containerd 2.x (`SystemdCgroup = true`), kubelet/kubeadm/kubectl (`apt-mark hold`), `ecr-credential-provider`. `kubeadm init/join`, CNI ve Traefik bunun üzerine kurulur; bu adımlar da otomatik yapılır (Ansible veya betik), elle sunucuya girip kurulum yapılmaz.
+- **Kurulum:** AWS kaynakları Terraform'dadır (`infra/terraform`, kurallar `infra/terraform/README.md`); sunucular boş Ubuntu olarak açılır (user-data yok). Sunucuların içi ve küme Ansible ile kurulur (`infra/ansible`, kurallar `infra/ansible/README.md`), elle sunucuya girip kurulum yapılmaz: `node_prep` (swap kapalı, kernel modülleri ve sysctl, containerd 2.x `SystemdCgroup = true`, kubelet/kubeadm/kubectl `hold`, `ecr-credential-provider`), `control_plane` (Secret'ların etcd'de şifrelenmesi, `kubeadm init`, IRSA `keys.json`, kubeconfig Secrets Manager'a), `workers` (`kubeadm join`, token 1 saatlik, saklanmaz), `cni` (Calico operator), `etcd_backup` (systemd timer → S3), `argocd` (Helm + `k8s/apps`'i izleyen root Application). Playbook tekrar çalıştırılabilir (idempotent); sürümler `group_vars/all/main.yml`'de tek yerdedir. Kubernetes sürüm yükseltmesi (`kubeadm upgrade`) playbook'ta yoktur. Node hazırlığının user-data yerine Ansible'da olmasının gerekçesi: `ignore_changes` yüzünden betik değişiklikleri mevcut node'lara ulaşmıyordu.
 - **Ağ eklentisi (CNI):** Calico veya Cilium. Pod CIDR `192.168.0.0/16`, VPC `10.0.0.0/16` ile çakışmaz.
 - **ECR erişimi:** Node'lara ECR okuma yetkili IAM instance profile verilir. kubeadm'de kubelet bu rolü kendiliğinden kullanmadığı için `ecr-credential-provider` kurulur.
 - **Pod kimliği (IRSA):** Pod'lar AWS'ye kalıcı anahtarla değil, servis başına IAM rolüyle erişir. ServiceAccount token'ı STS'te geçici anahtarla değiştirilir. Kümenin OIDC issuer'ı bir S3 bucket'ındadır: API server `--service-account-issuer` ile kurulur, `keys.json` init'ten sonra yüklenir. Java servislerinde `software.amazon.awssdk:sts` gerekir. IMDS hop limit 1 olduğu için pod node rolüne düşemez. Terraform'da `pod_identity = "node"` ile ortak node rolüne geçilebilir.
@@ -52,6 +52,26 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
 - **Metrik:** HPA için metrics-server kurulur.
 - **etcd yedeği:** Control plane'deki etcd düzenli olarak S3'e yedeklenir.
 - Küme sertifikaları ve kubeconfig depoya konmaz; Secrets Manager'da tutulur.
+- **Secret'lar etcd'de şifrelidir** (`EncryptionConfiguration`, `secretbox`): kube-apiserver Secret'ı etcd'ye yazmadan önce şifreler, etcd dosyaları ve S3'teki etcd yedekleri parolaları düz taşımaz. Anahtar control plane'de (`/etc/kubernetes/encryption`, yalnızca root) ve `dershane/cluster/etcd-encryption-key`'de durur; Ansible init'ten önce yazar, yeniden kurulan cp aynı anahtarı geri alır. KMS sağlayıcısı kullanılmadı (ek eklenti gerektirir); anahtar cp diskinde düz durur, raporda belirtilir.
+- **Kümedeki uygulamalar (`k8s/`, kurallar `k8s/README.md`):**
+  - **Yapı:** Ansible'ın kurduğu root Application `k8s/apps`'i izler (app of apps). Kurulum sırası `sync-wave` ile belirlenir:
+    - 0: External Secrets, cert-manager, metrics-server
+    - 1: Traefik, cluster-config
+    - 2: db-init, Keycloak
+    - 3: servisler
+    - 4: bootstrap
+    - 5: demo-seed
+
+    Application'lar arasında beklemek için ArgoCD'ye Application sağlık kontrolü Ansible'dan eklenir.
+  - **Servisler:** tek ortak chart `k8s/charts/service` ve servis başına `environments/prod/<servis>.yaml`. Bunları ApplicationSet (git files generator) üretiyor.
+  - **Secret'lar:** External Secrets, `ClusterSecretStore aws-secrets-manager` üzerinden, IRSA rolü `external-secrets` ile. Git'te parola yok.
+  - **Pod güvenliği:** chart'ta `runAsNonRoot`, sayısal `runAsUser` (10001, frontend 101), salt okunur kök dosya sistemi ve `/tmp` emptyDir. Java Dockerfile'larının `USER app`'i bu yüzden sorun değil.
+  - **Sıra kuralı:** Python migration'ları ArgoCD Sync hook'u, wave 1'de (secret'tan sonra, pod'lardan önce).
+  - **Veritabanları ve TLS:** db-init Job'u RDS'te 7 veritabanını ve rolü idempotent açar. TLS cert-manager + `letsencrypt-prod` (HTTP-01).
+  - **İlk super-admin:** prod realm sabit kimlikli `superadmin@onlinecourses.site` açar (ilk parola `dershane/keycloak/superadmin`, geçici). `bootstrap` Job'u user_service'e şube `MRKZ` ve yönetici satırını yazar (`R__local_seed.sql`'in karşılığı).
+  - **Demo verisi:** `demo-seed` Job'u `local/seed/seed.mjs`'i `SEED_TARGET=prod` ile çalıştırır: 2 öğretmen, 2 sınıf × 10 öğrenci, veli, 5 TYT + 2 AYT, yoklama, ödev. Bütün demo hesapları ortak `dershane/demo/password`'ü kullanır. Super-admin parolasını değiştirdikten sonra Job ona dokunmaz.
+  - **Parolalar:** Keycloak ve demo parolalarını Terraform üretir (`infra/terraform/app-secrets.tf`).
+  - **Değerler:** `<AWS_ACCOUNT_ID>` gibi işaretleri `k8s/fill-values.sh` Terraform çıktılarından doldurur. ARN'lerdeki hesap numarası public repoda görünür (bilinçli).
 
 ## Mikroservisler
 
@@ -301,7 +321,7 @@ com.dershane.<servis>
 - **Yığın:** Vite, React 19, TypeScript (strict), react-router (v7, düz `<Routes>`), TanStack Query, `oidc-client-ts` + `react-oidc-context` (Authorization Code + PKCE), `openapi-fetch` + `openapi-typescript`, shadcn/ui + Tailwind v4, `sonner` (toast), Vitest + Testing Library, ESLint + Prettier. Paket yöneticisi npm, Node 24 (`.nvmrc` = `24`, yama yazılmaz). i18n, global state ve MSW bilinçli olarak yoktur (arayüz yalnızca Türkçe; sunucu durumu TanStack Query'dedir). Formlar `react-hook-form` + `zod` (`@hookform/resolvers`) ile yazılır; şemalar sunucu kurallarını yansıtır (`src/lib/taskForm.ts`), sunucu hatası yine toast'ta görünür. Tek seçimli ızgara gibi basit formlar (yoklama, düzeltme) düz React state kalır.
 - **Çalışma zamanı ayarı:** API ve Keycloak adresleri `public/config.js` içindeki `window.__CONFIG__`'den okunur (`src/config.ts` tek okuma noktasıdır). Kubernetes'te ConfigMap bu dosyanın üzerine yazar; aynı imaj tüm ortamlarda çalışır. Adresler için `import.meta.env` kullanılmaz (build anında gömülür).
 - **Kimlik:** Token `sessionStorage`'dadır (sekme kapanınca silinir); çıkışta `queryClient.clear()` sonra `signoutRedirect()`. Keycloak adresi `localhost` olmalı, container adı olmamalı (token `iss`'i uyuşmaz). Roller ve kimlik access token'dan okunur (`atob`, ek kütüphane yok) ve yalnızca menü ve yönlendirme içindir; yetkilendirme her zaman serviste yapılır.
-- **Giriş sayfası Keycloak'ındır (şifre SPA'dan geçmez).** Uygulamaya uyan özel tema `local/keycloak/themes/dershane` (`parent=base`, yalnızca Türkçe, Inter kendimiz barındırılır). Yerelde compose ile salt okunur bağlanır ve realm'in `loginTheme` değeri `dershane`dir; üretimde Keycloak imajına gömülecek veya ConfigMap ile bağlanacak (GitOps haftaları). Doğrudan erişim izni (direct access grants) açılmaz.
+- **Giriş sayfası Keycloak'ındır (şifre SPA'dan geçmez).** Uygulamaya uyan özel tema `local/keycloak/themes/dershane` (`parent=base`, yalnızca Türkçe, Inter kendimiz barındırılır). Yerelde compose ile salt okunur bağlanır ve realm'in `loginTheme` değeri `dershane`dir; üretimde Keycloak imajına gömülüdür (`infra/keycloak/Dockerfile`, ECR reposu `keycloak`). Prod realm dosyası `k8s/platform/keycloak/realm/dershane-realm.json`'dır (yereldekinden türetilir: https adresleri, Swagger istemcisi yok, parolalar External Secrets şablonuyla doldurulur). Doğrudan erişim izni (direct access grants) açılmaz.
 - **API:** Tüm istekler gateway üzerinden gider (`apiBaseUrl`), servise doğrudan gidilmez; her istekte `Accept-Language: tr` ve `Authorization` eklenir, 401'de bir kez `signinSilent()` denenir. Hata `application/problem+json` ise `detail` toast'ta gösterilir. DTO elle yazılmaz: tipler `npm run gen:api` ile yerelde çalışan servislerin OpenAPI belgesinden üretilir (`src/api/schema/`, depoya girer; springdoc yalnızca `local`/`dev` profilinde açıktır).
 - **Tahmini puan** her yerde etiketiyle gösterilir: "tahmini (2026 katsayılarıyla)" (`coefficientYear` doluysa), aksi halde "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)" (`src/lib/score.ts`). Hesaplanmayan puanın yerinde sebebi yazar (`notComputedReason`); AYT/YDT puanının altında kullanılan TYT denemesi yazar. Net ve puanlar `formatNet` ile 2 basamaktır (`8,75`, `330,33`). Öğrenci özetindeki "Son deneme" kartı, net gelişimi ve "son net / en yüksek net" yalnızca TYT denemelerinden gelir (`useStudentTytResults`): AYT netleri başka ölçektedir ve AYT'de 11 ders vardır; AYT sonuçları Sonuçlar sayfasındadır. Bkz. Exam-analysis puanlama kuralları.
 - **CSP ve 401:** İçerik güvenlik politikası (CSP) ve çerçeve başlıkları NGINX'tedir (`frontend/nginx/`, imaj açılırken envsubst ile üretilir). Gateway ve Keycloak adresleri `CSP_CONNECT_SRC` / `CSP_FRAME_SRC` ortam değişkenlerinden gelir; ConfigMap bunları `config.js` ile birlikte ayarlamalıdır. 401 işleme tek uçuşludur: paralel istekler tek `signinSilent()` paylaşır, tek yönlendirme yapılır, 401 için toast gösterilmez.
@@ -326,11 +346,15 @@ DershaneYonetimi/
 │                              database, cache, edge, email, monitoring), ortam farkları environments/'ta.
 │                              Yerelde `floci-init` yalnızca SNS/SQS ve optik dosya bucket'ını uygular
 ├── infra/scripts/power.sh     EC2 ve RDS'i çalışma aralarında durdurur/başlatır (kredi)
-├── k8s/                       ArgoCD bu klasörü izler (henüz yok, GitOps haftaları)
-│   ├── charts/<servis-adi>/   Helm chart'ları
-│   ├── platform/              Traefik, cert-manager, External Secrets, ArgoCD, izleme
-│   ├── apps/                  ArgoCD Application tanımları
-│   └── environments/{dev,prod}/<servis>.yaml
+├── infra/ansible/             node hazırlığı ve kubeadm kümesi, ArgoCD'yi kurup k8s/apps'e bağlar (README.md)
+├── infra/keycloak/            Keycloak imajı (resmi imaj + giriş teması, kc.sh build)
+├── k8s/                       ArgoCD bu klasörü izler (README.md)
+│   ├── apps/                  ArgoCD Application'ları (platform/) ve servisler için ApplicationSet
+│   ├── platform/              Traefik, cert-manager, External Secrets, metrics-server, cluster-config,
+│   │                          db-init, Keycloak, bootstrap (ilk super-admin), demo-seed
+│   ├── charts/service/        tüm servislerin ortak Helm chart'ı
+│   ├── environments/prod/<servis>.yaml
+│   └── fill-values.sh         <AWS_ACCOUNT_ID> gibi işaretleri Terraform çıktılarından doldurur
 ├── local/                     yerel ortam: docker-compose.yml (PostgreSQL, Keycloak, Floci,
 │                              Mailpit), keycloak/ realm tanımı, postgres/ init betiği
 └── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar + terraform.yml
@@ -341,7 +365,7 @@ Servis klasör adları İngilizce, küçük harf ve tire ile ayrılmıştır (`e
 ## CI/CD
 
 - **CI: GitHub Actions.** Her servisin kendi workflow'u vardır ve `paths` filtresiyle yalnızca o servisin klasörü (veya `shared/events/`) değişince çalışır. Bir servisteki değişiklik diğerlerini derlememeli.
-- **CD: ArgoCD (GitOps).** CI kümeye doğrudan dağıtım yapmaz; `k8s/environments/<ortam>/<servis>.yaml` içindeki imaj sürümünü günceller, küme içinde çalışan ArgoCD dağıtımı yapar. main korumalıysa CI bot'unun bypass izni mi alacağı, yoksa ArgoCD Image Updater mı kullanılacağı GitOps haftalarında belirlenir.
+- **CD: ArgoCD (GitOps).** CI kümeye doğrudan dağıtım yapmaz; `k8s/environments/<ortam>/<servis>.yaml` içindeki imaj sürümünü günceller, küme içinde çalışan ArgoCD dağıtımı yapar. main korumalıysa CI bot'unun bypass izni mi alacağı, yoksa ArgoCD Image Updater mı kullanılacağı GitOps haftalarında belirlenir. **Şu an (bilinçli, sonraki iş):** `_image.yml` imajı ECR'a göndermiyor; imajlar `k8s/README.md`'deki komutlarla elle gönderiliyor ve etiket `k8s/fill-values.sh` ile yazılıyor. Workflow değişikliği Hüseyin'le konuşulduktan sonra yapılacak.
 - **AWS kimliği:** GitHub Actions AWS'ye yalnızca imajı ECR'a göndermek için OIDC ile girer (`bootstrap/`'taki OIDC sağlayıcısı, `registry` modülündeki ECR push rolü, yalnızca main). GitHub'da AWS anahtarı saklanmaz.
 - **Terraform elle uygulanır:** `plan` ve `apply` CI'da değil, ekip üyesinin kendi IAM kullanıcısıyla (`aws login`) laptop'tan çalıştırılır; state ve kilit S3'tedir. Onay adımı yoktur, değişikliği kimin yaptığı CloudTrail'de görünür (raporda bilinen sınır).
 
@@ -409,7 +433,6 @@ Entegrasyon testleri gerçek AWS'ye bağlanmaz; Floci ve Testcontainers kullanı
 
 Bunlar netleşince bu bölümden çıkarılıp yukarıya işlenmelidir.
 
-- **Üretimde ilk super-admin kurulumu:** Yerelde realm JSON'u ve `db/local` tohum verisi var; üretimde nasıl yapılacağı AWS haftasında (8–9) belirlenecek.
 - **exam-analysis'teki `Ders` ile user'daki `Subject` ilişkisi:** exam-analysis'te sınav türüne bağlı, ağırlıklı ayrı bir ders kataloğu var; iki katalog exam-analysis servisi yazılırken eşleştirilecek.
 - **LGS puanı:** TYT/AYT/YDT katsayı modeline geçti (bkz. Puanlama). LGS için MEB'in merkezi sınav puanı katsayıları bulunup katalogdaki LGS puan türüne `coefficientYear`, `baseScore`, katsayılar ve 0,5 net şartı yerine geçen MEB kuralıyla işlenmeli; o zamana kadar LGS yer tutucu ağırlıklı standart puanla hesaplanır (`weightsVerified: false`).
 - **Fakülte/bölüm adı ve danışman unvanı:** Rapor kapağı için eksik.

@@ -1,0 +1,49 @@
+# Installs Calico, the pod network. Until it runs every node is NotReady: pods cannot reach each other.
+# `kubectl diff` decides whether anything differs, so `kubectl apply` runs only for real changes.
+
+- name: Install Calico
+  environment:
+    KUBECONFIG: "{{ kubeconfig_admin }}"
+  block:
+    - name: Compare the Tigera operator manifests with the cluster
+      ansible.builtin.command: kubectl diff --server-side --force-conflicts -f {{ cni_calico_manifest_base }}/{{ item }}
+      register: cni_operator_diff
+      changed_when: false
+      failed_when: cni_operator_diff.rc > 1 # 0: no difference, 1: difference, >1: error
+      loop:
+        - operator-crds.yaml
+        - tigera-operator.yaml
+
+    # Server-side apply: the CRDs are too large for the annotation client-side apply keeps.
+    - name: Apply the Tigera operator manifests
+      ansible.builtin.command: kubectl apply --server-side --force-conflicts -f {{ cni_calico_manifest_base }}/{{ item.item }}
+      loop: "{{ cni_operator_diff.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.rc == 1
+      changed_when: true
+
+    - name: Wait for the Installation resource type
+      ansible.builtin.command: kubectl wait --for=condition=Established crd/installations.operator.tigera.io --timeout=120s
+      changed_when: false
+
+    - name: Write the Calico installation
+      ansible.builtin.template:
+        src: calico-installation.yaml.j2
+        dest: "{{ cni_installation_file }}"
+        mode: "0644"
+
+    - name: Compare the Calico installation with the cluster
+      ansible.builtin.command: kubectl diff --server-side -f {{ cni_installation_file }}
+      register: cni_installation_diff
+      changed_when: false
+      failed_when: cni_installation_diff.rc > 1
+
+    - name: Apply the Calico installation
+      ansible.builtin.command: kubectl apply --server-side -f {{ cni_installation_file }}
+      when: cni_installation_diff.rc == 1
+      changed_when: true
+
+    - name: Wait until every node is Ready
+      ansible.builtin.command: kubectl wait --for=condition=Ready nodes --all --timeout=600s
+      changed_when: false

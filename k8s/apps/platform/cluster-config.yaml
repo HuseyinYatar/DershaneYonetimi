@@ -1,0 +1,23 @@
+# Cluster-wide settings: the dershane namespace, how to reach Secrets Manager, how to get certificates.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/HuseyinYatar/DershaneYonetimi.git
+    targetRevision: main
+    path: k8s/platform/cluster-config
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dershane
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

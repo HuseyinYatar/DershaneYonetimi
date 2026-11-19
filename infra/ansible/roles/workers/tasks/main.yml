@@ -1,0 +1,27 @@
+# Joins a worker to the cluster, once. A join token lives for an hour and is created only when a worker
+# still has to join, so a rerun on a complete cluster changes nothing. The join command is not stored
+# anywhere: it goes from the control plane to the worker inside this run.
+
+# kubelet.conf exists once the node has joined.
+- name: Check whether this node has joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: workers_kubelet_conf
+
+- name: Join the cluster
+  when: not workers_kubelet_conf.stat.exists
+  block:
+    - name: Create a join command on the control plane
+      ansible.builtin.command: kubeadm token create --print-join-command --ttl 1h
+      delegate_to: "{{ groups['control_plane'][0] }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_admin }}"
+      register: workers_join_command
+      changed_when: true
+      no_log: true
+
+    - name: Run kubeadm join
+      ansible.builtin.command: "{{ workers_join_command.stdout }} --node-name {{ inventory_hostname }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
+      no_log: true

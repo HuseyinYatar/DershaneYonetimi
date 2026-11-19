@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# kube-apiserver encrypts every Secret with this key before writing it to etcd, so etcd's files on disk and
+# the S3 backups (etcd_backup role) hold ciphertext. Reading through the API is unchanged: pods and kubectl
+# still get the plain value. secretbox (XSalsa20 + Poly1305) is the recommended local provider.
+# identity stays last: it only lets the API server read a Secret written before encryption was on.
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources:
+      - secrets
+    providers:
+      - secretbox:
+          keys:
+            - name: key1
+              secret: {{ control_plane_encryption_key }}
+      - identity: {}

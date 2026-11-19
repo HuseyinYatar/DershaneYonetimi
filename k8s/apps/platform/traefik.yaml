@@ -1,0 +1,30 @@
+# Traefik: receives the traffic the NLB forwards and sends it to frontend, api-gateway or Keycloak by host name.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  sources:
+    - repoURL: https://traefik.github.io/charts
+      chart: traefik
+      targetRevision: 42.3.1
+      helm:
+        releaseName: traefik
+        valueFiles:
+          - $values/k8s/platform/traefik/values.yaml
+    - repoURL: https://github.com/HuseyinYatar/DershaneYonetimi.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

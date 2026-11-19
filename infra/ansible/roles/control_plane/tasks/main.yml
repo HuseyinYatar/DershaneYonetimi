@@ -1,0 +1,153 @@
+# Creates the cluster on the control plane (once), publishes the IRSA public keys and stores the admin
+# kubeconfig in Secrets Manager. The workers role joins the other nodes.
+
+- name: Read the installed kubeadm version
+  ansible.builtin.command: kubeadm version -o short
+  register: control_plane_kubeadm_version
+  changed_when: false
+
+# Encryption at rest for Secrets. kube-apiserver reads the configuration when it starts, so it has to exist
+# before kubeadm init. The key is created once and kept in Secrets Manager: a rebuilt control plane gets the
+# same key back, which a restored etcd backup needs. It never goes into Git or into the logs.
+- name: Encrypt Secrets at rest
+  block:
+    - name: Create the encryption directory
+      ansible.builtin.file:
+        path: "{{ control_plane_encryption_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # Restores the key from Secrets Manager, or creates one when the entry has no value yet (first install).
+    - name: Restore or create the encryption key
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          umask 077
+          if aws secretsmanager get-secret-value --secret-id "$KEY_SECRET" \
+               --query SecretString --output text > key.tmp 2> error.tmp; then
+            echo "restored from Secrets Manager"
+          elif grep -q ResourceNotFoundException error.tmp; then
+            openssl rand -base64 32 > key.tmp
+            aws secretsmanager put-secret-value --secret-id "$KEY_SECRET" \
+              --secret-string file://key.tmp > /dev/null
+            echo "created and stored in Secrets Manager"
+          else
+            cat error.tmp >&2
+            rm -f key.tmp error.tmp
+            exit 1
+          fi
+          rm -f error.tmp
+          mv key.tmp "$(basename "{{ control_plane_encryption_key_file }}")"
+        chdir: "{{ control_plane_encryption_dir }}"
+        creates: "{{ control_plane_encryption_key_file }}"
+      environment:
+        AWS_REGION: "{{ aws_region }}"
+        KEY_SECRET: "{{ cluster_secret_prefix }}/etcd-encryption-key"
+
+    - name: Read the encryption key
+      ansible.builtin.slurp:
+        src: "{{ control_plane_encryption_key_file }}"
+      register: control_plane_encryption_key_content
+      no_log: true
+
+    - name: Write the encryption configuration
+      ansible.builtin.template:
+        src: encryption-config.yaml.j2
+        dest: "{{ control_plane_encryption_config }}"
+        owner: root
+        group: root
+        mode: "0600"
+      vars:
+        control_plane_encryption_key: "{{ control_plane_encryption_key_content.content | b64decode | trim }}"
+      no_log: true
+
+- name: Write the kubeadm configuration
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: "{{ control_plane_kubeadm_config }}"
+    mode: "0600"
+
+# admin.conf exists once the cluster has been created; running init again would fail on a live node.
+- name: Create the cluster (kubeadm init)
+  ansible.builtin.command: kubeadm init --config {{ control_plane_kubeadm_config }}
+  args:
+    creates: "{{ kubeconfig_admin }}"
+
+- name: Give the ubuntu user kubectl access on this node
+  block:
+    - name: Create ~/.kube for ubuntu
+      ansible.builtin.file:
+        path: /home/ubuntu/.kube
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0700"
+
+    - name: Copy the admin kubeconfig for ubuntu
+      ansible.builtin.copy:
+        src: "{{ kubeconfig_admin }}"
+        dest: /home/ubuntu/.kube/config
+        remote_src: true
+        owner: ubuntu
+        group: ubuntu
+        mode: "0600"
+
+- name: Publish the cluster's keys and kubeconfig
+  environment:
+    KUBECONFIG: "{{ kubeconfig_admin }}"
+    AWS_REGION: "{{ aws_region }}"
+  block:
+    - name: Wait until the API server answers
+      ansible.builtin.command: kubectl get --raw /readyz
+      register: control_plane_readyz
+      until: control_plane_readyz.rc == 0
+      retries: 30
+      delay: 5
+      changed_when: false
+
+    # IRSA. AWS STS verifies a pod's token with these public keys. Terraform could only upload the
+    # discovery document: the keys are created by kubeadm init.
+    - name: Read the service account signing keys (JWKS)
+      ansible.builtin.command: kubectl get --raw /openid/v1/jwks
+      register: control_plane_jwks
+      changed_when: false
+
+    - name: Read the keys.json already in S3
+      ansible.builtin.command: aws s3 cp s3://{{ oidc_bucket }}/keys.json -
+      register: control_plane_published_jwks
+      changed_when: false
+      failed_when: false
+
+    - name: Upload keys.json to the OIDC bucket
+      ansible.builtin.command:
+        cmd: aws s3 cp - s3://{{ oidc_bucket }}/keys.json --content-type application/json
+        stdin: "{{ control_plane_jwks.stdout }}"
+      when: control_plane_published_jwks.rc != 0 or (control_plane_published_jwks.stdout | trim) != (control_plane_jwks.stdout | trim)
+      changed_when: true
+
+    # CLAUDE.md: cluster certificates and the kubeconfig never go into Git; Secrets Manager keeps a copy.
+    - name: Read the admin kubeconfig
+      ansible.builtin.slurp:
+        src: "{{ kubeconfig_admin }}"
+      register: control_plane_admin_conf
+      no_log: true
+
+    - name: Read the kubeconfig stored in Secrets Manager
+      ansible.builtin.command: >-
+        aws secretsmanager get-secret-value --secret-id {{ cluster_secret_prefix }}/kubeconfig
+        --query SecretString --output text
+      register: control_plane_stored_kubeconfig
+      changed_when: false
+      # An empty secret (no value yet) answers ResourceNotFoundException.
+      failed_when: control_plane_stored_kubeconfig.rc != 0 and 'ResourceNotFoundException' not in control_plane_stored_kubeconfig.stderr
+      no_log: true
+
+    - name: Store the admin kubeconfig in Secrets Manager
+      ansible.builtin.command: >-
+        aws secretsmanager put-secret-value --secret-id {{ cluster_secret_prefix }}/kubeconfig
+        --secret-string file://{{ kubeconfig_admin }}
+      when: (control_plane_stored_kubeconfig.stdout | trim) != (control_plane_admin_conf.content | b64decode | trim)
+      changed_when: true
+      no_log: true

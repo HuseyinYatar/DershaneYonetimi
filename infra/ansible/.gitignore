@@ -1,0 +1,5 @@
+# Written by inventory.sh and tf-vars.sh from Terraform outputs: IP addresses and account details.
+inventory.ini
+group_vars/all/terraform.json
+.ssh_known_hosts
+*.retry
