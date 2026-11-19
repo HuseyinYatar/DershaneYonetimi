@@ -1,22 +1,21 @@
 # task: tasks, assignments, submissions
-# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS> and <REDIS_ADDRESS> are filled
-# by k8s/fill-values.sh from the Terraform outputs; image.tag is written by CI (.github/workflows/_image.yml).
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
 name: task
 image:
-  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/task
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/task
   tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
 aws:
-  roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-task
+  roleArn: arn:aws:iam::423082503744:role/dershane-prod-task
 
 env:
-  DB_URL: jdbc:postgresql://<RDS_ADDRESS>:5432/task_service?sslmode=require
   DB_USERNAME: task_service
   DB_POOL_SIZE: "5"             # db.t4g.micro allows ~100 connections in total
   KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
   KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
   KEYCLOAK_PUBLIC_URL: https://auth.onlinecourses.site
   AWS_REGION: eu-central-1
-  TASK_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:<AWS_ACCOUNT_ID>:task-events
+  TASK_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:423082503744:task-events
   TASK_USER_EVENTS_QUEUE: task-user-events
 secretEnv:
   DB_PASSWORD: { key: dershane/db/task_service, property: password }
@@ -30,3 +29,10 @@ cronJobs:
   - name: check-deadlines
     schedule: "*/15 * * * *"
     args: ["--task.job=check-deadlines"]
+
+secretTemplates:
+  # The database address comes from Secrets Manager (dershane/endpoints), not from Git.
+  DB_URL:
+    template: "jdbc:postgresql://{{ .rdsHost }}:5432/task_service?sslmode=require"
+    from:
+      rdsHost: { key: dershane/endpoints, property: rds_host }

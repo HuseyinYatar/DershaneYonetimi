@@ -71,7 +71,7 @@ Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS ko
   - **İlk super-admin:** prod realm sabit kimlikli `superadmin@onlinecourses.site` açar (ilk parola `dershane/keycloak/superadmin`, geçici). `bootstrap` Job'u user_service'e şube `MRKZ` ve yönetici satırını yazar (`R__local_seed.sql`'in karşılığı).
   - **Demo verisi:** `demo-seed` Job'u `local/seed/seed.mjs`'i `SEED_TARGET=prod` ile çalıştırır: 2 öğretmen, 2 sınıf × 10 öğrenci, veli, 5 TYT + 2 AYT, yoklama, ödev. Bütün demo hesapları ortak `dershane/demo/password`'ü kullanır. Super-admin parolasını değiştirdikten sonra Job ona dokunmaz.
   - **Parolalar:** Keycloak ve demo parolalarını Terraform üretir (`infra/terraform/app-secrets.tf`).
-  - **Değerler:** `<AWS_ACCOUNT_ID>` gibi işaretleri `k8s/fill-values.sh` Terraform çıktılarından doldurur. ARN'lerdeki hesap numarası public repoda görünür (bilinçli).
+  - **Değerler:** `k8s/`'te doldurulacak işaret yok. Git'te yazılı tek ortam değeri AWS hesap numarasıdır (imaj adresleri, IRSA ve topic ARN'leri, `_image.yml`): imaj adresi pod açılmadan bilinmek zorunda, External Secrets'ın rolü de Secrets Manager'dan okunamaz. Public repoda görünmesi bilinçli (AWS hesap numarasını gizli saymaz). RDS ana kullanıcısı Terraform'un `dershane/db/master` kaydındadır (RDS'in rastgele adlı kendi secret'ı kullanılmaz). **Veri deposu adresleri (RDS, Redis) Git'e yazılmaz:** Terraform `dershane/endpoints`'e yazar, External Secrets bağlantı ayarlarını oradan kurar (`secretTemplates`, db-init/bootstrap `PGHOST`, Keycloak `KC_DB_URL`). Gerekçe: parola değiller ama altyapının iç ayrıntısı ve repo public.
 
 ## Mikroservisler
 
@@ -353,8 +353,7 @@ DershaneYonetimi/
 │   ├── platform/              Traefik, cert-manager, External Secrets, metrics-server, cluster-config,
 │   │                          db-init, Keycloak, bootstrap (ilk super-admin), demo-seed
 │   ├── charts/service/        tüm servislerin ortak Helm chart'ı
-│   ├── environments/prod/<servis>.yaml
-│   └── fill-values.sh         <AWS_ACCOUNT_ID> gibi işaretleri Terraform çıktılarından doldurur
+│   └── environments/prod/<servis>.yaml
 ├── local/                     yerel ortam: docker-compose.yml (PostgreSQL, Keycloak, Floci,
 │                              Mailpit), keycloak/ realm tanımı, postgres/ init betiği
 └── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar + terraform.yml

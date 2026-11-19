@@ -132,6 +132,7 @@ Diğer ayarlar:
 | `dershane/db/<veritabanı>` (7 adet) | `username`, `password`, `dbname` | Terraform (şifre write-only, state'e girmez) |
 | `rds!db-...` | RDS ana kullanıcı şifresi | RDS |
 | `dershane/redis` | `password` (AUTH token) | Terraform (write-only) |
+| `dershane/endpoints` | `rds_host`, `redis_host`: veri depolarının iç adresleri (parola değil; k8s/ Git'te adres tutmasın diye) | Terraform (`endpoints.tf`) |
 | `dershane/notification/smtp` | SES SMTP sunucusu, kullanıcı adı, şifre | Terraform (IAM access key'den türer, state'te bulunur) |
 | `dershane/cluster/kubeconfig` | boş açılır; admin kubeconfig | control plane (Ansible `control_plane` rolü) |
 | `dershane/cluster/etcd-encryption-key` | boş açılır; kube-apiserver'ın Secret'ları etcd'de şifrelediği anahtar (32 bayt, base64) | control plane (Ansible `control_plane` rolü, `kubeadm init`'ten önce) |

@@ -24,10 +24,9 @@ spec:
           image: postgres:17-alpine
           command: ["/bin/sh", "/scripts/init.sh"]
           env:
-            - name: PGHOST
-              value: "<RDS_ADDRESS>"
             - name: PGSSLMODE
               value: require        # RDS has rds.force_ssl = 1
+          # PGHOST, PGUSER, PGPASSWORD and the service passwords: the db-init Secret (external-secret.yaml).
           envFrom:
             - secretRef:
                 name: db-init

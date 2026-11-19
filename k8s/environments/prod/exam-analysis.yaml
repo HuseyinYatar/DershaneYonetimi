@@ -1,12 +1,12 @@
 # exam-analysis: mock exams, optical files, scores, weak topics
-# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS> and <REDIS_ADDRESS> are filled
-# by k8s/fill-values.sh from the Terraform outputs; image.tag is written by CI (.github/workflows/_image.yml).
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
 name: exam-analysis
 image:
-  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/exam-analysis
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/exam-analysis
   tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
 aws:
-  roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-exam-analysis
+  roleArn: arn:aws:iam::423082503744:role/dershane-prod-exam-analysis
 
 web:
   port: 8000
@@ -48,7 +48,7 @@ env:
   DB_POOL_SIZE: "5"
   AWS_REGION: eu-central-1
   OPTICAL_FILES_BUCKET: dershane-prod-exam-analysis-optical-files
-  SNS_TOPIC_ARN: arn:aws:sns:eu-central-1:<AWS_ACCOUNT_ID>:exam-analysis-events
+  SNS_TOPIC_ARN: arn:aws:sns:eu-central-1:423082503744:exam-analysis-events
   SQS_QUEUE_NAME: exam-analysis-user-events
   OIDC_ISSUER: https://auth.onlinecourses.site/realms/dershane
   OIDC_JWKS_URL: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
@@ -56,13 +56,15 @@ env:
 
 secretTemplates:
   DATABASE_URL:
-    template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@<RDS_ADDRESS>:5432/{{ .dbName }}?sslmode=require"
+    template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@{{ .rdsHost }}:5432/{{ .dbName }}?sslmode=require"
     from:
       dbUser: { key: dershane/db/exam_analysis, property: username }
       dbPassword: { key: dershane/db/exam_analysis, property: password }
       dbName: { key: dershane/db/exam_analysis, property: dbname }
+      rdsHost: { key: dershane/endpoints, property: rds_host }
   # rediss = TLS; ":<token>@" = ElastiCache AUTH token.
   REDIS_URL:
-    template: "rediss://:{{ .redisPassword }}@<REDIS_ADDRESS>:6379/0"
+    template: "rediss://:{{ .redisPassword }}@{{ .redisHost }}:6379/0"
     from:
       redisPassword: { key: dershane/redis, property: password }
+      redisHost: { key: dershane/endpoints, property: redis_host }

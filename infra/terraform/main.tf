@@ -86,11 +86,10 @@ module "iam" {
   secret_prefix  = local.secret_prefix
   service_access = local.service_access
 
-  topic_arns        = module.events.topic_arns
-  queue_arns        = module.events.queue_arns
-  bucket_arns       = module.storage.bucket_arns
-  etcd_bucket_arn   = module.storage.bucket_arns["etcd-backups"]
-  extra_secret_arns = [module.database[0].master_secret_arn]
+  topic_arns      = module.events.topic_arns
+  queue_arns      = module.events.queue_arns
+  bucket_arns     = module.storage.bucket_arns
+  etcd_bucket_arn = module.storage.bucket_arns["etcd-backups"]
 }
 
 module "nodes" {
