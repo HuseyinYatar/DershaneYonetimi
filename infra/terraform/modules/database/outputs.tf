@@ -7,8 +7,8 @@ output "port" {
 }
 
 output "master_secret_arn" {
-  description = "Created and rotated by RDS; read by the db-init Job only."
-  value       = aws_db_instance.this.master_user_secret[0].secret_arn
+  description = "dershane/db/master: the master login, read by the db-init Job only."
+  value       = aws_secretsmanager_secret.master.arn
 }
 
 output "service_secret_arns" {

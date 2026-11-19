@@ -1,12 +1,12 @@
 # notification: in-app, e-mail and SMS notifications from the events
-# Values for k8s/charts/service. <AWS_ACCOUNT_ID>, <RDS_ADDRESS> and <REDIS_ADDRESS> are filled
-# by k8s/fill-values.sh from the Terraform outputs; image.tag is written by CI (.github/workflows/_image.yml).
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
 name: notification
 image:
-  repository: <AWS_ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/notification
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/notification
   tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
 aws:
-  roleArn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/dershane-prod-notification
+  roleArn: arn:aws:iam::423082503744:role/dershane-prod-notification
 
 web:
   port: 8000
@@ -51,8 +51,9 @@ secretEnv:
 
 secretTemplates:
   DATABASE_URL:
-    template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@<RDS_ADDRESS>:5432/{{ .dbName }}?sslmode=require"
+    template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@{{ .rdsHost }}:5432/{{ .dbName }}?sslmode=require"
     from:
       dbUser: { key: dershane/db/notification, property: username }
       dbPassword: { key: dershane/db/notification, property: password }
       dbName: { key: dershane/db/notification, property: dbname }
+      rdsHost: { key: dershane/endpoints, property: rds_host }

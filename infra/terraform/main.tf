@@ -86,11 +86,10 @@ module "iam" {
   secret_prefix  = local.secret_prefix
   service_access = local.service_access
 
-  topic_arns        = module.events.topic_arns
-  queue_arns        = module.events.queue_arns
-  bucket_arns       = module.storage.bucket_arns
-  etcd_bucket_arn   = module.storage.bucket_arns["etcd-backups"]
-  extra_secret_arns = [module.database[0].master_secret_arn]
+  topic_arns      = module.events.topic_arns
+  queue_arns      = module.events.queue_arns
+  bucket_arns     = module.storage.bucket_arns
+  etcd_bucket_arn = module.storage.bucket_arns["etcd-backups"]
 }
 
 module "nodes" {
@@ -119,6 +118,8 @@ module "registry" {
   repositories = var.ecr_repositories
   force_delete = var.force_destroy_buckets
   github_repo  = var.github_repo
+
+  github_oidc_subject_prefix = var.github_oidc_subject_prefix
 }
 
 module "database" {

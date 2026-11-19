@@ -2,8 +2,8 @@
 # local/postgres/init.sql. No service is granted another service's database.
 #
 # Terraform cannot reach the instance (private subnets, no bastion), so it does not create the
-# databases. It writes one secret per service; a Kubernetes Job (k8s/, db-init) reads them and the
-# RDS-managed master secret and runs the CREATE ROLE / CREATE DATABASE statements idempotently.
+# databases. It writes one secret per service and the master login (dershane/db/master); a Kubernetes
+# Job (k8s/, db-init) reads them and runs the CREATE ROLE / CREATE DATABASE statements idempotently.
 
 resource "aws_db_subnet_group" "this" {
   name       = var.name
@@ -37,9 +37,12 @@ resource "aws_db_instance" "this" {
   publicly_accessible    = false
   multi_az               = false
 
-  # RDS generates the master password and keeps it in Secrets Manager; it never enters the state.
-  username                    = "dershane_admin"
-  manage_master_user_password = true
+  # Terraform generates the master password and keeps it in dershane/db/master (below), like the service
+  # passwords: write-only, so neither the plan nor the state contains it. Not the RDS-managed secret:
+  # that one gets a random name (rds!db-...), which k8s/ would have to carry.
+  username            = "dershane_admin"
+  password_wo         = ephemeral.random_password.master.result
+  password_wo_version = var.password_version
 
   backup_retention_period    = var.backup_retention_days
   skip_final_snapshot        = var.skip_final_snapshot
@@ -48,6 +51,28 @@ resource "aws_db_instance" "this" {
   deletion_protection        = false
   auto_minor_version_upgrade = true
   apply_immediately          = true
+}
+
+# --- Master credentials (db-init only) -----------------------------------------------------------
+
+ephemeral "random_password" "master" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "master" {
+  name                    = "${var.secret_prefix}/db/master"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "master" {
+  secret_id = aws_secretsmanager_secret.master.id
+
+  secret_string_wo = jsonencode({
+    username = aws_db_instance.this.username
+    password = ephemeral.random_password.master.result
+  })
+  secret_string_wo_version = var.password_version
 }
 
 # --- Service credentials ------------------------------------------------------------------------

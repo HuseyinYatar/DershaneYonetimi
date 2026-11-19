@@ -11,8 +11,7 @@ k8s/
 │   └── services.yaml  bizim servislerimiz: environments/prod'daki her dosya için bir Application
 ├── platform/          altyapının ayarları: hazır Helm paketlerinin values dosyaları ve kendi küçük tanımlarımız
 ├── charts/service/    8 servisin ortak Helm şablonu
-├── environments/prod/ her servisin kendi ayarları (adresler, hangi parolayı kullandığı, kaç pod...)
-└── fill-values.sh     işaretleri (<AWS_ACCOUNT_ID> vb.) Terraform çıktılarıyla dolduran betik
+└── environments/prod/ her servisin kendi ayarları (hangi parolayı ve adresi Secrets Manager'dan aldığı, kaç pod...)
 ```
 
 ## Kurulum sırası (wave)
@@ -33,7 +32,7 @@ Not: ApplicationSet'in kendi sağlık durumu yok, bu yüzden 4 ve 5, servisler t
 ## İlk kurulum
 
 1. **Terraform'u `standby = false` ile uygula.** NLB ve Redis bu adımda açılır. Ardından Güzel Hosting'e `@` ve `*` için A kaydı (`terraform output ingress_public_ip`) ve 3 DKIM CNAME kaydı girilir.
-2. **İşaretleri doldur:** `k8s/fill-values.sh`. Betik hesap numarasını, RDS ve Redis adreslerini ve RDS ana secret'ını dosyalara yazar. `git diff k8s/` ile kontrol et, commit et, main'e birleştir.
+2. **Dosyalarda doldurulacak bir şey yok.** Parolalar ve veri deposu adresleri Terraform'un yazdığı Secrets Manager kayıtlarından gelir (aşağıdaki "Parolalar"); dosyalarda yalnızca AWS hesap numarası (`423082503744`) yazılı. Başka bir hesaba kurulursa bu numara `k8s/` ve `.github/workflows/_image.yml` içinde değiştirilir.
 3. **İmajlar:** CI gönderiyor (aşağıdaki "İmajlar ve etiketler"). İlk kurulumda imajların hepsi gerekiyor: GitHub'da Actions sekmesinden 9 workflow (7 servis, `frontend`, `keycloak`) main üzerinde **Run workflow** ile bir kez çalıştırılır. Her biri imajı ECR'a gönderir ve `k8s/`'teki etiketini main'e commit'ler. Bitenleri `aws ecr list-images --repository-name <servis>` ile görebilirsin.
 4. **Ansible'ı çalıştır** (`infra/ansible/README.md`); son adımda ArgoCD kurulur ve gerisini kurar. Durumu `kubectl -n argocd get applications` ile ya da arayüzden (`infra/ansible/README.md`) izlersin. İlk kurulum, sertifikalar ve demo verisiyle birlikte 15–25 dakika sürer.
 
@@ -48,17 +47,9 @@ Bir servisin kodu main'e birleşince o servisin workflow'u (`.github/workflows/<
 
 Elle yeniden dağıtmak için: Actions → servisin workflow'u → **Run workflow** (main).
 
-## Doldurulan işaretler
+## Git'te yazılı tek ortam değeri: hesap numarası
 
-| İşaret | Değer | Nerede |
-|---|---|---|
-| `<AWS_ACCOUNT_ID>` | `terraform output ecr_registry`'nin ilk parçası | topic ARN'leri, IRSA rolleri, imaj adresleri |
-| `<ECR_REGISTRY>` | `terraform output ecr_registry` | Keycloak imajı |
-| `<RDS_ADDRESS>` | `terraform output rds_address` | veritabanı adresleri, db-init, bootstrap |
-| `<REDIS_ADDRESS>` | `terraform output redis_address` | api-gateway, messaging, exam-analysis |
-| `<RDS_MASTER_SECRET_ARN>` | `terraform output rds_master_secret_arn` | db-init (RDS'in ana kullanıcısı) |
-
-Hesap numarası ARN'lerde görünüyor ve repo public. Hesap numarası tek başına bir giriş bilgisi değil; bilinçli olarak kabul edildi.
+`423082503744` imaj adreslerinde, IRSA rol ARN'lerinde ve SNS topic ARN'lerinde yazılı. İmaj adresi pod açılmadan önce bilinmek zorunda ve External Secrets'ın kendi rolü Secrets Manager'dan okunamaz; bu yüzden bu numara Git'te. AWS hesap numarasını gizli bilgi saymaz, tek başına erişim vermez.
 
 ## Parolalar
 
@@ -76,6 +67,8 @@ aws secretsmanager get-secret-value --secret-id dershane/demo/password --query S
 Değer `{"value":"..."}` biçiminde. Konsoldan da okunabilir: Secrets Manager → kayıt → **Retrieve secret value**.
 
 Diğer kayıtlar kullanıcı parolası değil, sistemin kendi parolaları: veritabanları, Redis, SMTP, Keycloak yönetim konsolu (`dershane/keycloak/admin`, kullanıcı `admin`), user servisinin Keycloak'a bağlanma parolası.
+
+**Veri deposu adresleri de Git'te değil.** RDS ve Redis adresleri parola değil (ikisi de private subnet'te, yalnızca node'ların güvenlik grubuna açık), ama altyapının iç ayrıntısı ve repo public. Terraform onları `dershane/endpoints`'e (`rds_host`, `redis_host`) yazar; External Secrets bağlantı ayarlarını (`DB_URL`, `REDIS_HOST`, `DATABASE_URL`, `REDIS_URL`, db-init ve bootstrap'ta `PGHOST`, Keycloak'ta `KC_DB_URL`) buradan kurar. Git'te yalnızca `{{ .rdsHost }}` gibi yer tutucular var. Kümede adresi görmek için: `kubectl -n dershane get secret user-secrets -o jsonpath='{.data.DB_URL}' | base64 -d`.
 
 ## Demo verisi
 

@@ -33,8 +33,6 @@ spec:
               psql -v ON_ERROR_STOP=1 -f /sql/superadmin.sql
               echo "bootstrap: super-admin rows are in place"
           env:
-            - name: PGHOST
-              value: "<RDS_ADDRESS>"
             - name: PGSSLMODE
               value: require
           envFrom:

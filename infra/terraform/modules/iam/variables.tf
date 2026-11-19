@@ -39,8 +39,3 @@ variable "etcd_bucket_arn" {
   type = string
 }
 
-variable "extra_secret_arns" {
-  description = "Secrets outside the prefix that External Secrets may read (the RDS-managed master password)."
-  type        = list(string)
-  default     = []
-}

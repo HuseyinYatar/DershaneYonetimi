@@ -21,6 +21,9 @@ worker_count         = 2
 
 pod_identity = "irsa"
 github_repo  = "HuseyinYatar/DershaneYonetimi"
+# The repository issues OIDC tokens in GitHub's immutable format (owner and repository ids are public):
+#   gh api repos/HuseyinYatar/DershaneYonetimi/actions/oidc/customization/sub
+github_oidc_subject_prefix = "repo:HuseyinYatar@168910744/DershaneYonetimi@1420776653"
 
 buckets = {
   "exam-analysis-optical-files" = {}

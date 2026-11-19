@@ -145,7 +145,7 @@ resource "aws_iam_policy" "external_secrets" {
       Sid      = "ReadSecrets"
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-      Resource = concat(["${local.secret_arn_prefix}/*"], var.extra_secret_arns)
+      Resource = ["${local.secret_arn_prefix}/*"]
     }]
   })
 }
