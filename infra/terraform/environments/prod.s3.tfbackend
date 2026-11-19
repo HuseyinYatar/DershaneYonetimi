@@ -1,7 +1,7 @@
 # State in the bucket created by bootstrap/. Replace <ACCOUNT_ID> with the AWS account number once
 # (terraform -chdir=bootstrap output state_bucket). use_lockfile: a second plan/apply waits for the
 # lock object instead of writing the state at the same time (no DynamoDB table needed).
-bucket       = "dershane-tfstate-<ACCOUNT_ID>"
+bucket       = "dershane-tfstate-423082503744"
 key          = "prod/terraform.tfstate"
 region       = "eu-central-1"
 encrypt      = true

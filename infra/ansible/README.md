@@ -39,7 +39,7 @@ Playbook tekrar çalıştırılabilir. Her adım önce mevcut duruma bakar, yaln
 | # | Etiket | Nerede | Ne yapar |
 |---|---|---|---|
 | 1 | `node_prep` | tüm node'lar | hostname, swap kapatma, kernel modülleri ve sysctl, containerd (systemd cgroup), kubelet/kubeadm/kubectl (hold), ecr-credential-provider, cp'ye AWS CLI |
-| 2 | `control_plane` | cp | `kubeadm init` (yalnızca ilk sefer), `keys.json`'ın OIDC bucket'ına yüklenmesi (IRSA), admin kubeconfig'in Secrets Manager'a yazılması |
+| 2 | `control_plane` | cp | Secret şifreleme anahtarı (Secrets Manager'dan geri alınır, yoksa üretilip oraya yazılır) ve `EncryptionConfiguration`, `kubeadm init` (yalnızca ilk sefer), `keys.json`'ın OIDC bucket'ına yüklenmesi (IRSA), admin kubeconfig'in Secrets Manager'a yazılması |
 | 3 | `workers` | w1, w2 | Henüz katılmamış worker için join komutu üretilir ve `kubeadm join` çalışır |
 | 4 | `cni` | cp | Calico (Tigera operator, `192.168.0.0/16`, VXLANCrossSubnet); bütün node'lar Ready olana kadar bekler |
 | 5 | `etcd_backup` | cp | Günlük etcd snapshot'ı S3'e (systemd timer; ayrıca her açılıştan 10 dk sonra) |
@@ -73,7 +73,8 @@ infra/ansible/
 - **Bir worker silinip yeniden açıldı:** `./inventory.sh && ansible-playbook site.yml`. Yalnızca yeni worker hazırlanır ve kümeye katılır. Eski node kümeden elle silinir: `kubectl delete node w1`.
 - **Argo CD arayüzü:** `kubectl -n argocd port-forward svc/argocd-server 8080:443`, ardından https://localhost:8080. Kullanıcı `admin`, parola `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`.
 - **etcd yedeği elle:** cp'de `sudo systemctl start etcd-backup.service`, sonuç için `journalctl -u etcd-backup.service`. Yedekler `s3://<etcd bucket>/cp/` altında 14 gün kalır.
-- **etcd'yi yedekten geri yükleme** (elle; küme durumu snapshot anına döner): snapshot S3'ten indirilir, `etcdutl snapshot restore` ile yeni bir veri dizinine açılır, `/etc/kubernetes/manifests/etcd.yaml` bu dizini gösterecek şekilde değiştirilir. Ayrıntı: Kubernetes belgesi "Operating etcd clusters for Kubernetes", "Restoring an etcd cluster".
+- **etcd'yi yedekten geri yükleme** (elle; küme durumu snapshot anına döner): snapshot S3'ten indirilir, `etcdutl snapshot restore` ile yeni bir veri dizinine açılır, `/etc/kubernetes/manifests/etcd.yaml` bu dizini gösterecek şekilde değiştirilir. Ayrıntı: Kubernetes belgesi "Operating etcd clusters for Kubernetes", "Restoring an etcd cluster". Yedekteki Secret'lar şifrelidir; API server'ın aynı anahtarı kullanması gerekir. Yeniden kurulan cp'de `control_plane` rolü anahtarı `dershane/cluster/etcd-encryption-key`'den geri alır. Anahtar kaybolursa yedekteki Secret'lar okunamaz; External Secrets onları Secrets Manager'dan yeniden yazar.
+- **Secret'ların şifreli olduğunu görmek:** cp'de `sudo crictl exec $(sudo crictl ps --name etcd -q) etcdctl --cacert /etc/kubernetes/pki/etcd/ca.crt --cert /etc/kubernetes/pki/etcd/server.crt --key /etc/kubernetes/pki/etcd/server.key get /registry/secrets/dershane/user-secrets | head -c 80`. Çıktı `k8s:enc:secretbox:v1:key1:` ile başlıyorsa Secret etcd'de şifreli.
 
 ## Bilinen sınırlar
 

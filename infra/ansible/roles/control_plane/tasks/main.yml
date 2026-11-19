@@ -6,6 +6,63 @@
   register: control_plane_kubeadm_version
   changed_when: false
 
+# Encryption at rest for Secrets. kube-apiserver reads the configuration when it starts, so it has to exist
+# before kubeadm init. The key is created once and kept in Secrets Manager: a rebuilt control plane gets the
+# same key back, which a restored etcd backup needs. It never goes into Git or into the logs.
+- name: Encrypt Secrets at rest
+  block:
+    - name: Create the encryption directory
+      ansible.builtin.file:
+        path: "{{ control_plane_encryption_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # Restores the key from Secrets Manager, or creates one when the entry has no value yet (first install).
+    - name: Restore or create the encryption key
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          umask 077
+          if aws secretsmanager get-secret-value --secret-id "$KEY_SECRET" \
+               --query SecretString --output text > key.tmp 2> error.tmp; then
+            echo "restored from Secrets Manager"
+          elif grep -q ResourceNotFoundException error.tmp; then
+            openssl rand -base64 32 > key.tmp
+            aws secretsmanager put-secret-value --secret-id "$KEY_SECRET" \
+              --secret-string file://key.tmp > /dev/null
+            echo "created and stored in Secrets Manager"
+          else
+            cat error.tmp >&2
+            rm -f key.tmp error.tmp
+            exit 1
+          fi
+          rm -f error.tmp
+          mv key.tmp "$(basename "{{ control_plane_encryption_key_file }}")"
+        chdir: "{{ control_plane_encryption_dir }}"
+        creates: "{{ control_plane_encryption_key_file }}"
+      environment:
+        AWS_REGION: "{{ aws_region }}"
+        KEY_SECRET: "{{ cluster_secret_prefix }}/etcd-encryption-key"
+
+    - name: Read the encryption key
+      ansible.builtin.slurp:
+        src: "{{ control_plane_encryption_key_file }}"
+      register: control_plane_encryption_key_content
+      no_log: true
+
+    - name: Write the encryption configuration
+      ansible.builtin.template:
+        src: encryption-config.yaml.j2
+        dest: "{{ control_plane_encryption_config }}"
+        owner: root
+        group: root
+        mode: "0600"
+      vars:
+        control_plane_encryption_key: "{{ control_plane_encryption_key_content.content | b64decode | trim }}"
+      no_log: true
+
 - name: Write the kubeadm configuration
   ansible.builtin.template:
     src: kubeadm-config.yaml.j2

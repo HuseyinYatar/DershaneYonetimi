@@ -30,6 +30,16 @@ apiServer:
       value: {{ oidc_issuer }}
     - name: service-account-jwks-uri
       value: {{ oidc_issuer }}/keys.json
+    # Secrets are encrypted in etcd (and in its S3 backups) with the key the tasks above put in place.
+    - name: encryption-provider-config
+      value: {{ control_plane_encryption_config }}
+  # kube-apiserver runs as a static pod and sees only the host paths mounted into it.
+  extraVolumes:
+    - name: encryption
+      hostPath: {{ control_plane_encryption_dir }}
+      mountPath: {{ control_plane_encryption_dir }}
+      readOnly: true
+      pathType: Directory
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration

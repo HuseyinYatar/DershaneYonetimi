@@ -134,6 +134,7 @@ Diğer ayarlar:
 | `dershane/redis` | `password` (AUTH token) | Terraform (write-only) |
 | `dershane/notification/smtp` | SES SMTP sunucusu, kullanıcı adı, şifre | Terraform (IAM access key'den türer, state'te bulunur) |
 | `dershane/cluster/kubeconfig` | boş açılır; admin kubeconfig | control plane (Ansible `control_plane` rolü) |
+| `dershane/cluster/etcd-encryption-key` | boş açılır; kube-apiserver'ın Secret'ları etcd'de şifrelediği anahtar (32 bayt, base64) | control plane (Ansible `control_plane` rolü, `kubeadm init`'ten önce) |
 
 Pod'lara External Secrets Operator ile gelirler. Veritabanlarını ve rollerini RDS içinde `k8s/` altındaki `db-init` Job'u açar.
 

@@ -59,10 +59,13 @@ resource "aws_eip" "control_plane" {
   tags     = { Name = "${var.name}-${var.control_plane_key}" }
 }
 
-# Filled by the control plane after kubeadm init (infra/ansible); the kubeconfig never goes into Git.
+# Filled by the control plane (infra/ansible); neither ever goes into Git.
+#   kubeconfig             admin kubeconfig, written after kubeadm init
+#   etcd-encryption-key    key kube-apiserver encrypts Secrets with in etcd; written before kubeadm init.
+#                          An etcd backup restored on a rebuilt control plane needs the same key.
 # Join commands are not stored: Ansible creates a one-hour token on the control plane when a worker joins.
 resource "aws_secretsmanager_secret" "cluster" {
-  for_each                = toset(["kubeconfig"])
+  for_each                = toset(["kubeconfig", "etcd-encryption-key"])
   name                    = "${var.secret_prefix}/cluster/${each.key}"
   recovery_window_in_days = 0
 }
