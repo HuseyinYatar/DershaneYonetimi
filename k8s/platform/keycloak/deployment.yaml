@@ -1,4 +1,4 @@
-# Our Keycloak image (infra/keycloak/Dockerfile: official 26.8.1 + login theme, pre-built for PostgreSQL).
+# Our Keycloak image (infra/keycloak/Dockerfile: official 26.8.2 + login theme, pre-built for PostgreSQL).
 # --import-realm creates the "dershane" realm from the mounted file on the first start only; later changes
 # to the file do not touch an existing realm (change it in the admin console or delete the realm first).
 apiVersion: apps/v1

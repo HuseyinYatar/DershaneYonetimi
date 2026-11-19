@@ -7,7 +7,7 @@
 #   docker build --platform linux/amd64 -f infra/keycloak/Dockerfile -t <ecr_registry>/keycloak:<commit sha> .
 # Same Keycloak version as local/docker-compose.yml.
 
-FROM quay.io/keycloak/keycloak:26.8.1 AS builder
+FROM quay.io/keycloak/keycloak:26.8.2 AS builder
 # One Keycloak pod: a local cache instead of the cluster-wide one (no peers to find).
 ENV KC_DB=postgres \
     KC_HEALTH_ENABLED=true \
@@ -16,7 +16,7 @@ ENV KC_DB=postgres \
 COPY local/keycloak/themes/dershane /opt/keycloak/themes/dershane
 RUN /opt/keycloak/bin/kc.sh build
 
-FROM quay.io/keycloak/keycloak:26.8.1
+FROM quay.io/keycloak/keycloak:26.8.2
 ENV KC_CACHE=local
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
