@@ -42,3 +42,5 @@ jobs:
       context: .
       file: infra/keycloak/Dockerfile
       tag-file: k8s/platform/keycloak/deployment.yaml
+      # Accepted vulnerabilities inside Keycloak's own build, each with a reason and an expiry date.
+      trivy-ignore-file: infra/keycloak/.trivyignore

@@ -1,0 +1,9 @@
+# Vulnerabilities in the Keycloak image that are accepted on purpose (read by .github/workflows/keycloak.yml).
+# Only Keycloak uses this file; the services are scanned without exceptions.
+# Every entry names one CVE and expires: after the date the scan fails again and the entry is reviewed.
+
+# Google Guava 33.6.0-jre, denial of service; fixed in Guava 33.7.2. Keycloak 26.8.2 (the newest release on
+# 2026-11-19) still ships 33.6.0-jre inside its own build, so the jar cannot be upgraded in our image.
+# Impact: Keycloak could stop answering; no data or access is exposed. Remove this line after moving to a
+# Keycloak release with a fixed Guava (bump infra/keycloak/Dockerfile and local/docker-compose.yml).
+CVE-2026-102554 exp:2027-01-31

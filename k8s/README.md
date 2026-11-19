@@ -108,3 +108,4 @@ Job tekrar çalışsa veri çoğalmaz: betik her adımda önce var olana bakıyo
 - Keycloak realm dosyası yalnızca ilk açılışta içe aktarılıyor. Sonraki değişiklikler yönetim konsolundan ya da realm silinip yeniden içe aktarılarak yapılır.
 - demo-seed main dalındaki betiği çalıştırıyor.
 - Bir servisin entegrasyon testleri kırıksa imajı ECR'a gitmez ve kümedeki sürümü eski kalır (CI'da testler imajdan önce çalışıyor).
+- Keycloak imajında bir güvenlik açığı bilerek kabul edildi: Keycloak 26.8.2'nin içindeki Guava 33.6.0 (CVE-2026-102554, hizmet aksatma). Kendi imajımızda değiştirilemiyor; `infra/keycloak/.trivyignore`'da gerekçesiyle ve 2027-01-31 bitiş tarihiyle duruyor. Düzeltilmiş Guava'lı bir Keycloak çıkınca sürüm yükseltilip satır silinir.

@@ -30,6 +30,12 @@ on:
         required: false
         type: string
         default: ''
+      # Optional .trivyignore: vulnerabilities accepted on purpose, each with a reason and an expiry date
+      # (Keycloak only). Without it every fixed HIGH/CRITICAL vulnerability stops the image.
+      trivy-ignore-file:
+        required: false
+        type: string
+        default: ''
 
 env:
   IMAGE: ${{ inputs.service }}:${{ github.sha }}
@@ -72,6 +78,7 @@ jobs:
           image-ref: ${{ env.IMAGE }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: ${{ inputs.trivy-ignore-file }}
           exit-code: 1
 
       # --- Delivery (main only; runs after the scan passed) ---------------------------------------
