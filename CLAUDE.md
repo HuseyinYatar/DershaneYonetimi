@@ -181,7 +181,7 @@ com.dershane.<servis>
 
 ## User servisi kuralları
 
-- **Hesap açma:** Kullanıcıyı user servisi Keycloak Admin API ile açar; Keycloak'ın `sub` değeri `User.id` olur. Keycloak çağrısı veritabanı transaction'ının dışında yapılır. Veritabanı adımı başarısız olursa Keycloak hesabı silinerek telafi edilir; telafi de başarısız olursa ERROR logu düşülür ve `identity.compensations{outcome=failure}` metriği artar.
+- **Hesap açma:** Kullanıcıyı user servisi Keycloak Admin API ile açar; Keycloak'ın `sub` değeri `User.id` olur. user servisinin Keycloak istemcisi (`user-service`, service account) `kc-admin-api` kapsamını varsayılan kapsam olarak taşır: Keycloak 26.8.2'den beri Admin API, token'da bu kapsamı ve Admin API audience'ını arar, yoksa 401 döner (realm dosyalarında `defaultClientScopes`). Keycloak çağrısı veritabanı transaction'ının dışında yapılır. Veritabanı adımı başarısız olursa Keycloak hesabı silinerek telafi edilir; telafi de başarısız olursa ERROR logu düşülür ve `identity.compensations{outcome=failure}` metriği artar.
 - **Giriş:** E-posta isteğe bağlıdır. Kullanıcı adı e-posta varsa e-posta, yoksa öğrenci için `{şubekodu}-{öğrencino}`, veli için telefon numarasıdır. E-postalı kullanıcı şifresini Keycloak'ın gönderdiği e-postayla belirler. E-postasız kullanıcıya servis geçici şifre üretir; şifre yanıtta bir kez döner, hiçbir yerde saklanmaz ve loglanmaz, ilk girişte değiştirilir. Öğretmen ve yönetici için e-posta, veli için telefon zorunludur.
 - **Tablolar:** Kalıtım ayrı tablolarla (JPA JOINED): `users` + `student` / `teacher` / `guardian`. Yönetici, `role = ADMIN` olan düz kullanıcıdır.
 - **Veritabanı adı:** Yerelde veritabanı ve rol adı `user_service`tir; `user` PostgreSQL'de ayrılmış sözcük olduğu için kullanılmaz.

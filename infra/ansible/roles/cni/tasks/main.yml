@@ -9,7 +9,10 @@
       ansible.builtin.command: kubectl diff --server-side --force-conflicts -f {{ cni_calico_manifest_base }}/{{ item }}
       register: cni_operator_diff
       changed_when: false
-      failed_when: cni_operator_diff.rc > 1 # 0: no difference, 1: difference, >1: error
+      # 0: no difference, 1: difference, >1: error. On a new cluster the operator's namespace does not
+      # exist yet, so kubectl diff cannot compare the objects inside it and answers NotFound (rc 2):
+      # that is a difference, not an error.
+      failed_when: cni_operator_diff.rc > 1 and 'NotFound' not in cni_operator_diff.stderr
       loop:
         - operator-crds.yaml
         - tigera-operator.yaml
@@ -20,7 +23,7 @@
       loop: "{{ cni_operator_diff.results }}"
       loop_control:
         label: "{{ item.item }}"
-      when: item.rc == 1
+      when: item.rc != 0
       changed_when: true
 
     - name: Wait for the Installation resource type
@@ -37,11 +40,12 @@
       ansible.builtin.command: kubectl diff --server-side -f {{ cni_installation_file }}
       register: cni_installation_diff
       changed_when: false
-      failed_when: cni_installation_diff.rc > 1
+      # Same rule as above: NotFound means the object is not there yet, so it is applied.
+      failed_when: cni_installation_diff.rc > 1 and 'NotFound' not in cni_installation_diff.stderr
 
     - name: Apply the Calico installation
       ansible.builtin.command: kubectl apply --server-side -f {{ cni_installation_file }}
-      when: cni_installation_diff.rc == 1
+      when: cni_installation_diff.rc != 0
       changed_when: true
 
     - name: Wait until every node is Ready

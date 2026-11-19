@@ -73,9 +73,10 @@
       ansible.builtin.command: kubectl diff --server-side -f {{ argocd_root_app_file }}
       register: argocd_root_app_diff
       changed_when: false
-      failed_when: argocd_root_app_diff.rc > 1
+      # 0: no difference, 1: difference, >1: error; NotFound (nothing there yet) counts as a difference.
+      failed_when: argocd_root_app_diff.rc > 1 and 'NotFound' not in argocd_root_app_diff.stderr
 
     - name: Apply the root Application
       ansible.builtin.command: kubectl apply --server-side -f {{ argocd_root_app_file }}
-      when: argocd_root_app_diff.rc == 1
+      when: argocd_root_app_diff.rc != 0
       changed_when: true
