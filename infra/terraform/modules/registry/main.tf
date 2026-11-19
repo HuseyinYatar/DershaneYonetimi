@@ -71,7 +71,9 @@ resource "aws_iam_role" "github_push" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
+          # Exact match. With GitHub's immutable subject format the claim also carries the owner and
+          # repository ids, so a renamed or re-created account with the same name cannot take the role.
+          "token.actions.githubusercontent.com:sub" = "${coalesce(var.github_oidc_subject_prefix, "repo:${var.github_repo}")}:ref:refs/heads/${var.github_branch}"
         }
       }
     }]

@@ -119,6 +119,8 @@ module "registry" {
   repositories = var.ecr_repositories
   force_delete = var.force_destroy_buckets
   github_repo  = var.github_repo
+
+  github_oidc_subject_prefix = var.github_oidc_subject_prefix
 }
 
 module "database" {

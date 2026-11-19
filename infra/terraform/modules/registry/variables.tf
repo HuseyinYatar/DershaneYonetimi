@@ -25,3 +25,9 @@ variable "github_branch" {
   type    = string
   default = "main"
 }
+
+variable "github_oidc_subject_prefix" {
+  description = "Start of GitHub's OIDC sub claim (immutable format, with owner and repository ids). Null: repo:<github_repo>."
+  type        = string
+  default     = null
+}

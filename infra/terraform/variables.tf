@@ -151,6 +151,17 @@ variable "github_repo" {
   default     = null
 }
 
+variable "github_oidc_subject_prefix" {
+  description = <<-EOT
+    Start of the sub claim in GitHub's OIDC token, when the repository uses the immutable format
+    (repo:<owner>@<owner id>/<repo>@<repo id>). Read it with
+    gh api repos/<owner>/<repo>/actions/oidc/customization/sub (sub_claim_prefix).
+    Null: the classic repo:<owner>/<repo>.
+  EOT
+  type        = string
+  default     = null
+}
+
 # --- Data stores --------------------------------------------------------------------------------
 
 variable "db_instance_class" {
