@@ -4,7 +4,7 @@
 name: attendance
 image:
   repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/attendance
-  tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
+  tag: e7f537917a29c1f828a842c947dec1915b68e567
 aws:
   roleArn: arn:aws:iam::423082503744:role/dershane-prod-attendance
 
