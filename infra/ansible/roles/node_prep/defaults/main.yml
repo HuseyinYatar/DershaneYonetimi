@@ -1,0 +1,6 @@
+# The kubelet runs this binary to exchange the node's IAM role for an ECR pull token.
+node_prep_credential_provider_bin_dir: /opt/kubelet/credential-providers
+node_prep_credential_provider_config: /etc/kubelet-credential-provider/config.yaml
+node_prep_ecr_image_pattern: "*.dkr.ecr.*.amazonaws.com"
+node_prep_ecr_provider_url: >-
+  https://artifacts.k8s.io/binaries/cloud-provider-aws/v{{ ecr_credential_provider_version }}/linux/{{ deb_arch }}/ecr-credential-provider-linux-{{ deb_arch }}

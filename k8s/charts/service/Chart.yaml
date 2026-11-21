@@ -1,0 +1,5 @@
+apiVersion: v2
+name: service
+description: Shared chart of the Dershane services (Java, Python and the frontend); one values file per service in k8s/environments.
+type: application
+version: 0.1.0

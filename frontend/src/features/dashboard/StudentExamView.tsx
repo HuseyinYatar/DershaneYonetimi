@@ -1,5 +1,5 @@
 import { FileText, Target, TrendingUp } from "lucide-react";
-import { useStudentResults } from "@/api/queries/exam";
+import { useStudentResults, useStudentTytResults } from "@/api/queries/exam";
 import { useStudent } from "@/api/queries/user";
 import { Breadcrumb, PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -15,9 +15,11 @@ const BACK = { label: "Sınıflarım", to: "/classrooms" };
 export function StudentExamView({ studentId }: { studentId: string }) {
   const student = useStudent(studentId);
   const results = useStudentResults(studentId);
+  // Last and best net compare TYT with TYT; the exam count includes every type.
+  const tyt = useStudentTytResults(studentId);
 
   const name = [student.data?.firstName, student.data?.lastName].filter(Boolean).join(" ");
-  const nets = (results.data ?? []).map((r) => Number(r.net));
+  const nets = (tyt.data ?? []).map((r) => Number(r.net));
   const best = nets.length > 0 ? Math.max(...nets) : undefined;
 
   return (
@@ -44,7 +46,7 @@ export function StudentExamView({ studentId }: { studentId: string }) {
               value: results.data ? formatInt(results.data.length) : "—",
               label: "açıklanmış deneme",
             },
-            { icon: Target, value: formatNet(results.data?.[0]?.net), label: "son net" },
+            { icon: Target, value: formatNet(tyt.data?.[0]?.net), label: "son net" },
             { icon: TrendingUp, value: formatNet(best), label: "en yüksek net" },
           ]}
         />

@@ -1,0 +1,54 @@
+# Waits until the user service has created its tables (Flyway runs when its pod starts), then inserts the
+# rows. Runs on every sync; the SQL is idempotent.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-superadmin
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: superadmin
+          image: postgres:17-alpine
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until psql -tAc "SELECT 1 FROM information_schema.tables WHERE table_name = 'users'" | grep -q 1; do
+                echo "bootstrap: waiting for the user service's tables"; sleep 15
+              done
+              psql -v ON_ERROR_STOP=1 -f /sql/superadmin.sql
+              echo "bootstrap: super-admin rows are in place"
+          env:
+            - name: PGSSLMODE
+              value: require
+          envFrom:
+            - secretRef:
+                name: bootstrap-db
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 64Mi }
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+      volumes:
+        - name: sql
+          configMap:
+            name: superadmin-sql

@@ -1,7 +1,14 @@
 name: image
 
 # Reusable: build the image (tag = commit SHA, never latest), write the CycloneDX SBOM, scan with Trivy.
-# Pushing to ECR and updating the GitOps repo (main only) are added here once AWS is up.
+# On main (push or a manual run) it also delivers the image (CLAUDE.md pipeline steps 5 and 6):
+#   - pushes it to ECR. GitHub signs in to AWS with OIDC and assumes the push role Terraform created
+#     (registry module; it trusts only this repository's main branch). No AWS key is stored in GitHub.
+#   - points k8s/ at the new tag in a commit to main. Argo CD sees the commit and rolls the pods.
+# Pull requests only build and scan.
+#
+# The callers grant `id-token: write` and `contents: write` to the image job; GitHub lowers both to read
+# for pull requests from forks, and the steps that use them run on main only.
 on:
   workflow_call:
     inputs:
@@ -13,19 +20,44 @@ on:
         required: false
         type: string
         default: ''
+      # Dockerfile when it is not <context>/Dockerfile (Keycloak builds from the repository root).
+      file:
+        required: false
+        type: string
+        default: ''
+      # File whose image tag is updated; k8s/environments/prod/<service>.yaml when empty.
+      tag-file:
+        required: false
+        type: string
+        default: ''
+      # Optional .trivyignore: vulnerabilities accepted on purpose, each with a reason and an expiry date
+      # (Keycloak only). Without it every fixed HIGH/CRITICAL vulnerability stops the image.
+      trivy-ignore-file:
+        required: false
+        type: string
+        default: ''
 
 env:
   IMAGE: ${{ inputs.service }}:${{ github.sha }}
+  # terraform output ecr_registry and ecr_push_role_arn. Not secrets: the account number is also in k8s/.
+  AWS_REGION: eu-central-1
+  ECR_REGISTRY: 423082503744.dkr.ecr.eu-central-1.amazonaws.com
+  ECR_PUSH_ROLE: arn:aws:iam::423082503744:role/dershane-prod-github-ecr-push
+  DELIVER: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
 
 jobs:
   image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for AWS (used on main only)
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.context || format('services/{0}', inputs.service) }}
+          file: ${{ inputs.file }}
           load: true
           tags: ${{ env.IMAGE }}
           build-args: GIT_COMMIT_SHA=${{ github.sha }}
@@ -46,4 +78,78 @@ jobs:
           image-ref: ${{ env.IMAGE }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: ${{ inputs.trivy-ignore-file }}
           exit-code: 1
+
+      # --- Delivery (main only; runs after the scan passed) ---------------------------------------
+      - name: Sign in to AWS (OIDC, ECR push role)
+        if: env.DELIVER == 'true'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.ECR_PUSH_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Sign in to ECR
+        if: env.DELIVER == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+      # ECR tags are immutable: a manual re-run for the same commit finds the image there and skips the push.
+      - name: Push the image to ECR
+        if: env.DELIVER == 'true'
+        env:
+          REPOSITORY: ${{ inputs.service }}
+          TAG: ${{ github.sha }}
+        run: |
+          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$TAG" > /dev/null 2>&1; then
+            echo "$REPOSITORY:$TAG is already in ECR"
+            exit 0
+          fi
+          docker tag "$IMAGE" "$ECR_REGISTRY/$REPOSITORY:$TAG"
+          docker push "$ECR_REGISTRY/$REPOSITORY:$TAG"
+
+  # Pipeline step 6: Argo CD deploys what k8s/ on main says, so the new tag is committed there. The commit
+  # only touches k8s/, which no workflow's paths filter includes, and commits made with GITHUB_TOKEN do not
+  # start workflows: no loop. Several services can finish at once, so the push is retried on a fresh main.
+  deploy:
+    needs: image
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Point k8s/ at the new image
+        env:
+          SERVICE: ${{ inputs.service }}
+          TAG: ${{ github.sha }}
+          FILE: ${{ inputs.tag-file || format('k8s/environments/prod/{0}.yaml', inputs.service) }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet origin main
+            git reset --quiet --hard origin/main
+            # values files:  "  tag: <sha>";  plain manifests (Keycloak):  "image: <registry>/<service>:<sha>"
+            sed -E -i \
+              -e "s#^(  tag: ).*#\1${TAG}#" \
+              -e "s#(image: [^[:space:]]*/${SERVICE}:)[^[:space:]\"]+#\1${TAG}#" \
+              "$FILE"
+            if ! grep -q "$TAG" "$FILE"; then
+              echo "::error::no image tag line found in $FILE"
+              exit 1
+            fi
+            if git diff --quiet; then
+              echo "$FILE already points at $TAG"
+              exit 0
+            fi
+            git commit --quiet -am "deploy(${SERVICE}): ${TAG::7}"
+            if git push --quiet origin HEAD:main; then
+              echo "$FILE now points at $TAG"
+              exit 0
+            fi
+            echo "main moved; retrying ($attempt)"
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push the tag update to main"
+          exit 1

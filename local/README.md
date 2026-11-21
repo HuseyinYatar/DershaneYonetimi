@@ -183,50 +183,62 @@ AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test terraform apply \
 
 ## Mock veri
 
-Öğrenci panelini gerçek içerikle görmek için yerel yığını örnek veriyle doldurur (yalnızca yerel; uzak hiçbir
-şeye dokunmaz). Gereken: Node 22+ (bağımlılık yok) ve `--profile services` ile çalışan yığın.
+Öğrenci, öğretmen ve yönetici panellerini gerçek içerikle görmek için yığını örnek veriyle doldurur. Varsayılan
+olarak yalnızca yerel yığına dokunur. Aynı betik kümede `SEED_TARGET=prod` ile `demo-seed` Job'unun içinde de
+çalışır (`k8s/README.md`, "Demo verisi"). Gereken: Node 22+ (bağımlılık yok) ve `--profile services` ile çalışan yığın.
 
 ```bash
 node local/seed/seed.mjs
 ```
 
-Betik tekrar çalıştırılabilir: her adım önce var olanı arar (işaret: "Demo 12-A" sınıfı, "Demo TYT Deneme N"
-sınavları, görev başlıkları). Veriyi sıfırlamak için `docker compose ... down -v` yap, yığını yeniden kaldır
+Betik tekrar çalıştırılabilir: her adım önce var olanı arar (işaret: "Demo 12-A" ve "Demo 12-B" sınıfları, "Demo TYT
+Deneme N" sınavları, görev başlıkları). Veriyi sıfırlamak için `docker compose ... down -v` yap, yığını yeniden kaldır
 ve betiği çalıştır. Veri gerçek API'lerle (gateway `:8000`) açıldığı için olaylar akar ve diğer servislerin
 kopyaları (`StudentReplica`, `MembershipReplica`, iletişim kopyaları) dolar; betik kopyalar dolana kadar bekler.
 
-**Yalnızca yerel hesaplar** (şifreler Keycloak admin API'siyle bilinen değere ayarlanır):
+**Yerel hesaplar** (şifreler Keycloak admin API'siyle bilinen değere ayarlanır; kümede hepsinin ortak şifresi
+Secrets Manager'daki `dershane/demo/password`'tür):
 
-| Rol | Kullanıcı adı | Şifre |
-|---|---|---|
-| Ana öğrenci (Ayşe Yılmaz) | `mrkz-1001` | `Demo1234!` |
-| Geçici şifreli öğrenci (Merve Koç; ilk girişte "şifre belirle" sayfası) | `mrkz-1010` | `Gecici123!` |
-| Diğer öğrenciler (1002–1009) | `mrkz-1002` ... `mrkz-1009` | `Demo1234!` |
-| Öğretmen (Kemal Aksoy) | `ogretmen@dershane.local` | `Demo1234!` |
-| Öğretmen (Zeynep Karaca, Fizik) | `zeynep.karaca@dershane.local` | `Demo1234!` |
-| Öğretmen (Murat Erdem, Kimya) | `murat.erdem@dershane.local` | `Demo1234!` |
-| Veli (Fatma Yılmaz, Ayşe'nin velisi) | `05551234567` | `Demo1234!` |
-| Super-admin | `superadmin@dershane.local` | `admin` |
+| Rol | Ad | Kullanıcı adı | Şifre | AYT alanı | Not |
+|---|---|---|---|---|---|
+| Öğrenci | Ayşe Yılmaz | `mrkz-1001` | `Demo1234!` | SAY | Ana öğrenci (12-A): velisi, yoklama geçmişi, teslim ve notlanan ödevleri var |
+| Öğrenci | Mehmet Kaya | `mrkz-1002` | `Demo1234!` | SAY | 12-A'nın en iyisi |
+| Öğrenci | Elif Demir … Deniz Aydın | `mrkz-1003` … `mrkz-1009` | `Demo1234!` | SAY/EA | 12-A |
+| Öğrenci | Merve Koç | `mrkz-1010` | `Gecici123!` | SAY | Yalnızca yerelde geçici şifre: ilk girişte "şifre belirle" sayfası |
+| Öğrenci | Ahmet Polat … Yağmur Bulut | `mrkz-1011` … `mrkz-1020` | `Demo1234!` | SAY/EA | 12-B (İrem Aslan `mrkz-1014` en iyisi) |
+| Öğretmen | Kemal Aksoy | `ogretmen@dershane.local` | `Demo1234!` | | Demo 12-A'nın Matematik ve Türkçe öğretmeni |
+| Öğretmen | Seda Kılıç | `ogretmen2@dershane.local` | `Demo1234!` | | Demo 12-B'nin Matematik ve Türkçe öğretmeni |
+| Öğretmen | Zeynep Karaca | `zeynep.karaca@dershane.local` | `Demo1234!` | | Demo 12-A'nın Fizik öğretmeni (haftada 4 saat; program demosu) |
+| Öğretmen | Murat Erdem | `murat.erdem@dershane.local` | `Demo1234!` | | Demo 12-A'nın Kimya öğretmeni (haftada 3 saat; program demosu) |
+| Veli | Fatma Yılmaz | `05551234567` | `Demo1234!` | | Ayşe'nin velisi (anne) |
+| Super-admin | | `superadmin@dershane.local` | `admin` | | Bütün şubeler, denemeler ve kullanıcılar |
+
+AYT alanı: SAY öğrencileri AYT'de Matematik ve Fen'i, EA öğrencileri Matematik ve Edebiyat–Sosyal Bilimler-1'i
+yanıtlar (80 sorunun 60–74'ü doğru, 2–5'i boş); diğer iki teste girmezler. Girilmeyen test boş sayılmaz ve sonuç
+oluşturmaz; SAY öğrencisinin SÖZ puanı "0,5 net şartı" nedeniyle hesaplanmaz.
 
 Şube olarak var olan `MRKZ` kullanılır (yoksa "Demo Şube" / `DMO` açılır); kullanıcı adı `{şubekodu}-{öğrencino}`
 kuralıyla `mrkz-1001` olur.
 
 Ne oluşur:
-- **API ile:** ders kataloğu (Matematik, Türkçe, Fizik, Kimya), `Demo 12-A` (12. sınıf), öğretmen ve atamaları,
-  iki ek şube (`KDKY` Kadıköy Şubesi / `Kadıköy 12-A`, `CNKY` Çankaya Şubesi / `Çankaya 11-A`) ve `MRKZ`'de `Demo 12-A`'ya
-  atanmış iki ek öğretmen (Fizik haftada 4, Kimya haftada 3 saat; haftalık program demosu için), 10 öğrenci
-  (üyelik 2026-09-01'den), veli bağı; exam-analysis: şube zayıf konu ayarı (son 3 deneme, eşik 0,5), 4 TYT
-  denemesi (kurum içi puanlama, cevap anahtarı, optik dosya yükleme, açıklama; Ayşe'nin neti denemeden denemeye
-  artar, bazı konularda zayıf kalır; açıklama bildirimlerini üretir); attendance: pazartesi/çarşamba/cuma haftalık
-  program, son 4 haftanın oturumları (yönetici geçmiş tarihli oturum açıp gerekçeyle yoklama alır; Ayşe: 8 var,
-  2 geç, 1 yok, 1 izinli) ve `generate-sessions` işiyle gelecek 7 günün oturumları; task: 7 görev (tek seferlik,
-  günlük), Ayşe 3 teslim yapar, öğretmen 2'sini notlar.
-- **Doğrudan işlemle (API'nin yapamadıkları):**
-  - Şifreler Keycloak admin API'siyle (master `admin`/`admin`) ayarlanır.
-  - Katalog (`seed-catalog`) exam-analysis container'ında çalıştırılır.
+- **API ile:** ders kataloğu (Matematik, Türkçe, Fizik, Kimya), `Demo 12-A` ve `Demo 12-B` (12. sınıf), iki öğretmen ve
+  atamaları, iki ek şube (`KDKY` Kadıköy Şubesi / `Kadıköy 12-A`, `CNKY` Çankaya Şubesi / `Çankaya 11-A`), `Demo 12-A`'ya
+  atanmış iki ek öğretmen (Fizik haftada 4, Kimya haftada 3 saat), 20 öğrenci (üyelik 2026-09-01'den), veli bağı; exam-analysis: şube zayıf konu ayarı (son 3 deneme,
+  eşik 0,5), 5 TYT denemesi (iki sınıfın öğrencileri birlikte; kurum içi puanlama, cevap anahtarı, optik dosya
+  yükleme, açıklama; Ayşe'nin neti denemeden denemeye artar, bazı konularda zayıf kalır; açıklama bildirimlerini
+  üretir), 2 AYT denemesi (19 ve 5 gün önce, `ayt-fwf-v1`; SAY/EA/SÖZ puanları TYT Deneme 3 ve 4'ün netleriyle
+  birleşir); attendance: 12-A pazartesi/çarşamba/cuma, 12-B salı/perşembe haftalık program, son 4 haftanın
+  oturumları (yönetici geçmiş tarihli oturum açıp gerekçeyle yoklama alır; Ayşe: 8 var, 2 geç, 1 yok, 1 izinli) ve
+  yerelde `generate-sessions` işiyle gelecek 7 günün oturumları; task: 12-A'ya 7, 12-B'ye 2 görev, Ayşe 3 teslim
+  yapar, öğretmeni 2'sini notlar.
+- **Doğrudan işlemle (API'nin yapamadıkları, yalnızca yerelde):**
+  - Şifreler Keycloak admin API'siyle (master `admin`/`admin`; kümede `dershane/keycloak/admin`) ayarlanır.
+  - Katalog (`seed-catalog`) exam-analysis container'ında çalıştırılır (kümede exam-analysis'in migration Job'u yapar).
+  - Kopyaların dolduğu SQL ile kontrol edilir (kümede exam-analysis API'sine sorulur).
   - `OVERDUE` (Gecikti) durumu zamanla oluştuğu için "Limit çalışma kağıdı" ve "Fizik: Vektörler tekrar testi" atamalarının
     `due_at` değeri `task_service` veritabanında SQL ile 2 gün geriye alınır, ardından task servisinin gerçek
-    `check-deadlines` işi çalıştırılır ve atamaları `OVERDUE` yapar (olay yolu da çalışır).
+    `check-deadlines` işi çalıştırılır ve atamaları `OVERDUE` yapar (olay yolu da çalışır). Kümede bu adım yoktur;
+    süre dolunca CronJob işaretler.
 
 ```bash
 docker compose -f local/docker-compose.yml down -v   # veritabanı dahil her şeyi siler

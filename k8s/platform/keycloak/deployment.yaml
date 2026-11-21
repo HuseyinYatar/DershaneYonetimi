@@ -1,0 +1,80 @@
+# Our Keycloak image (infra/keycloak/Dockerfile: official 26.8.2 + login theme, pre-built for PostgreSQL).
+# --import-realm creates the "dershane" realm from the mounted file on the first start only; later changes
+# to the file do not touch an existing realm (change it in the admin console or delete the realm first).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    app.kubernetes.io/name: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate          # a single pod with a local cache: never two at once
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000      # keycloak user of the official image
+        runAsGroup: 0
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: keycloak
+          image: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/keycloak:b260ca09e0394428b46579b4c1cb1eda445f1fc3
+          args: ["start", "--optimized", "--import-realm"]
+          env:
+            # Tokens always carry the public issuer; services inside the cluster still call
+            # http://keycloak.dershane:8080 (backchannel), as local/docker-compose.yml does.
+            - name: KC_HOSTNAME
+              value: https://auth.onlinecourses.site
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
+            - name: KC_HTTP_ENABLED
+              value: "true"        # Traefik ends TLS; inside the cluster Keycloak speaks HTTP
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: admin
+          # KC_DB_URL (address from Secrets Manager), database login, admin password: external-secrets.yaml.
+          envFrom:
+            - secretRef:
+                name: keycloak-env
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          startupProbe:          # the first start creates the schema on RDS
+            httpGet: { path: /health/started, port: management }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health/ready, port: management }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: management }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 200m, memory: 768Mi }
+            limits: { memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        - name: realm
+          secret:
+            secretName: keycloak-realm

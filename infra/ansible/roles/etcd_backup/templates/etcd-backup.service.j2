@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Upload an etcd snapshot to S3
+After=network-online.target containerd.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ etcd_backup_script }}

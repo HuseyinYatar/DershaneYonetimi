@@ -1,0 +1,15 @@
+{{- if .Values.files }}
+# Files mounted into the containers (frontend: config.js with the production addresses).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "service.name" . }}-files
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  {{- range $i, $file := .Values.files }}
+  file-{{ $i }}: {{ $file.content | quote }}
+  {{- end }}
+{{- end }}

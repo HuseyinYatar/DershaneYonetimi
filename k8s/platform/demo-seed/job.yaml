@@ -1,0 +1,62 @@
+# Downloads the repository (main) and runs the seed script against the cluster's own addresses. The script
+# looks for everything it would create first, so running it again adds nothing twice.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-seed
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 6               # services may still be starting; each attempt resumes where it stopped
+  activeDeadlineSeconds: 3600
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000         # node user of the image
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: seed
+          image: node:24-bookworm
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              git clone --depth 1 --branch main https://github.com/HuseyinYatar/DershaneYonetimi.git /tmp/repo
+              node /tmp/repo/local/seed/seed.mjs
+          env:
+            - name: SEED_TARGET
+              value: prod
+            - name: GATEWAY_URL
+              value: http://api-gateway.dershane:8080
+            - name: KEYCLOAK_URL
+              value: https://auth.onlinecourses.site
+            - name: FRONTEND_URL
+              value: https://onlinecourses.site
+            - name: SEED_ADMIN_USER
+              value: superadmin@onlinecourses.site
+            - name: KEYCLOAK_ADMIN_USER
+              value: admin
+            - name: HOME
+              value: /tmp
+          envFrom:
+            - secretRef:
+                name: demo-seed
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

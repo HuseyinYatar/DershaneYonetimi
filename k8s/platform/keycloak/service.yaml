@@ -1,0 +1,14 @@
+# In-cluster address http://keycloak.dershane:8080 (services fetch the signing keys from here).
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

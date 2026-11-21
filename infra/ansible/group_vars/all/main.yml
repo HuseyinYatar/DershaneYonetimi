@@ -1,0 +1,32 @@
+# Cluster-wide settings. The values that come from Terraform (control plane public IP, OIDC issuer and
+# bucket, etcd backup bucket) are in terraform.json next to this file, written by tf-vars.sh.
+
+aws_region: eu-central-1
+
+# Versions, pinned in one place. kubernetes_version is the pkgs.k8s.io minor channel; the patch release
+# is whatever that channel has when a node is prepared (packages are then held).
+kubernetes_version: "1.37"
+ecr_credential_provider_version: "1.37.0"
+calico_version: v3.33.1
+helm_version: v4.3.2
+argocd_chart_version: "10.18.0"
+
+# Pod and Service networks. Neither may overlap the VPC (10.0.0.0/16).
+pod_cidr: 192.168.0.0/16
+service_cidr: 10.96.0.0/12
+
+# Secrets Manager entry Terraform created empty (modules/nodes): <prefix>/kubeconfig.
+cluster_secret_prefix: dershane/cluster
+
+# Argo CD watches this repository's k8s/apps folder once the cluster is up.
+argocd_repo_url: https://github.com/HuseyinYatar/DershaneYonetimi.git
+argocd_target_revision: main
+
+# systemd calendar expression for the daily etcd snapshot (another one runs 10 minutes after each start).
+etcd_backup_schedule: "*-*-* 03:00:00 Europe/Istanbul"
+
+kubeconfig_admin: /etc/kubernetes/admin.conf
+local_kubeconfig: "{{ lookup('ansible.builtin.env', 'HOME') }}/.kube/dershane-prod.config"
+
+# Debian architecture name used in download URLs (amd64 on the c7i/m7i instances).
+deb_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"

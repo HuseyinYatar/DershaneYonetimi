@@ -1,0 +1,23 @@
+# Demo data for presentations: 2 teachers, 2 classrooms of 10 students, exams, attendance, tasks. Delete this file to install without it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-seed
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/HuseyinYatar/DershaneYonetimi.git
+    targetRevision: main
+    path: k8s/platform/demo-seed
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dershane
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

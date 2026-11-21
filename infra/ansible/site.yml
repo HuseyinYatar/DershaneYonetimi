@@ -1,0 +1,54 @@
+# Builds the kubeadm cluster on the EC2 nodes Terraform created, then hands it over to Argo CD.
+#   ./inventory.sh && ./tf-vars.sh
+#   ansible-playbook site.yml                      # everything
+#   ansible-playbook site.yml --tags node_prep     # one step
+# Safe to run again: each task checks the current state first and changes only what differs.
+
+- name: Prepare every node for kubeadm
+  hosts: all
+  become: true
+  tags: [node_prep]
+  roles:
+    - node_prep
+
+- name: Initialise the control plane
+  hosts: control_plane
+  become: true
+  tags: [control_plane]
+  roles:
+    - control_plane
+
+- name: Join the workers
+  hosts: workers
+  become: true
+  tags: [workers]
+  roles:
+    - workers
+
+- name: Install the pod network (Calico)
+  hosts: control_plane
+  become: true
+  tags: [cni]
+  roles:
+    - cni
+
+- name: Schedule etcd backups to S3
+  hosts: control_plane
+  become: true
+  tags: [etcd_backup]
+  roles:
+    - etcd_backup
+
+- name: Install Argo CD and point it at k8s/apps
+  hosts: control_plane
+  become: true
+  tags: [argocd]
+  roles:
+    - argocd
+
+- name: Write a kubeconfig for this computer
+  hosts: control_plane
+  become: true
+  tags: [kubeconfig]
+  roles:
+    - kubeconfig

@@ -1,0 +1,18 @@
+# First super-admin, part 2. Part 1 is Keycloak's realm file (keycloak/realm/dershane-realm.json): it creates
+# the account superadmin@onlinecourses.site with the fixed id ...a001. This writes the matching rows
+# (branch MRKZ and the admin user) into the user service's database, the way services/user's
+# R__local_seed.sql does locally. Without both, nobody can log in to create the first users.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dershane
+resources:
+  - external-secret.yaml
+  - job.yaml
+configMapGenerator:
+  - name: superadmin-sql
+    files:
+      - superadmin.sql
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"

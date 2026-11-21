@@ -1,0 +1,25 @@
+# Installs a daily etcd snapshot to S3 on the control plane (script + systemd service + timer).
+# Restore is manual: etcdutl snapshot restore, see infra/ansible/README.md.
+
+- name: Install the backup script
+  ansible.builtin.template:
+    src: etcd-backup.sh.j2
+    dest: "{{ etcd_backup_script }}"
+    mode: "0750"
+
+- name: Install the systemd service and timer
+  ansible.builtin.template:
+    src: "etcd-backup.{{ item }}.j2"
+    dest: "/etc/systemd/system/etcd-backup.{{ item }}"
+    mode: "0644"
+  loop: [service, timer]
+  notify: Reload systemd units
+
+- name: Make systemd read the new units before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable the backup timer
+  ansible.builtin.systemd_service:
+    name: etcd-backup.timer
+    enabled: true
+    state: started

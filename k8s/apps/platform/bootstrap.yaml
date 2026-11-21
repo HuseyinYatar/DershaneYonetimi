@@ -1,0 +1,23 @@
+# First super-admin: writes the branch and admin rows into the user service's database (Keycloak's realm file creates the account).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bootstrap
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/HuseyinYatar/DershaneYonetimi.git
+    targetRevision: main
+    path: k8s/platform/bootstrap
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dershane
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

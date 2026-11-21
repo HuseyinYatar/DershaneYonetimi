@@ -1,11 +1,21 @@
-// Shared helpers of the local seed: Keycloak login (auth code + PKCE), Keycloak admin, gateway calls.
-// LOCAL ONLY: talks to the docker compose stack, never to anything remote.
+// Shared helpers of the seed: Keycloak login (auth code + PKCE), Keycloak admin, gateway calls.
+// SEED_TARGET=local (default): the docker compose stack, with the known local passwords.
+// SEED_TARGET=prod: the cluster (k8s/platform/demo-seed); addresses and passwords come from the environment,
+// and the docker helpers (psql, compose) are not available.
 import { createHash, randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+export const TARGET = process.env.SEED_TARGET ?? 'local';
+export const LOCAL = TARGET === 'local';
 export const GATEWAY = process.env.GATEWAY_URL ?? 'http://localhost:8000';
 export const KEYCLOAK = process.env.KEYCLOAK_URL ?? 'http://localhost:8180';
+// The login redirect must be one of the dershane-frontend client's redirect URIs (realm file).
+export const FRONTEND = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+const KEYCLOAK_ADMIN = {
+  user: process.env.KEYCLOAK_ADMIN_USER ?? 'admin',
+  password: process.env.KEYCLOAK_ADMIN_PASSWORD ?? 'admin',
+};
 export const REALM = 'dershane';
 export const COMPOSE_FILE = fileURLToPath(new URL('../docker-compose.yml', import.meta.url));
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -59,7 +69,7 @@ async function loginOnce(username, password) {
   const base = `${KEYCLOAK}/realms/${REALM}/protocol/openid-connect`;
   const verifier = b64url(randomBytes(48));
   const challenge = b64url(createHash('sha256').update(verifier).digest());
-  const redirect = 'http://localhost:3000/cb';
+  const redirect = `${FRONTEND}/cb`;
   const jar = jarOf();
   const authUrl = `${base}/auth?${new URLSearchParams({
     client_id: 'dershane-frontend',
@@ -169,7 +179,12 @@ async function adminToken() {
       const r = await fetch(`${KEYCLOAK}/realms/master/protocol/openid-connect/token`, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' }),
+        body: new URLSearchParams({
+          grant_type: 'password',
+          client_id: 'admin-cli',
+          username: KEYCLOAK_ADMIN.user,
+          password: KEYCLOAK_ADMIN.password,
+        }),
       });
       if (!r.ok) throw new Error(`Keycloak admin login failed: HTTP ${r.status}`);
       return (await r.json()).access_token;
@@ -178,14 +193,19 @@ async function adminToken() {
   );
 }
 
-/** Sets a known password on a LOCAL Keycloak account. temporary=true forces the change-password page at next login. */
-export async function setPassword(username, password, temporary) {
+/** Finds a Keycloak account of the realm; returns the admin headers and the account's URL. */
+async function keycloakUser(username) {
   const t = await adminToken();
   const h = { authorization: `Bearer ${t}`, 'content-type': 'application/json' };
   const url = `${KEYCLOAK}/admin/realms/${REALM}/users`;
   const users = await (await fetch(`${url}?username=${encodeURIComponent(username)}&exact=true`, { headers: h })).json();
   if (!users.length) throw new Error(`Keycloak user ${username} not found`);
-  const { id } = users[0];
+  return { h, url, id: users[0].id };
+}
+
+/** Sets a known password on a Keycloak account. temporary=true forces the change-password page at next login. */
+export async function setPassword(username, password, temporary) {
+  const { h, url, id } = await keycloakUser(username);
   const r = await fetch(`${url}/${id}/reset-password`, {
     method: 'PUT',
     headers: h,
@@ -204,14 +224,49 @@ export async function setPassword(username, password, temporary) {
   }
 }
 
-// --- docker helpers, only where the API cannot do it (documented in local/README.md) -----------
+/** Required actions of an account, e.g. ['UPDATE_PASSWORD'] while its password is still temporary. */
+export async function requiredActionsOf(username) {
+  const { h, url, id } = await keycloakUser(username);
+  const u = await (await fetch(`${url}/${id}`, { headers: h })).json();
+  return u.requiredActions ?? [];
+}
+
+/** Puts required actions back on an account (prod: the super-admin must change its first password). */
+export async function setRequiredActions(username, actions) {
+  const { h, url, id } = await keycloakUser(username);
+  const u = await (await fetch(`${url}/${id}`, { headers: h })).json();
+  const put = await fetch(`${url}/${id}`, { method: 'PUT', headers: h, body: JSON.stringify({ ...u, requiredActions: actions }) });
+  if (!put.ok) throw new Error(`setting required actions of ${username}: HTTP ${put.status}`);
+}
+
+/** Calls fn until it succeeds or the time is up (prod: Keycloak and the services may still be starting). */
+export async function until(what, fn, { timeoutMs = 20 * 60_000, everyMs = 10_000 } = {}) {
+  const end = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (Date.now() > end) throw new Error(`Timed out waiting for ${what}: ${e.message}`);
+      log(`waiting for ${what}: ${e.message.slice(0, 120)}`);
+      await sleep(everyMs);
+    }
+  }
+}
+
+// --- docker helpers, local only, where the API cannot do it (documented in local/README.md) -------
+function localOnly(what) {
+  if (!LOCAL) throw new Error(`${what} is a local docker helper; not available with SEED_TARGET=${TARGET}`);
+}
+
 export function psql(db, sql) {
+  localOnly('psql');
   return execFileSync('docker', ['exec', 'dershane-postgres-1', 'psql', '-U', 'postgres', '-d', db, '-tAq', '-c', sql], {
     encoding: 'utf8',
   }).trim();
 }
 
 export function compose(...args) {
+  localOnly('docker compose');
   return execFileSync('docker', ['compose', '-f', COMPOSE_FILE, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],

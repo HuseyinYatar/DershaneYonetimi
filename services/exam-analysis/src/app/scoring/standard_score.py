@@ -2,7 +2,9 @@
 
 standard score = 50 + 10 * (net - mean) / std_dev, per subject (test); the estimated score of a
 score type is the weighted sum of its subjects' standard scores plus the score type's base score.
-How that sum is finally scaled is an open decision and is isolated in _apply_base_score.
+Used for score types without coefficients (LGS until its MEB coefficients are known); TYT, AYT and
+YDT use app.scoring.coefficient_score. The statistics (mean, std_dev) are still computed for every
+exam: they are the institutional / national statistics of the exam.
 """
 
 import uuid

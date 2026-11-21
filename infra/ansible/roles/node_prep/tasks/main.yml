@@ -1,0 +1,215 @@
+# Prepares an Ubuntu 24.04 node for kubeadm: host name, swap, kernel settings, containerd, the Kubernetes
+# packages and ECR pulls. It does not create or join the cluster (control_plane and workers roles).
+
+# Ubuntu's own first-boot work (SSH keys, package lists) runs under cloud-init and holds the apt lock.
+- name: Wait for the first boot to finish
+  ansible.builtin.command: cloud-init status --wait
+  register: node_prep_cloud_init
+  changed_when: false
+  failed_when: node_prep_cloud_init.rc not in [0, 2] # 2: finished with recoverable warnings
+
+# 1. Host name. kubectl get nodes shows cp, w1, w2; the name resolves to the private IP so the kubelet
+#    and kubeadm pick the VPC address.
+- name: Set the host name
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+    use: systemd
+
+- name: Keep the host name across reboots (cloud-init would reset it)
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-preserve-hostname.cfg
+    content: "preserve_hostname: true\n"
+    mode: "0644"
+
+- name: Resolve the host name to the private IP
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '\s{{ inventory_hostname }}$'
+    line: "{{ private_ip }} {{ inventory_hostname }}"
+
+# 2. Swap. The kubelet refuses to start while swap is on (failSwapOn).
+- name: Turn swap off now
+  ansible.builtin.command: swapoff -a
+  when: ansible_facts['swaptotal_mb'] > 0
+  changed_when: true
+
+- name: Keep swap off after a reboot
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+
+# 3. Kernel. overlay: container image layers. br_netfilter + the sysctls: pod traffic crossing the node
+#    bridge goes through iptables (Services) and can be forwarded between nodes.
+- name: Load the kernel modules at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    mode: "0644"
+
+- name: Load the kernel modules now
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Set the kernel parameters Kubernetes networking needs
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-kubernetes.conf
+    reload: true
+  loop:
+    - net.bridge.bridge-nf-call-iptables
+    - net.bridge.bridge-nf-call-ip6tables
+    - net.ipv4.ip_forward
+
+# 4. Package repositories: Docker's for containerd 2.x (Kubernetes 1.36+ needs containerd 2) and
+#    pkgs.k8s.io, which serves one Kubernetes minor version per repository.
+- name: Install the tools the next steps use
+  ansible.builtin.apt:
+    name: [apt-transport-https, ca-certificates, curl, gpg, unzip, python3-debian]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Add Docker's repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/ubuntu
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: stable
+    architectures: "{{ deb_arch }}"
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
+
+- name: Add the Kubernetes repository for {{ kubernetes_version }}
+  ansible.builtin.deb822_repository:
+    name: kubernetes
+    types: deb
+    uris: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/"
+    suites: /
+    signed_by: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
+
+# 5. containerd. The package ships a config with the CRI plugin disabled, so the full default config is
+#    written. SystemdCgroup = true: the kubelet uses the systemd cgroup driver and both must agree.
+- name: Install containerd
+  ansible.builtin.apt:
+    name: containerd.io
+    state: present
+    update_cache: true
+
+- name: Hold containerd at its installed version
+  ansible.builtin.dpkg_selections:
+    name: containerd.io
+    selection: hold
+
+- name: Read containerd's default configuration
+  ansible.builtin.command: containerd config default
+  register: node_prep_containerd_default
+  changed_when: false
+
+- name: Write the containerd configuration with the systemd cgroup driver
+  ansible.builtin.copy:
+    dest: /etc/containerd/config.toml
+    content: "{{ node_prep_containerd_default.stdout | replace('SystemdCgroup = false', 'SystemdCgroup = true') }}\n"
+    mode: "0644"
+  notify: Restart containerd
+
+- name: Check that the systemd cgroup driver is set
+  ansible.builtin.command: grep -q 'SystemdCgroup = true' /etc/containerd/config.toml
+  changed_when: false
+
+- name: Run containerd at boot
+  ansible.builtin.systemd_service:
+    name: containerd
+    enabled: true
+    state: started
+
+# 6. kubelet, kubeadm, kubectl. state: present never upgrades an installed package, and the hold keeps
+#    apt upgrade from moving them; upgrades go through kubeadm upgrade.
+- name: Install kubelet, kubeadm and kubectl
+  ansible.builtin.apt:
+    name: [kubelet, kubeadm, kubectl]
+    state: present
+
+- name: Hold the Kubernetes packages
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: [kubelet, kubeadm, kubectl]
+
+- name: Run the kubelet at boot
+  ansible.builtin.systemd_service:
+    name: kubelet
+    enabled: true
+
+# 7. ECR pulls. On kubeadm the kubelet does not use the instance profile by itself; the credential
+#    provider turns the node role into an ECR token whenever an image matches the pattern.
+- name: Create the credential provider directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ node_prep_credential_provider_bin_dir }}"
+    - "{{ node_prep_credential_provider_config | dirname }}"
+
+# The published .sha256 file holds only the hash, so it is read first and checked on download.
+- name: Read the checksum of ecr-credential-provider {{ ecr_credential_provider_version }}
+  ansible.builtin.uri:
+    url: "{{ node_prep_ecr_provider_url }}.sha256"
+    return_content: true
+  register: node_prep_ecr_checksum
+
+- name: Download ecr-credential-provider
+  ansible.builtin.get_url:
+    url: "{{ node_prep_ecr_provider_url }}"
+    dest: "{{ node_prep_credential_provider_bin_dir }}/ecr-credential-provider"
+    checksum: "sha256:{{ node_prep_ecr_checksum.content | trim }}"
+    mode: "0755"
+  notify: Restart kubelet
+
+- name: Write the credential provider configuration
+  ansible.builtin.template:
+    src: credential-provider-config.yaml.j2
+    dest: "{{ node_prep_credential_provider_config }}"
+    mode: "0644"
+  notify: Restart kubelet
+
+- name: Pass the node IP and the credential provider to the kubelet
+  ansible.builtin.template:
+    src: kubelet-default.j2
+    dest: /etc/default/kubelet
+    mode: "0644"
+  notify: Restart kubelet
+
+# 8. AWS CLI on the control plane: keys.json, etcd snapshots and the cluster secrets go to AWS with the
+#    control plane's instance role.
+- name: Install the AWS CLI on the control plane
+  when: inventory_hostname in groups['control_plane']
+  block:
+    - name: Check whether the AWS CLI is installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/aws
+      register: node_prep_aws_cli
+
+    - name: Download and unpack the AWS CLI
+      ansible.builtin.unarchive:
+        src: "https://awscli.amazonaws.com/awscli-exe-linux-{{ ansible_facts['architecture'] }}.zip"
+        dest: /tmp
+        remote_src: true
+      when: not node_prep_aws_cli.stat.exists
+
+    - name: Run the AWS CLI installer
+      ansible.builtin.command: /tmp/aws/install
+      args:
+        creates: /usr/local/bin/aws
+
+# Restart containerd now if its configuration changed, before kubeadm needs it.
+- name: Apply pending restarts
+  ansible.builtin.meta: flush_handlers

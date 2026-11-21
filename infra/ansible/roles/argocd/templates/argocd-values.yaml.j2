@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Helm values for argo-helm/argo-cd {{ argocd_chart_version }}. The UI is reached with
+#   kubectl -n {{ argocd_namespace }} port-forward svc/{{ argocd_release }}-server 8080:443
+# no Ingress until Traefik and cert-manager run (they come from k8s/ through Argo CD itself).
+
+# No single sign-on yet: log in as admin (initial password in the argocd-initial-admin-secret Secret).
+dex:
+  enabled: false
+
+# Slack/e-mail notifications about syncs are not used; saves a pod.
+notifications:
+  enabled: false
+
+configs:
+  cm:
+    # k8s/apps installs the platform and the services in order (argocd.argoproj.io/sync-wave on each
+    # Application). The root waits for one wave to be healthy before the next only if Argo CD assesses the
+    # health of Application resources, which it stopped doing by default in 1.8. This restores it.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+      return hs

@@ -857,8 +857,20 @@ export interface components {
             net: string;
         };
         /**
+         * ScorePart
+         * @description One part of a coefficient score: "Sabit puan", "TYT netleri (…)" or one AYT subject. The parts
+         *     add up to the score (before the 500 cap).
+         */
+        ScorePart: {
+            /** Label */
+            label: string;
+            /** Points */
+            points: string;
+        };
+        /**
          * ScoreRead
-         * @description Always an estimate; the UI labels it "tahmini (kurum içi)" or "tahmini (Türkiye geneli)".
+         * @description Always an estimate. With coefficient_year the UI labels it "tahmini (2026 katsayılarıyla)";
+         *     otherwise (standard-score model) "tahmini (kurum içi)" or "tahmini (Türkiye geneli)".
          */
         ScoreRead: {
             /**
@@ -879,6 +891,14 @@ export interface components {
             source: components["schemas"]["ScoringSource"] | null;
             /** Branchrank */
             branchRank: number | null;
+            /** Coefficientyear */
+            coefficientYear?: number | null;
+            /** Notcomputedreason */
+            notComputedReason?: string | null;
+            /** Linkedexamname */
+            linkedExamName?: string | null;
+            /** Breakdown */
+            breakdown?: components["schemas"]["ScorePart"][];
         };
         /** ScoreTypeCreate */
         ScoreTypeCreate: {
@@ -1107,6 +1127,13 @@ export interface components {
             blank: number;
             /** Net */
             net: string;
+            /**
+             * Taken
+             * @default true
+             */
+            taken: boolean;
+            /** Questioncount */
+            questionCount?: number | null;
         };
         /** TopicAnalysisItem */
         TopicAnalysisItem: {

@@ -1,0 +1,30 @@
+# api-gateway: the only public API address; checks tokens, rate limits, CORS
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
+name: api-gateway
+image:
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/api-gateway
+  tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
+# No AWS calls, so no IRSA role.
+
+ingress:
+  enabled: true
+  host: api.onlinecourses.site
+
+env:
+  KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
+  KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  CORS_ALLOWED_ORIGINS: https://onlinecourses.site
+  USER_SERVICE_URL: http://user.dershane:8080
+  ATTENDANCE_SERVICE_URL: http://attendance.dershane:8080
+  TASK_SERVICE_URL: http://task.dershane:8080
+  MESSAGING_SERVICE_URL: http://messaging.dershane:8080
+  EXAM_ANALYSIS_SERVICE_URL: http://exam-analysis.dershane:8000
+  NOTIFICATION_SERVICE_URL: http://notification.dershane:8000
+  # Rate limit counters live in ElastiCache (TLS + AUTH token).
+  REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_SSL_ENABLED: "true"
+
+secretEnv:
+  REDIS_HOST: { key: dershane/endpoints, property: redis_host }
+  SPRING_DATA_REDIS_PASSWORD: { key: dershane/redis, property: password }

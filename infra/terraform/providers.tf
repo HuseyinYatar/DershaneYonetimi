@@ -1,5 +1,7 @@
-# The same code runs against Floci (aws_endpoint_url set, emulator = true) and real AWS (both unset).
-# Credentials come from the environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), never from code.
+# Runs against real AWS (prod) and, for SNS, SQS and S3 only, against Floci (local, emulator = true).
+# The address is never written here: the provider reads AWS_ENDPOINT_URL (set to Floci by floci-init,
+# unset against AWS), like the services. Credentials come from the environment (SSO session, GitHub
+# OIDC or Floci's test keys), never from code.
 provider "aws" {
   region = var.aws_region
 
@@ -8,9 +10,11 @@ provider "aws" {
   skip_requesting_account_id  = var.emulator
   s3_use_path_style           = var.emulator
 
-  endpoints {
-    sns = var.aws_endpoint_url
-    sqs = var.aws_endpoint_url
-    s3  = var.aws_endpoint_url
+  default_tags {
+    tags = {
+      Project     = "dershane"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    }
   }
 }

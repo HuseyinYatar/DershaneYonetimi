@@ -1,0 +1,46 @@
+# Runs init.sh against RDS on every sync of this Application (the script is idempotent). An Argo CD Sync
+# hook, so a finished Job is replaced instead of failing on Kubernetes' immutable Job spec.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10            # RDS may still be starting (power.sh on); each retry waits longer
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70           # postgres user of the alpine image
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: db-init
+          image: postgres:17-alpine
+          command: ["/bin/sh", "/scripts/init.sh"]
+          env:
+            - name: PGSSLMODE
+              value: require        # RDS has rds.force_ssl = 1
+          # PGHOST, PGUSER, PGPASSWORD and the service passwords: the db-init Secret (external-secret.yaml).
+          envFrom:
+            - secretRef:
+                name: db-init
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 64Mi }
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: db-init-script

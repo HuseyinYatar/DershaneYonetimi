@@ -37,10 +37,19 @@ class StudentScore(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     student_result_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("student_result.id", ondelete="CASCADE"))
     score_type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("score_type.id"))
-    # Null until the statistics it depends on exist (e.g. national statistics not entered yet).
+    # Null when the score is not computed: not_computed_reason says why (coefficient model), or the
+    # statistics it depends on are missing (standard-score model, e.g. national statistics).
     estimated_score: Mapped[Decimal | None] = mapped_column(Numeric(7, 3))
+    # Statistics source of a standard-score result; null for the coefficient model.
     source: Mapped[ScoringSource | None] = mapped_column(enum_column(ScoringSource, "scoring_source"))
     branch_rank: Mapped[int | None]
+    # MINIMUM_NET_NOT_MET, LINKED_RESULT_MISSING, LINKED_MINIMUM_NOT_MET.
+    not_computed_reason: Mapped[str | None] = mapped_column(String(32))
+    # The exam whose nets filled the subjects of another exam type (AYT/YDT: the student's latest
+    # published TYT of the branch on or before this exam's date).
+    linked_mock_exam_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mock_exam.id", ondelete="SET NULL")
+    )
 
     __table_args__ = (UniqueConstraint("student_result_id", "score_type_id"),)
 

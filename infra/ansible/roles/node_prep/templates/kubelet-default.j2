@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+# Read by kubeadm's systemd drop-in for the kubelet. --node-ip pins the VPC address, so the node never
+# registers with its (changing) public IP.
+KUBELET_EXTRA_ARGS=--node-ip={{ private_ip }} --image-credential-provider-config={{ node_prep_credential_provider_config }} --image-credential-provider-bin-dir={{ node_prep_credential_provider_bin_dir }}

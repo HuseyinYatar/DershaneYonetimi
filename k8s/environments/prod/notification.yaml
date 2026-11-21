@@ -1,0 +1,59 @@
+# notification: in-app, e-mail and SMS notifications from the events
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
+name: notification
+image:
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/notification
+  tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
+aws:
+  roleArn: arn:aws:iam::423082503744:role/dershane-prod-notification
+
+web:
+  port: 8000
+  probes:
+    port: 8000
+    liveness: /health/live
+    readiness: /health/ready
+    startupFailureThreshold: 24
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+service:
+  port: 8000
+
+worker:
+  enabled: true
+  command: ["python", "-m", "app.worker"]
+  livenessCommand: ["python", "-m", "app.worker.healthcheck"]   # age of the heartbeat file in /tmp
+
+migration:
+  enabled: true
+  command: ["alembic", "upgrade", "head"]
+
+env:
+  ENVIRONMENT: prod
+  DB_POOL_SIZE: "5"
+  AWS_REGION: eu-central-1
+  SQS_QUEUE_NAME: notification-queue
+  # Amazon SES SMTP endpoint (Terraform modules/email); the login is in Secrets Manager.
+  SMTP_HOST: email-smtp.eu-central-1.amazonaws.com
+  SMTP_PORT: "587"
+  SMTP_STARTTLS: "true"
+  MAIL_FROM: "Dershane <no-reply@onlinecourses.site>"
+  FRONTEND_BASE_URL: https://onlinecourses.site
+  OIDC_ISSUER: https://auth.onlinecourses.site/realms/dershane
+  OIDC_JWKS_URL: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  OIDC_AUDIENCE: dershane-api
+
+secretEnv:
+  SMTP_USERNAME: { key: dershane/notification/smtp, property: username }
+  SMTP_PASSWORD: { key: dershane/notification/smtp, property: password }
+
+secretTemplates:
+  DATABASE_URL:
+    template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@{{ .rdsHost }}:5432/{{ .dbName }}?sslmode=require"
+    from:
+      dbUser: { key: dershane/db/notification, property: username }
+      dbPassword: { key: dershane/db/notification, property: password }
+      dbName: { key: dershane/db/notification, property: dbname }
+      rdsHost: { key: dershane/endpoints, property: rds_host }

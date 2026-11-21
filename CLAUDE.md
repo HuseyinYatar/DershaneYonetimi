@@ -26,30 +26,52 @@ Projenin asıl amacı cloud-native ve modern DevOps uygulamalarını göstermek:
 | Kubernetes | EC2 üzerinde kubeadm ile kendi kurduğumuz küme | kind |
 | AWS servisleri | Gerçek AWS | **Floci** (yerel AWS emülatörü, `http://localhost:4566`) |
 | İmaj deposu | Amazon ECR | Yerel registry |
-| Veritabanı | RDS (PostgreSQL) | Floci RDS veya yerel PostgreSQL |
-| Önbellek | ElastiCache (Redis) | Floci ElastiCache veya yerel Redis |
+| Veritabanı | RDS (PostgreSQL 17), tek instance içinde servis başına veritabanı ve rol | Yerel PostgreSQL (docker-compose) |
+| Önbellek | ElastiCache (Redis) | Yerel Redis (docker-compose) |
 | Dosya | S3 | Floci S3 |
-| Gizli bilgiler | Secrets Manager | Floci Secrets Manager |
-| Giriş trafiği | Network Load Balancer + NGINX Ingress + Route 53 | NGINX Ingress |
+| Gizli bilgiler | Secrets Manager | Yerelde ortam değişkenleri (docker-compose) |
+| Giriş trafiği | Network Load Balancer (sabit Elastic IP) + Traefik. DNS Güzel Hosting'de (`onlinecourses.site`, A kaydı), TLS cert-manager + Let's Encrypt | Traefik |
 
 Kurallar:
 - AWS uç noktası kodda sabit yazılmaz; ortam değişkeninden okunur (`AWS_ENDPOINT_URL`). Yerelde Floci'yi, üretimde boş bırakılarak gerçek AWS'yi gösterir.
-- Aynı Terraform kodu hem Floci'ye hem AWS'ye uygulanabilmeli. Ortama özgü farklar değişken dosyalarında tutulur.
+- Olay altyapısı (SNS, SQS) ve optik dosya bucket'ı aynı Terraform koduyla hem Floci'ye hem AWS'ye uygulanır; ortama özgü farklar değişken dosyalarında tutulur. Küme platformu (EC2, RDS, ElastiCache, NLB, IAM...) yalnızca AWS'de kurulur: Floci EC2'yi container olarak açtığı için kubeadm orada çalışmaz.
 - Floci bir emülatördür; son doğrulama AWS üzerinde yapılır. EC2 sunucuları demo ve test dışında durdurulur.
 
 ## Kubernetes kümesi (EC2 + kubeadm)
 
 Yönetilen EKS yerine kümeyi EC2 üzerinde kendimiz kuruyoruz. Gerekçe: EKS kontrol düzlemini AWS yönettiği için Kubernetes'in iç yapısı görülmüyor; projenin amacı tam Kubernetes deneyimi.
 
-- **Topoloji:** 1 control plane + 2 worker node (EC2). Tek control plane bilinçli bir sınırlılıktır, raporda belirtilir.
-- **Kurulum:** EC2, VPC, subnet ve security group'lar Terraform ile açılır. Kubernetes kurulumu (containerd, kubeadm init/join) cloud-init veya Ansible ile otomatik yapılır; elle sunucuya girip kurulum yapılmaz.
-- **Ağ eklentisi (CNI):** Calico veya Cilium.
-- **ECR erişimi:** Node'lara ECR okuma yetkili IAM instance profile verilir.
+- **Topoloji:** 1 control plane (`c7i-flex.large`, 2 vCPU / 4 GiB) + 2 worker (`m7i-flex.large`, 2 vCPU / 8 GiB). İkisi de AWS free plan'a uygun tek kubeadm adayıdır (micro tipler kubeadm'in 2 GiB alt sınırının altında, `t4g` ARM). Sabit private IP: cp `10.0.1.10`, worker'lar `.11`, `.12`; cp'nin Elastic IP'si var. Tek control plane bilinçli bir sınırlılıktır, raporda belirtilir.
+- **Ağ:** Node'lar ve NLB tek public subnet'te (tek AZ), RDS ve ElastiCache iki private subnet'te. NAT Gateway yok (ayda ~40 $): node'lar public IP ile dışarı çıkar, gelen trafiği security group sınırlar. Raporda maliyet kararı olarak yazılır.
+- **Kurulum:** AWS kaynakları Terraform'dadır (`infra/terraform`, kurallar `infra/terraform/README.md`); sunucular boş Ubuntu olarak açılır (user-data yok). Sunucuların içi ve küme Ansible ile kurulur (`infra/ansible`, kurallar `infra/ansible/README.md`), elle sunucuya girip kurulum yapılmaz: `node_prep` (swap kapalı, kernel modülleri ve sysctl, containerd 2.x `SystemdCgroup = true`, kubelet/kubeadm/kubectl `hold`, `ecr-credential-provider`), `control_plane` (Secret'ların etcd'de şifrelenmesi, `kubeadm init`, IRSA `keys.json`, kubeconfig Secrets Manager'a), `workers` (`kubeadm join`, token 1 saatlik, saklanmaz), `cni` (Calico operator), `etcd_backup` (systemd timer → S3), `argocd` (Helm + `k8s/apps`'i izleyen root Application). Playbook tekrar çalıştırılabilir (idempotent); sürümler `group_vars/all/main.yml`'de tek yerdedir. Kubernetes sürüm yükseltmesi (`kubeadm upgrade`) playbook'ta yoktur. Node hazırlığının user-data yerine Ansible'da olmasının gerekçesi: `ignore_changes` yüzünden betik değişiklikleri mevcut node'lara ulaşmıyordu.
+- **Ağ eklentisi (CNI):** Calico veya Cilium. Pod CIDR `192.168.0.0/16`, VPC `10.0.0.0/16` ile çakışmaz.
+- **ECR erişimi:** Node'lara ECR okuma yetkili IAM instance profile verilir. kubeadm'de kubelet bu rolü kendiliğinden kullanmadığı için `ecr-credential-provider` kurulur.
+- **Pod kimliği (IRSA):** Pod'lar AWS'ye kalıcı anahtarla değil, servis başına IAM rolüyle erişir. ServiceAccount token'ı STS'te geçici anahtarla değiştirilir. Kümenin OIDC issuer'ı bir S3 bucket'ındadır: API server `--service-account-issuer` ile kurulur, `keys.json` init'ten sonra yüklenir. Java servislerinde `software.amazon.awssdk:sts` gerekir. IMDS hop limit 1 olduğu için pod node rolüne düşemez. Terraform'da `pod_identity = "node"` ile ortak node rolüne geçilebilir.
 - **Kalıcı disk:** Küme içinde durumlu servis çalışacaksa AWS EBS CSI sürücüsü kurulur. Veritabanı RDS'te olduğu sürece gerekmez.
-- **Dış trafik:** NGINX Ingress Controller, önünde Network Load Balancer.
+- **Dış trafik:** Traefik, NodePort 30080/30443 ile Terraform'un açtığı NLB'nin arkasındadır. NLB TCP geçirir, TLS'i Traefik cert-manager sertifikasıyla açar. ingress-nginx Mart 2026'da emekliye ayrıldığı (güvenlik yaması almadığı) için kullanılmaz. Adresler: `onlinecourses.site` → frontend, `api.onlinecourses.site` → api-gateway, `auth.onlinecourses.site` → Keycloak (ayrı origin; gateway yalnızca `/api/**` sunar). Traefik middleware'i (hız sınırı, CORS, JWT) kullanılmaz, bunlar gateway'dedir.
 - **Metrik:** HPA için metrics-server kurulur.
 - **etcd yedeği:** Control plane'deki etcd düzenli olarak S3'e yedeklenir.
 - Küme sertifikaları ve kubeconfig depoya konmaz; Secrets Manager'da tutulur.
+- **Secret'lar etcd'de şifrelidir** (`EncryptionConfiguration`, `secretbox`): kube-apiserver Secret'ı etcd'ye yazmadan önce şifreler, etcd dosyaları ve S3'teki etcd yedekleri parolaları düz taşımaz. Anahtar control plane'de (`/etc/kubernetes/encryption`, yalnızca root) ve `dershane/cluster/etcd-encryption-key`'de durur; Ansible init'ten önce yazar, yeniden kurulan cp aynı anahtarı geri alır. KMS sağlayıcısı kullanılmadı (ek eklenti gerektirir); anahtar cp diskinde düz durur, raporda belirtilir.
+- **Kümedeki uygulamalar (`k8s/`, kurallar `k8s/README.md`):**
+  - **Yapı:** Ansible'ın kurduğu root Application `k8s/apps`'i izler (app of apps). Kurulum sırası `sync-wave` ile belirlenir:
+    - 0: External Secrets, cert-manager, metrics-server
+    - 1: Traefik, cluster-config
+    - 2: db-init, Keycloak
+    - 3: servisler
+    - 4: bootstrap
+    - 5: demo-seed
+
+    Application'lar arasında beklemek için ArgoCD'ye Application sağlık kontrolü Ansible'dan eklenir.
+  - **Servisler:** tek ortak chart `k8s/charts/service` ve servis başına `environments/prod/<servis>.yaml`. Bunları ApplicationSet (git files generator) üretiyor.
+  - **Secret'lar:** External Secrets, `ClusterSecretStore aws-secrets-manager` üzerinden, IRSA rolü `external-secrets` ile. Git'te parola yok.
+  - **Pod güvenliği:** chart'ta `runAsNonRoot`, sayısal `runAsUser` (10001, frontend 101), salt okunur kök dosya sistemi ve `/tmp` emptyDir. Java Dockerfile'larının `USER app`'i bu yüzden sorun değil.
+  - **Sıra kuralı:** Python migration'ları ArgoCD Sync hook'u, wave 1'de (secret'tan sonra, pod'lardan önce).
+  - **Veritabanları ve TLS:** db-init Job'u RDS'te 7 veritabanını ve rolü idempotent açar. TLS cert-manager + `letsencrypt-prod` (HTTP-01).
+  - **İlk super-admin:** prod realm sabit kimlikli `superadmin@onlinecourses.site` açar (ilk parola `dershane/keycloak/superadmin`, geçici). `bootstrap` Job'u user_service'e şube `MRKZ` ve yönetici satırını yazar (`R__local_seed.sql`'in karşılığı).
+  - **Demo verisi:** `demo-seed` Job'u `local/seed/seed.mjs`'i `SEED_TARGET=prod` ile çalıştırır: 2 öğretmen, 2 sınıf × 10 öğrenci, veli, 5 TYT + 2 AYT, yoklama, ödev. Bütün demo hesapları ortak `dershane/demo/password`'ü kullanır. Super-admin parolasını değiştirdikten sonra Job ona dokunmaz.
+  - **Parolalar:** Keycloak ve demo parolalarını Terraform üretir (`infra/terraform/app-secrets.tf`).
+  - **Değerler:** `k8s/`'te doldurulacak işaret yok. Git'te yazılı tek ortam değeri AWS hesap numarasıdır (imaj adresleri, IRSA ve topic ARN'leri, `_image.yml`): imaj adresi pod açılmadan bilinmek zorunda, External Secrets'ın rolü de Secrets Manager'dan okunamaz. Public repoda görünmesi bilinçli (AWS hesap numarasını gizli saymaz). RDS ana kullanıcısı Terraform'un `dershane/db/master` kaydındadır (RDS'in rastgele adlı kendi secret'ı kullanılmaz). **Veri deposu adresleri (RDS, Redis) Git'e yazılmaz:** Terraform `dershane/endpoints`'e yazar, External Secrets bağlantı ayarlarını oradan kurar (`secretTemplates`, db-init/bootstrap `PGHOST`, Keycloak `KC_DB_URL`). Gerekçe: parola değiller ama altyapının iç ayrıntısı ve repo public.
 
 ## Mikroservisler
 
@@ -159,7 +181,7 @@ com.dershane.<servis>
 
 ## User servisi kuralları
 
-- **Hesap açma:** Kullanıcıyı user servisi Keycloak Admin API ile açar; Keycloak'ın `sub` değeri `User.id` olur. Keycloak çağrısı veritabanı transaction'ının dışında yapılır. Veritabanı adımı başarısız olursa Keycloak hesabı silinerek telafi edilir; telafi de başarısız olursa ERROR logu düşülür ve `identity.compensations{outcome=failure}` metriği artar.
+- **Hesap açma:** Kullanıcıyı user servisi Keycloak Admin API ile açar; Keycloak'ın `sub` değeri `User.id` olur. user servisinin Keycloak istemcisi (`user-service`, service account) `kc-admin-api` kapsamını varsayılan kapsam olarak taşır: Keycloak 26.8.2'den beri Admin API, token'da bu kapsamı ve Admin API audience'ını arar, yoksa 401 döner (realm dosyalarında `defaultClientScopes`). Keycloak çağrısı veritabanı transaction'ının dışında yapılır. Veritabanı adımı başarısız olursa Keycloak hesabı silinerek telafi edilir; telafi de başarısız olursa ERROR logu düşülür ve `identity.compensations{outcome=failure}` metriği artar.
 - **Giriş:** E-posta isteğe bağlıdır. Kullanıcı adı e-posta varsa e-posta, yoksa öğrenci için `{şubekodu}-{öğrencino}`, veli için telefon numarasıdır. E-postalı kullanıcı şifresini Keycloak'ın gönderdiği e-postayla belirler. E-postasız kullanıcıya servis geçici şifre üretir; şifre yanıtta bir kez döner, hiçbir yerde saklanmaz ve loglanmaz, ilk girişte değiştirilir. Öğretmen ve yönetici için e-posta, veli için telefon zorunludur.
 - **Tablolar:** Kalıtım ayrı tablolarla (JPA JOINED): `users` + `student` / `teacher` / `guardian`. Yönetici, `role = ADMIN` olan düz kullanıcıdır.
 - **Veritabanı adı:** Yerelde veritabanı ve rol adı `user_service`tir; `user` PostgreSQL'de ayrılmış sözcük olduğu için kullanılmaz.
@@ -222,7 +244,7 @@ com.dershane.<servis>
 - **İstemci önbelleği ve eşitleme.** Tarayıcı (IndexedDB) her sohbetin son N mesajını saklar (N yapılandırılabilir, başlangıç 200). `GET /conversations/{id}/messages`: parametresiz son `limit` mesaj; `beforeSeq` yukarı kaydırma; `afterSeq=N[&updatedSince=T]` N'den yeni mesajlar **ve** `updated_at > T` olan (düzenlenen/silinen) eski mesajlar. `limit` varsayılan 50, en çok 200. Yanıt `{messages, hasMore, syncedAt}`; `syncedAt = şimdi − 10 sn` (kısa transaction'ların geç commit'ini kaçırmamak için), istemci sonraki istekte `updatedSince = syncedAt` gönderir; tekrar gelen mesaj `id` ile üzerine yazılır. İstemci numaralarda boşluk görürse `afterSeq` ile eksik aralığı ister. Silinen mesajın `content` ve `fileId`'si istemciye dönmez.
 - **Okundu bilgisi.** `ConversationParticipant.lastReadSeq` katılımcının okuduğu son `seq`'dir (0 = hiçbiri). Okunmamış sayısı `seq > lastReadSeq`, göndereni kendisi olmayan ve silinmemiş mesajlardır. Gönderenin kendi okundusu mesajla birlikte ilerler. `PUT /conversations/{id}/read` konumu yalnızca ileri alır (`seq > lastSeq` → `READ_SEQ_OUT_OF_RANGE`); değişirse `READ` çerçevesi iki tarafa gider.
 - **Düzenleme ve silme.** Yalnızca gönderen. Düzenleme `messaging.message.edit-window` (15 dk) içinde; eski içerik `message_edit` tablosuna eklenir (yalnızca ekleme). PHOTO'da yalnızca açıklama düzenlenir. `editedAt` "düzenlendi" göstermek, `updated_at` (her değişiklikte) önbellek eşitlemek içindir. Silme süre sınırsızdır ve tekrarlanabilir (ikinci istek 204, değişiklik yok).
-- **WebSocket kimlik doğrulaması: tek kullanımlık bilet.** Tarayıcı el sıkışmada `Authorization` gönderemez. İstemci `POST /api/v1/chat/tickets` (JWT ile) → 30 sn geçerli bilet; `GET /api/v1/chat/ws?ticket=…` ile bağlanır, servis bileti Redis'ten `GETDEL` ile bir kez tüketir. `/api/v1/chat/ws` hem gateway'de hem serviste `permitAll`'dır; geçersiz bilet 401, Redis yoksa 503. İstemci 30 sn'de bir `{"type":"PING"}` gönderir (`PONG` döner; sunucu çevrimiçi anahtarını yeniler, NGINX'in 60 sn'lik `proxy-read-timeout`'unu da aşar). Soket `max-session-age` (60 dk) sonra `4401 reauthenticate` ile kapatılır, istemci yeni biletle bağlanır (çıkış yapmış veya pasife alınmış kullanıcının soketi en çok bu kadar yaşar).
+- **WebSocket kimlik doğrulaması: tek kullanımlık bilet.** Tarayıcı el sıkışmada `Authorization` gönderemez. İstemci `POST /api/v1/chat/tickets` (JWT ile) → 30 sn geçerli bilet; `GET /api/v1/chat/ws?ticket=…` ile bağlanır, servis bileti Redis'ten `GETDEL` ile bir kez tüketir. `/api/v1/chat/ws` hem gateway'de hem serviste `permitAll`'dır; geçersiz bilet 401, Redis yoksa 503. İstemci 30 sn'de bir `{"type":"PING"}` gönderir (`PONG` döner; sunucu çevrimiçi anahtarını yeniler, bağlantıyı Traefik'in ve NLB'nin boşta zaman aşımlarının altında tutar). Soket `max-session-age` (60 dk) sonra `4401 reauthenticate` ile kapatılır, istemci yeni biletle bağlanır (çıkış yapmış veya pasife alınmış kullanıcının soketi en çok bu kadar yaşar).
 - **Soket ömrü ve sınırı:** `max-session-age` yalnızca istemci çerçeve gönderince değil, dakikada bir çalışan zamanlanmış süpürmeyle de uygulanır (`SessionExpiry`); sessiz soket süresiz açık kalamaz. Kullanıcı başına en çok 5 soket vardır, fazlası en eskiden başlayarak `4429` ile kapatılır. Pasife alınmış hesap (token süresi dolmamış olsa da) sohbet açamaz, mesaj gönderemez, bilet alamaz (`ACCOUNT_INACTIVE`). Senkron cevabı en çok 500 değişmiş eski mesaj taşır. Gerçek zamanlı çerçeve hatalarında log yalnızca istisna türünü yazar, neden DEBUG'dadır (çerçeve mesaj metni içerir).
 - **Çerçeveler (sunucu → istemci):** `{"type":"MESSAGE","message":{…}}` (oluşturma, düzenleme, silme; istemci `id` ile upsert eder), `{"type":"READ","conversationId","userId","lastReadSeq"}`, `{"type":"PONG"}`. Tüm pod'lar tek Redis kanalını (`messaging:frames`) dinler ve yalnızca kendi soketlerine dağıtır. Yavaş soket `ConcurrentWebSocketSessionDecorator` ile (5 sn / 512 KB) düşürülür. Çerçeve kaybı veya yayın hatası WARN + `messaging.realtime.publish{outcome=failure}`; mesaj yine kayıtlıdır.
 - **`NewMessage` (çevrimdışı bildirim).** Alıcının açık soketi yoksa gelen **her mesaj için** bir `NewMessage` outbox'a yazılır (10 mesaj = 10 olay; kısma yok). Yükte içerik ve ad yok. Çevrimiçi durumu Redis'te `presence:{userId}` anahtarıdır (TTL 70 sn, PING yeniler, son soket kapanınca silinir) ve yalnızca bu karar için kullanılır, karşı tarafa gösterilmez. Redis'e ulaşılamazsa kullanıcı çevrimdışı sayılır (kaçan bildirim yerine fazla bildirim). **Şu an dinleyen yoktur (bilinçli):** notification bu olaya abone değildir; gerekçe Notification bölümünde.
@@ -261,14 +283,18 @@ com.dershane.<servis>
 
 ### Puanlama
 
-- ÖSYM ve MEB puanı **soru bazlı değil, test bazlı standart puanla** hesaplar: standart puan = 50 + 10 × (net − ortalama) ÷ standart sapma. Sonra testler puan türü ağırlıklarıyla (`ScoreTypeWeight`) toplanır. Bir sorunun puanı, onu kaç kişinin doğru yaptığına göre değişmez; zor geçen testte aynı netin puan değeri artar.
-- Her sınav türünün bir veya daha fazla puan türü (`ScoreType`) vardır: TYT ve LGS'de tek, AYT'de SAY/EA/SÖZ, YDT'de DİL. Ağırlıklar ders üzerinde değil, puan türü–ders çiftinde tutulur.
-- Standart puan için testin ortalaması ve standart sapması gerekir. Bunlar `ExamSubjectStatistic`te tutulur ve iki kaynaktan gelir:
-  - `INSTITUTIONAL`: optik dosya işlenince dershane öğrencilerinden otomatik hesaplanır.
-  - `NATIONAL`: yayınevi veya sınav organizasyonu açıkladıktan sonra **yalnızca yönetici** elle girer.
-- Hangi istatistiğin kullanılacağını `MockExam.scoringSource` belirler; deneme oluşturulurken seçilir. Öğrenci denemesi başına her puan türü için tek puan görür (`StudentScore`).
-- Türkiye geneli bir denemede ülke istatistiği henüz girilmediyse `StudentScore.estimatedScore` boş kalır; net ve konu analizi yine görünür. İstatistik girilince puan otomatik hesaplanır.
-- Tahmini puan her yerde "tahmini" olarak etiketlenir ve kaynağı belirtilir: "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)". Kurum içi puan Türkiye geneliyle karşılaştırılamaz.
+- ÖSYM puanı **test bazlı standart puanla** hesaplar: her testin neti o yılın adaylarının ortalaması ve standart sapmasıyla standart puana çevrilir (50 + 10 × (net − ortalama) ÷ standart sapma), puan türü ağırlıklarıyla toplanır ve en düşüğü 100, en yükseği 500 olacak biçimde doğrusal ölçeklenir. Bu zincir nete göre doğrusaldır; ortalama, standart sapma ve ölçek sınırları sabitlenince tek formüle iner.
+- **Tahmini puan katsayı modeliyle hesaplanır** (`app/scoring/coefficient_score.py`): `puan = sabit + Σ katsayı × max(test neti, 0)`, puan türünün tavanında (500) kesilir. Sabit ("sıfır netteki puan", `ScoreType.baseScore`) ve net başına katsayılar (`ScoreTypeWeight.weight`) `seed/catalog.json`'dadır, tahmin ettikleri yıl `ScoreType.coefficientYear`'dır. Gerekçe: resmi hesap sınavdan sonra açıklanan ulusal istatistik ister; deneme için geçen yılların ulusal değerleri gömülü katsayılar kullanılır, puan dershanenin öğrenci sayısına bağlı olmaz. Kaynak: sinavhavuzu.com.tr YKS puan hesaplama, 2026 tahmini (beklenen hata TYT/SAY/EA/DİL 2–3, SÖZ 4–6 puan). Katsayılar her yıl güncellenir; değişince `python -m app.cli seed-catalog` ve `python -m app.cli rescore` çalıştırılır.
+- Eksi test neti hesapta 0 sayılır (gösterilen net değişmez). OBP (diploma notu) kapsam dışıdır; puan yerleştirme puanı değil, sınav puanıdır.
+- **0,5 net şartı:** Bir puan türü, testlerinden en az birinde 0,5 net yoksa hesaplanmaz (`ScoreTypeWeight.minimumNetGroup`: aynı gruptaki dersler tek ÖSYM testi sayılır; ör. Fizik + Kimya + Biyoloji = Fen Bilimleri testi). TYT: Türkçe veya Temel Matematik; SAY: AYT Matematik veya Fen Bilimleri; EA: AYT Matematik veya Edebiyat–Sosyal Bilimler-1; SÖZ: Edebiyat–Sosyal Bilimler-1 veya Sosyal Bilimler-2; DİL: yabancı dil testi. Hesaplanmayan puan boş kalır, sebebi `StudentScore.notComputedReason`'da saklanır ve ekranda yazılır (`MINIMUM_NET_NOT_MET`, `LINKED_RESULT_MISSING`, `LINKED_MINIMUM_NOT_MET`).
+- **Girilmeyen test (AYT):** Sınav türünün `optionalTests`'i (katalog; AYT: Edebiyat–Sosyal Bilimler-1, Sosyal Bilimler-2, Matematik, Fen Bilimleri) seçmeli testleri tanımlar. Optik satırda hiçbir sorusu yanıtlanmamış test girilmemiş sayılır: ders sonucu, konu sonucu, saklanan cevap ve boş sayısı oluşmaz (öğrenci listede "92 boş" ve konularda %0 görünmez, zayıf konu çıkmaz), puan hesabında 0 nettir. Testin bir dersi bile yanıtlandıysa test girilmiştir, boşları sayılır. TYT ve LGS'de her test zorunludur. Girilmeyen test hesaplanan bir puana giriyorsa (sayısalcının EA'sındaki Edebiyat–Sosyal Bilimler-1) öğrencinin sonuç ayrıntısında dersleri "girilmedi" (`taken: false`, soru sayısıyla, toplamlara girmeden) listelenir; hesaplanmayan puan türünün dersleri listelenmez.
+- **Puanın kaynağı:** Sonuç ayrıntısında her katsayılı puan `breakdown` taşır: "Sabit puan", "TYT netleri (deneme adı)" ve her AYT dersinden gelen puan (girilmeyen test 0). Parçalar 500 sınırından önceki puana toplanır (yuvarlama farkı 0,01). Ekranda yalnızca değerler yazar, katsayı ve formül yazmaz.
+- **AYT ve YDT puanları TYT netlerini de içerir** (katsayı tablosundaki TYT satırları, katalogda `TYT:MAT` gibi). TYT netleri öğrencinin aynı şubedeki, bu denemenin tarihinde veya öncesinde **açıklanmış en son TYT denemesinden** alınır; hangi deneme olduğu `StudentScore.linkedMockExamId`'de saklanır ve ekranda "TYT netleri: …" diye yazılır. TYT denemesi yoksa veya o TYT'de puan hesaplanmıyorsa (ÖSYM: TYT puanı olmayanın AYT/YDT puanı yoktur) AYT/YDT puanı hesaplanmaz.
+- Her sınav türünün bir veya daha fazla puan türü (`ScoreType`) vardır: TYT ve LGS'de tek, AYT'de SAY/EA/SÖZ, YDT'de DİL. Katsayılar ders üzerinde değil, puan türü–ders çiftinde tutulur.
+- **LGS katsayısı henüz yoktur:** LGS puan türü eski standart puan modeliyle hesaplanır (`coefficientYear` boş: ağırlıklı kurum içi/Türkiye geneli standart puanlar, yer tutucu ağırlıklar, `weightsVerified: false`).
+- Kurum içi ve Türkiye geneli istatistikler (`ExamSubjectStatistic`, `MockExam.scoringSource`) olduğu gibi kalır: `INSTITUTIONAL` optik dosya işlenince otomatik hesaplanır, `NATIONAL`'ı yalnızca yönetici girer. Katsayılı puan türlerinde bunlar puanı etkilemez; yalnızca LGS'nin standart puanında kullanılır. Kurum sırası puana göre (puan yoksa nete göre) verilir.
+- Tahmini puan her yerde "tahmini" olarak etiketlenir: katsayılı türlerde "tahmini (2026 katsayılarıyla)", standart puanlı türlerde "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)". Puan ve netler ekranda 2 basamakla gösterilir.
+- **Bilinen sınırlar (raporda yazılacak):** Katsayılar resmi değil, tahminidir. AYT/YDT puanı yalnızca AYT/YDT denemesi yeniden hesaplanınca güncellenir; bağlı TYT'ye sonradan geç eşleşme olursa AYT puanı bir sonraki yeniden hesaplamaya kadar eski TYT netleriyle kalır. Bir puan türü tek bir başka sınav türünün testlerini sayabilir. Katsayılar yalnızca katalog dosyasıyla girilir; `PUT /score-types/{id}/weights` başka sınav türünün dersini kabul etmez.
 
 ### Zayıf konu
 
@@ -299,9 +325,9 @@ com.dershane.<servis>
 - **Yığın:** Vite, React 19, TypeScript (strict), react-router (v7, düz `<Routes>`), TanStack Query, `oidc-client-ts` + `react-oidc-context` (Authorization Code + PKCE), `openapi-fetch` + `openapi-typescript`, shadcn/ui + Tailwind v4, `sonner` (toast), Vitest + Testing Library, ESLint + Prettier. Paket yöneticisi npm, Node 24 (`.nvmrc` = `24`, yama yazılmaz). i18n, global state ve MSW bilinçli olarak yoktur (arayüz yalnızca Türkçe; sunucu durumu TanStack Query'dedir). Formlar `react-hook-form` + `zod` (`@hookform/resolvers`) ile yazılır; şemalar sunucu kurallarını yansıtır (`src/lib/taskForm.ts`), sunucu hatası yine toast'ta görünür. Tek seçimli ızgara gibi basit formlar (yoklama, düzeltme) düz React state kalır.
 - **Çalışma zamanı ayarı:** API ve Keycloak adresleri `public/config.js` içindeki `window.__CONFIG__`'den okunur (`src/config.ts` tek okuma noktasıdır). Kubernetes'te ConfigMap bu dosyanın üzerine yazar; aynı imaj tüm ortamlarda çalışır. Adresler için `import.meta.env` kullanılmaz (build anında gömülür).
 - **Kimlik:** Token `sessionStorage`'dadır (sekme kapanınca silinir); çıkışta `queryClient.clear()` sonra `signoutRedirect()`. Keycloak adresi `localhost` olmalı, container adı olmamalı (token `iss`'i uyuşmaz). Roller ve kimlik access token'dan okunur (`atob`, ek kütüphane yok) ve yalnızca menü ve yönlendirme içindir; yetkilendirme her zaman serviste yapılır.
-- **Giriş sayfası Keycloak'ındır (şifre SPA'dan geçmez).** Uygulamaya uyan özel tema `local/keycloak/themes/dershane` (`parent=base`, yalnızca Türkçe, Inter kendimiz barındırılır). Yerelde compose ile salt okunur bağlanır ve realm'in `loginTheme` değeri `dershane`dir; üretimde Keycloak imajına gömülecek veya ConfigMap ile bağlanacak (GitOps haftaları). Doğrudan erişim izni (direct access grants) açılmaz.
+- **Giriş sayfası Keycloak'ındır (şifre SPA'dan geçmez).** Uygulamaya uyan özel tema `local/keycloak/themes/dershane` (`parent=base`, yalnızca Türkçe, Inter kendimiz barındırılır). Yerelde compose ile salt okunur bağlanır ve realm'in `loginTheme` değeri `dershane`dir; üretimde Keycloak imajına gömülüdür (`infra/keycloak/Dockerfile`, ECR reposu `keycloak`). Prod realm dosyası `k8s/platform/keycloak/realm/dershane-realm.json`'dır (yereldekinden türetilir: https adresleri, Swagger istemcisi yok, parolalar External Secrets şablonuyla doldurulur). Doğrudan erişim izni (direct access grants) açılmaz.
 - **API:** Tüm istekler gateway üzerinden gider (`apiBaseUrl`), servise doğrudan gidilmez; her istekte `Accept-Language: tr` ve `Authorization` eklenir, 401'de bir kez `signinSilent()` denenir. Hata `application/problem+json` ise `detail` toast'ta gösterilir. DTO elle yazılmaz: tipler `npm run gen:api` ile yerelde çalışan servislerin OpenAPI belgesinden üretilir (`src/api/schema/`, depoya girer; springdoc yalnızca `local`/`dev` profilinde açıktır).
-- **Tahmini puan** her yerde "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)" etiketiyle gösterilir (bkz. Exam-analysis puanlama kuralları).
+- **Tahmini puan** her yerde etiketiyle gösterilir: "tahmini (2026 katsayılarıyla)" (`coefficientYear` doluysa), aksi halde "tahmini (kurum içi)" veya "tahmini (Türkiye geneli)" (`src/lib/score.ts`). Hesaplanmayan puanın yerinde sebebi yazar (`notComputedReason`); AYT/YDT puanının altında kullanılan TYT denemesi yazar. Net ve puanlar `formatNet` ile 2 basamaktır (`8,75`, `330,33`). Öğrenci özetindeki "Son deneme" kartı, net gelişimi ve "son net / en yüksek net" yalnızca TYT denemelerinden gelir (`useStudentTytResults`): AYT netleri başka ölçektedir ve AYT'de 11 ders vardır; AYT sonuçları Sonuçlar sayfasındadır. Bkz. Exam-analysis puanlama kuralları.
 - **CSP ve 401:** İçerik güvenlik politikası (CSP) ve çerçeve başlıkları NGINX'tedir (`frontend/nginx/`, imaj açılırken envsubst ile üretilir). Gateway ve Keycloak adresleri `CSP_CONNECT_SRC` / `CSP_FRAME_SRC` ortam değişkenlerinden gelir; ConfigMap bunları `config.js` ile birlikte ayarlamalıdır. 401 işleme tek uçuşludur: paralel istekler tek `signinSilent()` paylaşır, tek yönlendirme yapılır, 401 için toast gösterilmez.
 - **Yazı tipi ve tasarım dili:** Inter kendimiz barındırılır (`@fontsource-variable/inter`, `main.tsx`); NGINX CSP `font-src 'self'` olduğu için Google Fonts kullanılmaz. Tasarım dili: açık gri zemin üzerinde büyük yuvarlak yüzey, mor (`#6D4AFF`) dolgulu tek kart ("Zayıf konular"), gölgesiz beyaz kartlar, regular ağırlıklı büyük sayılar, her durum `StatusBadge` ile; gradyan, kart gölgesi, emoji ve süs araç çubuğu yoktur. Geniş ekran kırılması `wide:` (1320px, `index.css`'te tanımlı); `min-[1320px]:` Tailwind çıktısında `lg:` ile sıra karıştırıyor.
 - **Sorgu kancaları ve grafikler:** Servisler arası paylaşılan TanStack Query kancaları `src/api/queries/<servis>.ts` altındadır (anahtarlar servis adıyla başlar); ortak sunum bileşenleri `components/ui/` ve `components/charts/`, durum rozeti eşlemeleri `src/lib/status/` altındadır. Grafikler (BarChart, SemicircleGauge, LineChart) elle yazılmış SVG'dir, grafik kütüphanesi eklenmez; `role="img"` ve `aria-label` taşırlar.
@@ -314,22 +340,29 @@ com.dershane.<servis>
 
 ## Depo yapısı
 
-Uygulama kodu monorepo, dağıtım tanımları ayrı GitOps deposu.
+Uygulama kodu, altyapı ve dağıtım tanımları tek depodadır (monorepo). Küme içi tanımlar ayrı bir GitOps deposu yerine `k8s/` klasöründedir. Servis workflow'larının `paths` filtresi `k8s/**`'i içermediği için CI'ın etiket commit'i pipeline'ı yeniden tetiklemez.
 
 ```
-dershane-app/
+DershaneYonetimi/
 ├── services/<servis-adi>/     her servis kendi Dockerfile'ı ve testleriyle
 ├── frontend/
 ├── shared/events/             olay şemaları (JSON Schema) ve kuralları
-├── infra/terraform/           AWS ve Floci altyapısı: tek kök modül, `modules/events` (SNS/SQS),
-│                              ortam farkları `environments/*.tfvars`'ta. Yerelde `floci-init` uygular
+├── infra/terraform/           AWS ve Floci altyapısı (README.md): bootstrap/ (state bucket, Budget, GitHub OIDC),
+│                              tek kök modül, modules/ (events, storage, network, nodes, iam, registry,
+│                              database, cache, edge, email, monitoring), ortam farkları environments/'ta.
+│                              Yerelde `floci-init` yalnızca SNS/SQS ve optik dosya bucket'ını uygular
+├── infra/scripts/power.sh     EC2 ve RDS'i çalışma aralarında durdurur/başlatır (kredi)
+├── infra/ansible/             node hazırlığı ve kubeadm kümesi, ArgoCD'yi kurup k8s/apps'e bağlar (README.md)
+├── infra/keycloak/            Keycloak imajı (resmi imaj + giriş teması, kc.sh build)
+├── k8s/                       ArgoCD bu klasörü izler (README.md)
+│   ├── apps/                  ArgoCD Application'ları (platform/) ve servisler için ApplicationSet
+│   ├── platform/              Traefik, cert-manager, External Secrets, metrics-server, cluster-config,
+│   │                          db-init, Keycloak, bootstrap (ilk super-admin), demo-seed
+│   ├── charts/service/        tüm servislerin ortak Helm chart'ı
+│   └── environments/prod/<servis>.yaml
 ├── local/                     yerel ortam: docker-compose.yml (PostgreSQL, Keycloak, Floci,
 │                              Mailpit), keycloak/ realm tanımı, postgres/ init betiği
-└── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar
-
-dershane-gitops/               ArgoCD bu depoyu izler
-├── charts/<servis-adi>/       Helm chart'ları
-└── environments/{dev,prod}/values.yaml
+└── .github/workflows/         servis başına pipeline + ortak (reusable) şablonlar + terraform.yml
 ```
 
 Servis klasör adları İngilizce, küçük harf ve tire ile ayrılmıştır (`exam-analysis`, `messaging`).
@@ -337,7 +370,9 @@ Servis klasör adları İngilizce, küçük harf ve tire ile ayrılmıştır (`e
 ## CI/CD
 
 - **CI: GitHub Actions.** Her servisin kendi workflow'u vardır ve `paths` filtresiyle yalnızca o servisin klasörü (veya `shared/events/`) değişince çalışır. Bir servisteki değişiklik diğerlerini derlememeli.
-- **CD: ArgoCD (GitOps).** CI kümeye doğrudan dağıtım yapmaz; GitOps deposundaki imaj sürümünü günceller, küme içinde çalışan ArgoCD dağıtımı yapar.
+- **CD: ArgoCD (GitOps).** CI kümeye doğrudan dağıtım yapmaz; `k8s/environments/<ortam>/<servis>.yaml` içindeki imaj sürümünü günceller, küme içinde çalışan ArgoCD dağıtımı yapar. main korumalıysa CI bot'unun bypass izni mi alacağı, yoksa ArgoCD Image Updater mı kullanılacağı GitOps haftalarında belirlenir. **Uygulama:** `_image.yml` main'de (push veya elle Run workflow) imajı Trivy taramasından sonra OIDC ile `dershane-prod-github-ecr-push` rolüne geçip ECR'a gönderir, ardından `k8s/environments/prod/<servis>.yaml`'daki `tag:` satırını (Keycloak'ta deployment'taki imaj satırını) commit SHA'sıyla değiştirip main'e commit'ler (`deploy(<servis>): <sha>`). main korumasız olduğu için `GITHUB_TOKEN` ile itilir; commit yalnızca `k8s/`'i değiştirdiği için workflow tetiklemez. Aynı anda biten servisler için itme yeniden denenir. Keycloak imajının kendi workflow'u vardır (`keycloak.yml`). İmaj işi testlere bağlıdır: entegrasyon testi kırık servisin imajı gitmez. main'e koruma eklenirse bot'a bypass izni veya ArgoCD Image Updater gerekir.
+- **AWS kimliği:** GitHub Actions AWS'ye yalnızca imajı ECR'a göndermek için OIDC ile girer (`bootstrap/`'taki OIDC sağlayıcısı, `registry` modülündeki ECR push rolü, yalnızca main). GitHub'da AWS anahtarı saklanmaz.
+- **Terraform elle uygulanır:** `plan` ve `apply` CI'da değil, ekip üyesinin kendi IAM kullanıcısıyla (`aws login`) laptop'tan çalıştırılır; state ve kilit S3'tedir. Onay adımı yoktur, değişikliği kimin yaptığı CloudTrail'de görünür (raporda bilinen sınır).
 
 Servis pipeline aşamaları:
 1. Lint (Java: Spotless + Checkstyle, Python: Ruff)
@@ -345,9 +380,9 @@ Servis pipeline aşamaları:
 3. Entegrasyon testleri (Testcontainers + Floci; Java'da `*IT` sınıfları, `mvn verify`)
 4. Docker imajı oluşturma + güvenlik taraması (Trivy) + SBOM (CycloneDX)
 5. İmajı ECR'a gönderme (yalnızca ana dal)
-6. GitOps deposunda imaj sürümünü güncelleme (yalnızca ana dal)
+6. `k8s/` altında imaj sürümünü güncelleme (yalnızca ana dal)
 
-Pull request'te 1–4, ana dala birleştirmede 1–6 çalışır. Terraform için ayrı pipeline vardır: PR'da `plan`, onayla `apply`.
+Pull request'te 1–4, ana dala birleştirmede 1–6 çalışır. Terraform için ayrı pipeline vardır (`terraform.yml`), yalnızca statik kontrol yapar ve AWS'ye bağlanmaz: `fmt`, `validate`, `terraform test` (sahte provider), tflint, `trivy config`.
 
 İmaj etiketi commit SHA'sıdır; `latest` kullanılmaz.
 
@@ -380,7 +415,7 @@ Entegrasyon testleri gerçek AWS'ye bağlanmaz; Floci ve Testcontainers kullanı
 - Servisler birbirinden bağımsız dağıtılabilir
 - Ana dala birleştirilen değişiklik, elle müdahale olmadan AWS'deki kümeye ulaşır
 - Küme sıfırdan Terraform ve otomasyon betikleriyle, elle müdahale olmadan kurulabilir
-- Aynı Terraform kodu Floci ve AWS'de hatasız uygulanır
+- Olay altyapısı (SNS/SQS/S3) aynı Terraform koduyla Floci'de ve AWS'de hatasız uygulanır; küme platformu AWS'de
 - Yük testinde exam-analysis pod sayısı HPA ile artar ve yük kalkınca azalır
 - Bir servis kapatıldığında diğer işlevler çalışmaya devam eder
 - Tüm servislerin metrik, log ve izleri Grafana'da görülebilir
@@ -403,9 +438,8 @@ Entegrasyon testleri gerçek AWS'ye bağlanmaz; Floci ve Testcontainers kullanı
 
 Bunlar netleşince bu bölümden çıkarılıp yukarıya işlenmelidir.
 
-- **Üretimde ilk super-admin kurulumu:** Yerelde realm JSON'u ve `db/local` tohum verisi var; üretimde nasıl yapılacağı AWS haftasında (8–9) belirlenecek.
 - **exam-analysis'teki `Ders` ile user'daki `Subject` ilişkisi:** exam-analysis'te sınav türüne bağlı, ağırlıklı ayrı bir ders kataloğu var; iki katalog exam-analysis servisi yazılırken eşleştirilecek.
-- **Tahmini puan ölçekleme formülü:** Ağırlıklı standart puanların TYT, AYT ve LGS için hangi aralığa ve nasıl ölçekleneceği (taban puan dahil) ÖSYM ve MEB kılavuzlarından doğrulanıp puan türüne (`ScoreType.baseScore`, `ScoreTypeWeight`) işlenmeli. `services/exam-analysis/seed/catalog.json` içindeki ağırlıklar şimdilik yer tutucudur (`weightsVerified: false`).
+- **LGS puanı:** TYT/AYT/YDT katsayı modeline geçti (bkz. Puanlama). LGS için MEB'in merkezi sınav puanı katsayıları bulunup katalogdaki LGS puan türüne `coefficientYear`, `baseScore`, katsayılar ve 0,5 net şartı yerine geçen MEB kuralıyla işlenmeli; o zamana kadar LGS yer tutucu ağırlıklı standart puanla hesaplanır (`weightsVerified: false`).
 - **Fakülte/bölüm adı ve danışman unvanı:** Rapor kapağı için eksik.
 
 ## Rapor

@@ -2,6 +2,9 @@
 
 seed-catalog [PATH]     load exam types, subjects, topics, score types and optical formats (idempotent)
 seed-students PATH      load the local student copy from a JSON list (development only)
+rescore                 recompute statistics, estimated scores and ranks of every exam with results
+                        (after the score type coefficients change); oldest first, so AYT/YDT link
+                        to TYT results that are already rescored
 
 AWS resources (bucket, topic, queues) are infrastructure: infra/terraform creates them, in Floci
 locally and on AWS.
@@ -18,13 +21,25 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.cache import build_cache
 from app.config import get_settings
 from app.db import get_session_factory
-from app.models import ExamType, OpticalFormat, ScoreType, ScoreTypeWeight, Subject, Topic
+from app.models import (
+    ExamType,
+    MockExam,
+    OpticalFormat,
+    ScoreType,
+    ScoreTypeWeight,
+    StudentResult,
+    Subject,
+    Topic,
+)
 from app.observability.logging import configure_logging
+from app.repositories import exams as exams_repo
+from app.repositories import results as results_repo
 from app.schemas.optical import OpticalFieldDefinition
 from app.schemas.replicas import StudentReplicaIn
-from app.services import replica_service
+from app.services import replica_service, scoring_service
 
 logger = structlog.get_logger(__name__)
 
@@ -67,6 +82,7 @@ def _upsert_exam_type(session: Session, data: dict[str, Any]) -> ExamType:
         session.add(exam_type)
     exam_type.name = data["name"]
     exam_type.wrong_divisor = Decimal(str(data["wrongDivisor"]))
+    exam_type.optional_tests = data.get("optionalTests")
     session.flush()
     return exam_type
 
@@ -106,9 +122,22 @@ def _upsert_score_type(
         score_type = ScoreType(exam_type_id=exam_type.id, code=data["code"])
         session.add(score_type)
     score_type.name = data["name"]
-    score_type.base_score = None if data.get("baseScore") is None else Decimal(str(data["baseScore"]))
+    score_type.base_score = _decimal(data.get("baseScore"))
+    score_type.coefficient_year = data.get("coefficientYear")
+    score_type.minimum_net = _decimal(data.get("minimumNet"))
+    score_type.max_score = _decimal(data.get("maxScore"))
+    # [["TUR"], ["MAT"]]: each inner list is one ÖSYM test for the minimum-net rule.
+    groups = {
+        code: number
+        for number, group in enumerate(data.get("minimumNetGroups", []), start=1)
+        for code in group
+    }
     score_type.weights = [
-        ScoreTypeWeight(subject_id=subjects[code].id, weight=Decimal(str(weight)))
+        ScoreTypeWeight(
+            subject_id=_resolve_subject(session, subjects, code).id,
+            weight=Decimal(str(weight)),
+            minimum_net_group=groups.get(code),
+        )
         for code, weight in data["weights"].items()
     ]
     session.flush()
@@ -119,6 +148,46 @@ def _upsert_score_type(
             score_type=score_type.code,
             reason="weights must be checked against the ÖSYM/MEB guide (open decision in CLAUDE.md)",
         )
+
+
+def _decimal(value: Any) -> Decimal | None:
+    return None if value is None else Decimal(str(value))
+
+
+def _resolve_subject(session: Session, own: dict[str, Subject], code: str) -> Subject:
+    """Finds a catalog subject code: MAT is a subject of the score type's own exam type, TYT:MAT
+    one of another exam type, which must come earlier in the catalog file."""
+    if ":" not in code:
+        return own[code]
+    exam_type_code, subject_code = code.split(":", 1)
+    subject = session.scalar(
+        select(Subject)
+        .join(ExamType, ExamType.id == Subject.exam_type_id)
+        .where(ExamType.code == exam_type_code, Subject.code == subject_code)
+    )
+    if subject is None:
+        raise ValueError(f"unknown subject {code}: seed its exam type earlier in the catalog")
+    return subject
+
+
+def rescore(session: Session) -> int:
+    """Recomputes every exam that has results, one transaction per exam (the exam row is locked while
+    its scores are rewritten), oldest first so an AYT links to TYT results already rescored."""
+    settings = get_settings()
+    cache = build_cache(settings.redis_url, settings.cache_ttl_seconds)
+    exam_ids = session.scalars(
+        select(MockExam.id)
+        .where(MockExam.id.in_(select(StudentResult.mock_exam_id)))
+        .order_by(MockExam.exam_date, MockExam.created_at)
+    ).all()
+    for exam_id in exam_ids:
+        exam = exams_repo.get_mock_exam(session, exam_id, for_update=True)
+        scoring_service.recalculate_exam(session, exam, refresh_institutional=True)
+        student_ids = sorted(results_repo.existing_student_ids(session, exam.id))
+        session.commit()
+        cache.invalidate_exam(exam.id, exam.exam_type_id, student_ids)
+    logger.info("rescore.completed", exams=len(exam_ids))
+    return len(exam_ids)
 
 
 def seed_students(session: Session, students: list[dict[str, Any]]) -> None:
@@ -135,11 +204,15 @@ def main(argv: list[str] | None = None) -> int:
     catalog_parser.add_argument("path", nargs="?", type=Path, default=DEFAULT_CATALOG)
     students_parser = commands.add_parser("seed-students")
     students_parser.add_argument("path", type=Path)
+    commands.add_parser("rescore")
     args = parser.parse_args(argv)
 
     settings = get_settings()
     configure_logging(settings.log_level, f"{settings.service_name}-cli", settings.environment)
     with get_session_factory()() as session:
+        if args.command == "rescore":
+            rescore(session)
+            return 0
         data = json.loads(args.path.read_text(encoding="utf-8"))
         if args.command == "seed-catalog":
             seed_catalog(session, data)

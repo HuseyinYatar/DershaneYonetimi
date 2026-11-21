@@ -53,7 +53,24 @@ export function ScoreCard({ scores }: { scores: Score[] }) {
                 <div className="mt-8 text-[76px] leading-none font-light tracking-[-0.045em]">
                   {formatNet(score.estimatedScore)}
                 </div>
-                <p className="mt-4 text-[13px] text-white/85">{scoreExplanation(score.source)}</p>
+                <p className="mt-4 text-[13px] text-white/85">{scoreExplanation(score)}</p>
+                {score.breakdown && score.breakdown.length > 0 && (
+                  // Where the points come from (constant, TYT nets, each AYT test); values only.
+                  <div className="mt-4 border-t border-white/[0.22] pt-3 text-[13px]">
+                    <p className="text-white/70">Puanın kaynağı</p>
+                    <dl
+                      className="mt-1.5 space-y-1.5"
+                      aria-label={`${score.scoreTypeCode} puanının kaynağı`}
+                    >
+                      {score.breakdown.map((part) => (
+                        <div key={part.label} className="flex items-center justify-between gap-3">
+                          <dt className="text-white/85">{part.label}</dt>
+                          <dd className="font-medium">{formatNet(part.points)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
               </>
             ) : (
               <div className="mt-6 flex items-start gap-3 text-sm text-white/90">

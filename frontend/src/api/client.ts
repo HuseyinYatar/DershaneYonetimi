@@ -3,7 +3,8 @@ import createClient, { type Middleware } from "openapi-fetch";
 import { getUserManager } from "@/auth/oidc";
 import { currentPath } from "@/auth/returnPath";
 import { getConfig } from "@/config";
-import { ApiError } from "./problem";
+import { toast } from "sonner";
+import { ApiError, NETWORK_ERROR_CODE, isNetworkError, problemOf } from "./problem";
 import type { paths as UserPaths } from "./schema/user";
 import type { paths as AttendancePaths } from "./schema/attendance";
 import type { paths as TaskPaths } from "./schema/task";
@@ -34,6 +35,8 @@ function redirectOnce() {
     .catch((error) => {
       redirecting = false;
       console.warn("Sign-in redirect failed", error);
+      // Keycloak down: without this the expired session just sits there silently.
+      if (isNetworkError(error)) toast.error(problemOf(error).message, { id: NETWORK_ERROR_CODE });
     });
 }
 

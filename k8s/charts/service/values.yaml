@@ -1,0 +1,98 @@
+# Defaults of the shared chart. Each service's file in k8s/environments/prod/ sets what differs.
+
+# Service name: Deployment, Service, ServiceAccount (IRSA trusts dershane/<name>) and labels use it.
+name: ""
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# IRSA. With a role, the pod gets a projected ServiceAccount token (audience sts.amazonaws.com) plus
+# AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE; the AWS SDK trades the token for the role's temporary keys.
+# Empty: the pod gets no AWS identity (api-gateway, frontend).
+aws:
+  roleArn: ""
+  region: eu-central-1
+
+# Plain environment variables (rendered into a ConfigMap).
+env: {}
+# Secret environment variables, each one property of a Secrets Manager entry:
+#   DB_PASSWORD: { key: dershane/db/user_service, property: password }
+secretEnv: {}
+# Secret variables built from several properties (External Secrets template, Go template syntax):
+#   DATABASE_URL:
+#     template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@host:5432/db"
+#     from:
+#       dbUser: { key: dershane/db/x, property: username }
+#       dbPassword: { key: dershane/db/x, property: password }
+# The names under "from" must be unique within one service.
+secretTemplates: {}
+
+# The main process: serves HTTP behind the Service.
+web:
+  replicas: 1
+  command: []
+  args: []
+  port: 8080
+  probes:
+    port: 8081                # Java: management port
+    liveness: /health/liveness
+    readiness: /health/readiness
+    startupFailureThreshold: 36   # x 5 s: Java with Flyway needs up to a few minutes on a small node
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { memory: 640Mi }
+
+# Optional second process from the same image without a Service (Python workers).
+worker:
+  enabled: false
+  command: []
+  env: {}                     # added to (and overriding) env for the worker only
+  livenessCommand: []
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { memory: 640Mi }
+
+service:
+  port: 8080
+
+ingress:
+  enabled: false
+  host: ""
+  clusterIssuer: letsencrypt-prod
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  cpuUtilization: 70
+
+# One-off command before the Deployments change (Python: alembic upgrade head). Java services migrate with
+# Flyway on start and leave this off.
+migration:
+  enabled: false
+  command: []
+
+# Scheduled runs of the same image: [{ name, schedule, args }], times in Europe/Istanbul.
+cronJobs: []
+
+# Files mounted read-only into the containers: [{ path, content }] (frontend: config.js).
+files: []
+
+# Extra writable directories (emptyDir) besides /tmp; the root filesystem is read-only.
+writableDirs: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001            # numeric, so Kubernetes can verify it is not root (Java images say USER app)
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
