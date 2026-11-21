@@ -4,7 +4,7 @@
 name: frontend
 image:
   repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/frontend
-  tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
+  tag: 352bcb3e3d679bdf34d3a168ab6e976c6b2c048f
 
 ingress:
   enabled: true
