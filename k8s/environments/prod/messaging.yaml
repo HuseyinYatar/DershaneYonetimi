@@ -4,7 +4,7 @@
 name: messaging
 image:
   repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/messaging
-  tag: b260ca09e0394428b46579b4c1cb1eda445f1fc3
+  tag: bf900069f36e7c31699bc21a720847b606283ee9
 aws:
   roleArn: arn:aws:iam::423082503744:role/dershane-prod-messaging
 
