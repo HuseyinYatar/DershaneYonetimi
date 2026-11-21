@@ -4,6 +4,9 @@ import com.dershane.userservice.classroom.application.port.in.LoadClassroomQuery
 import com.dershane.userservice.classroom.domain.Classroom;
 import com.dershane.userservice.enrollment.application.port.in.AssignTeacherCommand;
 import com.dershane.userservice.enrollment.application.port.in.AssignTeacherUseCase;
+import com.dershane.userservice.enrollment.application.port.in.BranchAssignmentView;
+import com.dershane.userservice.enrollment.application.port.in.ChangeAssignmentHoursUseCase;
+import com.dershane.userservice.enrollment.application.port.in.ListBranchTeacherAssignmentsQuery;
 import com.dershane.userservice.enrollment.application.port.in.ListTeacherAssignmentsQuery;
 import com.dershane.userservice.enrollment.application.port.in.RemoveTeacherAssignmentUseCase;
 import com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView;
@@ -32,10 +35,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 class TeacherAssignmentService
-    implements AssignTeacherUseCase, RemoveTeacherAssignmentUseCase, ListTeacherAssignmentsQuery {
+    implements AssignTeacherUseCase,
+        ChangeAssignmentHoursUseCase,
+        RemoveTeacherAssignmentUseCase,
+        ListBranchTeacherAssignmentsQuery,
+        ListTeacherAssignmentsQuery {
 
   private static final String CREATE = "teacher.assignment.create";
   private static final String DELETE = "teacher.assignment.delete";
+  private static final String CHANGE_HOURS = "teacher.assignment.change-hours";
 
   private final LoadTeacherAssignmentPort loadAssignment;
   private final SaveTeacherAssignmentPort saveAssignment;
@@ -89,28 +97,54 @@ class TeacherAssignmentService
 
   @Override
   @Transactional
+  @Observed(name = CHANGE_HOURS)
+  public TeacherAssignmentView changeWeeklyHours(
+      Actor actor, UUID teacherId, UUID assignmentId, int weeklyHours) {
+    Teacher teacher = userLookup.requireTeacher(teacherId);
+    branchAccess.requireBranchAdmin(actor, teacher.getBranchId(), CHANGE_HOURS);
+    TeacherAssignment assignment = requireAssignment(teacherId, assignmentId);
+    saveAssignment.save(assignment.withWeeklyHours(weeklyHours));
+    log.atInfo()
+        .addKeyValue("assignmentId", assignmentId)
+        .addKeyValue("teacherId", teacherId)
+        .addKeyValue("weeklyHours", weeklyHours)
+        .log("Assignment weekly hours changed");
+    return assignmentQuery.findViewById(assignmentId).orElseThrow(() -> notFound(assignmentId));
+  }
+
+  @Override
+  @Transactional
   @Observed(name = DELETE)
   public void remove(Actor actor, UUID teacherId, UUID assignmentId) {
     Teacher teacher = userLookup.requireTeacher(teacherId);
     branchAccess.requireBranchAdmin(actor, teacher.getBranchId(), DELETE);
-    TeacherAssignment assignment =
-        loadAssignment
-            .findByIdAndTeacherId(assignmentId, teacherId)
-            .orElseThrow(
-                () ->
-                    Rejections.reject(
-                        log,
-                        ErrorCode.TEACHER_ASSIGNMENT_NOT_FOUND,
-                        "Teacher assignment not found",
-                        "teacherId",
-                        teacherId,
-                        "assignmentId",
-                        assignmentId));
-    saveAssignment.delete(assignment);
+    saveAssignment.delete(requireAssignment(teacherId, assignmentId));
     log.atInfo()
         .addKeyValue("assignmentId", assignmentId)
         .addKeyValue("teacherId", teacherId)
         .log("Teacher assignment removed");
+  }
+
+  private TeacherAssignment requireAssignment(UUID teacherId, UUID assignmentId) {
+    return loadAssignment
+        .findByIdAndTeacherId(assignmentId, teacherId)
+        .orElseThrow(() -> notFound(assignmentId));
+  }
+
+  private RuntimeException notFound(UUID assignmentId) {
+    return Rejections.reject(
+        log,
+        ErrorCode.TEACHER_ASSIGNMENT_NOT_FOUND,
+        "Teacher assignment not found",
+        "assignmentId",
+        assignmentId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<BranchAssignmentView> listOfBranch(Actor actor, UUID branchId) {
+    branchAccess.requireBranchAdmin(actor, branchId, "teacher.assignment.list-branch");
+    return assignmentQuery.findAssignmentsOfBranch(branchId);
   }
 
   /** Branch admins, or the teacher themself. */

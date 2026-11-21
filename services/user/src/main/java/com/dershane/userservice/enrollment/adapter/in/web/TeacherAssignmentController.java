@@ -2,7 +2,9 @@ package com.dershane.userservice.enrollment.adapter.in.web;
 
 import com.dershane.userservice.enrollment.adapter.in.web.dto.CreateTeacherAssignmentRequest;
 import com.dershane.userservice.enrollment.adapter.in.web.dto.TeacherAssignmentResponse;
+import com.dershane.userservice.enrollment.adapter.in.web.dto.UpdateTeacherAssignmentRequest;
 import com.dershane.userservice.enrollment.application.port.in.AssignTeacherUseCase;
+import com.dershane.userservice.enrollment.application.port.in.ChangeAssignmentHoursUseCase;
 import com.dershane.userservice.enrollment.application.port.in.ListTeacherAssignmentsQuery;
 import com.dershane.userservice.enrollment.application.port.in.RemoveTeacherAssignmentUseCase;
 import com.dershane.userservice.shared.adapter.in.security.SecurityRoles;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 class TeacherAssignmentController {
 
   private final AssignTeacherUseCase assignTeacher;
+  private final ChangeAssignmentHoursUseCase changeHours;
   private final RemoveTeacherAssignmentUseCase removeAssignment;
   private final ListTeacherAssignmentsQuery listAssignments;
   private final EnrollmentWebMapper mapper;
@@ -57,6 +61,18 @@ class TeacherAssignmentController {
   public List<TeacherAssignmentResponse> list(
       @CurrentActor Actor actor, @PathVariable UUID teacherId) {
     return listAssignments.list(actor, teacherId).stream().map(mapper::toResponse).toList();
+  }
+
+  @Operation(summary = "Set the weekly lesson hours the classroom needs for an assignment")
+  @PutMapping("/{assignmentId}")
+  @PreAuthorize(SecurityRoles.ANY_ADMIN)
+  public TeacherAssignmentResponse update(
+      @CurrentActor Actor actor,
+      @PathVariable UUID teacherId,
+      @PathVariable UUID assignmentId,
+      @Valid @RequestBody UpdateTeacherAssignmentRequest request) {
+    return mapper.toResponse(
+        changeHours.changeWeeklyHours(actor, teacherId, assignmentId, request.weeklyHours()));
   }
 
   @Operation(summary = "Remove an assignment")

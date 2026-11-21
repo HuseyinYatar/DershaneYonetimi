@@ -1,6 +1,7 @@
 package com.dershane.userservice.enrollment.adapter.in.web;
 
 import com.dershane.userservice.enrollment.adapter.in.web.dto.AssignClassroomRequest;
+import com.dershane.userservice.enrollment.adapter.in.web.dto.BranchTeacherAssignmentResponse;
 import com.dershane.userservice.enrollment.adapter.in.web.dto.ClassroomMembershipResponse;
 import com.dershane.userservice.enrollment.adapter.in.web.dto.ClassroomStudentResponse;
 import com.dershane.userservice.enrollment.adapter.in.web.dto.ClassroomTeacherResponse;
@@ -9,6 +10,7 @@ import com.dershane.userservice.enrollment.adapter.in.web.dto.MyClassroomRespons
 import com.dershane.userservice.enrollment.adapter.in.web.dto.TeacherAssignmentResponse;
 import com.dershane.userservice.enrollment.application.port.in.AssignClassroomCommand;
 import com.dershane.userservice.enrollment.application.port.in.AssignTeacherCommand;
+import com.dershane.userservice.enrollment.application.port.in.BranchAssignmentView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomStudentView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomSummaryView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomTeacherView;
@@ -26,6 +28,8 @@ interface EnrollmentWebMapper {
   ClassroomMembershipResponse toResponse(MembershipView view);
 
   TeacherAssignmentResponse toResponse(TeacherAssignmentView view);
+
+  BranchTeacherAssignmentResponse toResponse(BranchAssignmentView view);
 
   ClassroomStudentResponse toResponse(ClassroomStudentView view);
 

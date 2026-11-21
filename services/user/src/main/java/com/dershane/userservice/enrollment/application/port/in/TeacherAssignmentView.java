@@ -10,4 +10,5 @@ public record TeacherAssignmentView(
     String classroomName,
     UUID subjectId,
     String subjectName,
+    int weeklyHours,
     Instant createdAt) {}

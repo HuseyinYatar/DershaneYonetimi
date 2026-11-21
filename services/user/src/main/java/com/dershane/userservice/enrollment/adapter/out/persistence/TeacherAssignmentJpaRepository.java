@@ -1,5 +1,6 @@
 package com.dershane.userservice.enrollment.adapter.out.persistence;
 
+import com.dershane.userservice.enrollment.application.port.in.BranchAssignmentView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomSummaryView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomTeacherView;
 import com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView;
@@ -37,7 +38,7 @@ interface TeacherAssignmentJpaRepository extends JpaRepository<TeacherAssignment
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.ClassroomTeacherView(
-          a.id, t.id, t.info.firstName, t.info.lastName, s.id, s.name)
+          a.id, t.id, t.info.firstName, t.info.lastName, s.id, s.name, a.weeklyHours)
       from TeacherAssignmentJpaEntity a
         join TeacherJpaEntity t on t.id = a.teacherId
         join SubjectJpaEntity s on s.id = a.subjectId
@@ -49,7 +50,7 @@ interface TeacherAssignmentJpaRepository extends JpaRepository<TeacherAssignment
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView(
-          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.createdAt)
+          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.weeklyHours, a.createdAt)
       from TeacherAssignmentJpaEntity a
         join ClassroomJpaEntity c on c.id = a.classroomId
         join SubjectJpaEntity s on s.id = a.subjectId
@@ -61,13 +62,25 @@ interface TeacherAssignmentJpaRepository extends JpaRepository<TeacherAssignment
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.TeacherAssignmentView(
-          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.createdAt)
+          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.weeklyHours, a.createdAt)
       from TeacherAssignmentJpaEntity a
         join ClassroomJpaEntity c on c.id = a.classroomId
         join SubjectJpaEntity s on s.id = a.subjectId
       where a.id = :assignmentId
       """)
   Optional<TeacherAssignmentView> findAssignmentView(UUID assignmentId);
+
+  @Query(
+      """
+      select new com.dershane.userservice.enrollment.application.port.in.BranchAssignmentView(
+          a.id, a.teacherId, c.id, c.name, s.id, s.name, a.weeklyHours)
+      from TeacherAssignmentJpaEntity a
+        join ClassroomJpaEntity c on c.id = a.classroomId
+        join SubjectJpaEntity s on s.id = a.subjectId
+      where c.branchId = :branchId and c.active = true
+      order by c.name, s.name
+      """)
+  List<BranchAssignmentView> findAssignmentsOfBranch(UUID branchId);
 
   @Query(
       """

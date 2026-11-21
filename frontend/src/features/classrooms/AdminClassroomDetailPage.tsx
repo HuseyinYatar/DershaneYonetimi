@@ -16,6 +16,7 @@ import { EmptyState, QueryError } from "@/components/ui/EmptyState";
 import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { Breadcrumb, PageHeader } from "@/components/ui/PageHeader";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { Skeleton, SkeletonRows } from "@/components/ui/Skeleton";
 import { classroomFormSchema, type ClassroomFormValues } from "@/lib/classroomForm";
 import { activeBadge } from "@/lib/status/admin";
@@ -28,9 +29,11 @@ type Classroom = NonNullable<ReturnType<typeof useClassroom>["data"]>;
 
 function EditCard({ classroom }: { classroom: Classroom }) {
   const update = useUpdateClassroom(classroom.id ?? "");
+  const ask = useConfirm();
   const deactivate = useDeactivateClassroom(classroom.id ?? "");
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isDirty },
   } = useForm<ClassroomFormValues>({
@@ -51,9 +54,14 @@ function EditCard({ classroom }: { classroom: Classroom }) {
           active && (
             <PillButton
               disabled={deactivate.isPending}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm("Sınıf pasife alınsın mı? Öğrencisi olan sınıf pasife alınamaz.")
+                  await ask({
+                    title: "Sınıf pasife alınsın mı?",
+                    text: "Öğrencisi olan sınıf pasife alınamaz.",
+                    confirmLabel: "Pasife al",
+                    danger: true,
+                  })
                 ) {
                   deactivate.mutate();
                 }
@@ -69,7 +77,7 @@ function EditCard({ classroom }: { classroom: Classroom }) {
         noValidate
         className="mt-4 flex flex-col gap-4"
       >
-        <ClassroomFields register={register} errors={errors} withGrade={false} />
+        <ClassroomFields register={register} control={control} errors={errors} withGrade={false} />
         <p className="text-[13px] text-dim">
           Seviye: {classroom.gradeLevel}. sınıf (sonradan değişmez).
         </p>
@@ -89,6 +97,7 @@ function EditCard({ classroom }: { classroom: Classroom }) {
 
 function StudentsCard({ classroomId }: { classroomId: string }) {
   const students = useClassroomStudents(classroomId);
+  const ask = useConfirm();
   const remove = useRemoveFromClassroom();
   const list = students.data ?? [];
 
@@ -131,8 +140,14 @@ function StudentsCard({ classroomId }: { classroomId: string }) {
               </div>
               <PillButton
                 disabled={remove.isPending}
-                onClick={() => {
-                  if (window.confirm("Öğrenci sınıftan çıkarılsın mı?")) {
+                onClick={async () => {
+                  if (
+                    await ask({
+                      title: "Öğrenci sınıftan çıkarılsın mı?",
+                      confirmLabel: "Çıkar",
+                      danger: true,
+                    })
+                  ) {
                     remove.mutate(s.studentId ?? "");
                   }
                 }}

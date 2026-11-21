@@ -6,6 +6,7 @@ import static com.dershane.attendanceservice.shared.domain.ErrorCategory.INTERNA
 import static com.dershane.attendanceservice.shared.domain.ErrorCategory.NOT_FOUND;
 import static com.dershane.attendanceservice.shared.domain.ErrorCategory.RULE_VIOLATION;
 import static com.dershane.attendanceservice.shared.domain.ErrorCategory.UNAUTHENTICATED;
+import static com.dershane.attendanceservice.shared.domain.ErrorCategory.UNAVAILABLE;
 import static com.dershane.attendanceservice.shared.domain.ErrorCategory.UNSUPPORTED_METHOD;
 import static com.dershane.attendanceservice.shared.domain.ErrorCategory.VALIDATION;
 
@@ -29,6 +30,8 @@ public enum ErrorCode {
 
   RESOURCE_NOT_FOUND(NOT_FOUND),
   SCHEDULE_NOT_FOUND(NOT_FOUND),
+  TIMETABLE_DRAFT_NOT_FOUND(NOT_FOUND),
+  DRAFT_LESSON_NOT_FOUND(NOT_FOUND),
   SESSION_NOT_FOUND(NOT_FOUND),
   EXCUSE_NOT_FOUND(NOT_FOUND),
   MEMBERSHIP_NOT_FOUND(NOT_FOUND),
@@ -38,6 +41,9 @@ public enum ErrorCode {
 
   SESSION_CLASSROOM_OVERLAP(CONFLICT),
   SESSION_TEACHER_BUSY(CONFLICT),
+  CLASSROOM_BUSY(CONFLICT),
+  TEACHER_BUSY(CONFLICT),
+  TIMETABLE_DRAFT_STALE(CONFLICT),
   ATTENDANCE_ALREADY_TAKEN(CONFLICT),
   EXCUSE_ALREADY_DECIDED(CONFLICT),
   CONCURRENT_MODIFICATION(CONFLICT),
@@ -47,6 +53,9 @@ public enum ErrorCode {
   BRANCH_MISMATCH(RULE_VIOLATION),
   INVALID_TIME_RANGE(RULE_VIOLATION),
   INVALID_DATE_RANGE(RULE_VIOLATION),
+  TIMETABLE_SETTING_INVALID(RULE_VIOLATION),
+  LESSON_OUTSIDE_GRID(RULE_VIOLATION),
+  LUNCH_BREAK_SLOT(RULE_VIOLATION),
   SESSION_NOT_PLANNED(RULE_VIOLATION),
   SESSION_NOT_COMPLETED(RULE_VIOLATION),
   SESSION_CANCELLED(RULE_VIOLATION),
@@ -58,6 +67,8 @@ public enum ErrorCode {
   STUDENT_NOT_IN_ROSTER(RULE_VIOLATION),
   STUDENT_FILTER_REQUIRED(RULE_VIOLATION),
   IDEMPOTENCY_KEY_REUSED(RULE_VIOLATION),
+
+  USER_SERVICE_UNAVAILABLE(UNAVAILABLE),
 
   INTERNAL_ERROR(INTERNAL);
 

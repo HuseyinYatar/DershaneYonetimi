@@ -37,6 +37,7 @@ export function UserEditCard({ kind, user }: { kind: UserKind; user: UserRow }) 
   const update = useUpdateUser(user.id ?? "");
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isDirty },
   } = useForm<UserFormValues>({
@@ -54,7 +55,7 @@ export function UserEditCard({ kind, user }: { kind: UserKind; user: UserRow }) 
         noValidate
         className="mt-4 flex flex-col gap-4"
       >
-        <UserFields kind={kind} register={register} errors={errors} />
+        <UserFields kind={kind} register={register} control={control} errors={errors} />
         <div>
           <button
             type="submit"

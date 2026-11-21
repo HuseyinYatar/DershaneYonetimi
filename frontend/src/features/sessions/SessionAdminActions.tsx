@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useCancelSession, useReassignTeacher } from "@/api/queries/attendance";
 import { useBranchTeachers } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
+import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { fullName } from "@/lib/userForm";
 
@@ -28,6 +30,7 @@ export function SessionAdminActions({
   teacherId: string;
 }) {
   const teachers = useBranchTeachers();
+  const ask = useConfirm();
   const cancel = useCancelSession(sessionId);
   const reassign = useReassignTeacher(sessionId);
   const [substitute, setSubstitute] = useState("");
@@ -38,21 +41,16 @@ export function SessionAdminActions({
     <Card className="p-5">
       <CardHeader title="Yönetici işlemleri" />
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <select
+        <Select
           aria-label="Yerine giren öğretmen"
+          placeholder="Yerine giren öğretmen"
           value={substitute}
-          onChange={(e) => setSubstitute(e.target.value)}
-          className={`${INPUT} sm:max-w-xs`}
-        >
-          <option value="">Yerine giren öğretmen</option>
-          {(teachers.data ?? [])
+          onChange={setSubstitute}
+          options={(teachers.data ?? [])
             .filter((t) => t.active && t.id !== teacherId)
-            .map((t) => (
-              <option key={t.id} value={t.id}>
-                {fullName(t)}
-              </option>
-            ))}
-        </select>
+            .map((t) => ({ value: t.id ?? "", label: fullName(t) }))}
+          className="w-full sm:w-72"
+        />
         <button
           type="button"
           disabled={!substitute || reassign.isPending}
@@ -65,8 +63,16 @@ export function SessionAdminActions({
       <div className="mt-4 border-t border-line pt-4">
         <PillButton
           disabled={cancel.isPending}
-          onClick={() => {
-            if (window.confirm("Bu ders iptal edilsin mi? Yoklama alınmayacak.")) cancel.mutate();
+          onClick={async () => {
+            if (
+              await ask({
+                title: "Bu ders iptal edilsin mi?",
+                text: "Yoklama alınmayacak.",
+                confirmLabel: "Dersi iptal et",
+                danger: true,
+              })
+            )
+              cancel.mutate();
           }}
         >
           Dersi iptal et

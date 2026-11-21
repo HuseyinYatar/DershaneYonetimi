@@ -1,4 +1,5 @@
 import { ChartNoAxesColumn } from "lucide-react";
+import { useConfirm } from "@/lib/useConfirm";
 import { Link, useParams, useSearchParams } from "react-router";
 import {
   useExamResults,
@@ -159,6 +160,7 @@ function TopicsCard({ mockExamId }: { mockExamId: string }) {
 export function ExamDetailPage() {
   const { mockExamId = "" } = useParams();
   const exam = useMockExam(mockExamId);
+  const ask = useConfirm();
   const publish = usePublishExam(mockExamId);
   const isAdmin = !!useActor()?.roles.includes("admin");
   const [params, setParams] = useSearchParams();
@@ -180,11 +182,13 @@ export function ExamDetailPage() {
             <button
               type="button"
               disabled={publish.isPending}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
-                    "Sonuçlar açıklansın mı? Öğrenciler ve veliler bilgilendirilir, geri alınamaz.",
-                  )
+                  await ask({
+                    title: "Sonuçlar açıklansın mı?",
+                    text: "Öğrenciler ve veliler bilgilendirilir, geri alınamaz.",
+                    confirmLabel: "Açıkla",
+                  })
                 ) {
                   publish.mutate();
                 }

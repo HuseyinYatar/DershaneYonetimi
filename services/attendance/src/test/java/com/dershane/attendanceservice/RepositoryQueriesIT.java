@@ -22,6 +22,7 @@ import com.dershane.attendanceservice.roster.application.port.out.SaveGuardianLi
 import com.dershane.attendanceservice.roster.application.port.out.SaveMembershipReplicaPort;
 import com.dershane.attendanceservice.roster.domain.GuardianLinkReplica;
 import com.dershane.attendanceservice.roster.domain.MembershipReplica;
+import com.dershane.attendanceservice.schedule.application.port.out.BranchScheduleLockPort;
 import com.dershane.attendanceservice.schedule.application.port.out.LoadSchedulePort;
 import com.dershane.attendanceservice.schedule.application.port.out.SaveSchedulePort;
 import com.dershane.attendanceservice.schedule.domain.ClassSchedule;
@@ -91,6 +92,7 @@ class RepositoryQueriesIT {
   @Autowired private LoadExcusePort loadExcuse;
   @Autowired private SaveSchedulePort saveSchedule;
   @Autowired private LoadSchedulePort loadSchedule;
+  @Autowired private BranchScheduleLockPort branchLock;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private EntityManager entityManager;
 
@@ -559,6 +561,20 @@ class RepositoryQueriesIT {
         saveExcuse.save(Excuse.request(student, branchId, from, to, "Illness", UUID.randomUUID()));
     excuse.approve(UUID.randomUUID(), Instant.now(), null);
     return saveExcuse.save(excuse);
+  }
+
+  @Test
+  void theBranchLockIsAnAdvisoryLockHeldByTheTransactionAndFreeToAskForAgain() {
+    UUID otherBranch = UUID.randomUUID();
+    String held =
+        "select count(*) from pg_locks where locktype = 'advisory' and pid = pg_backend_pid()";
+
+    branchLock.lock(branchId);
+    branchLock.lock(branchId);
+    assertThat(jdbc.queryForObject(held, Long.class)).isEqualTo(1L);
+
+    branchLock.lock(otherBranch);
+    assertThat(jdbc.queryForObject(held, Long.class)).isEqualTo(2L);
   }
 
   private static void assertViolates(Runnable action, String constraint) {

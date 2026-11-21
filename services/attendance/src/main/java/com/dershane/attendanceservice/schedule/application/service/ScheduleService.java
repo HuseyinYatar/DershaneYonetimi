@@ -11,10 +11,15 @@ import com.dershane.attendanceservice.schedule.application.port.in.ListSchedules
 import com.dershane.attendanceservice.schedule.application.port.in.ScheduleView;
 import com.dershane.attendanceservice.schedule.application.port.in.UpdateScheduleCommand;
 import com.dershane.attendanceservice.schedule.application.port.in.UpdateScheduleUseCase;
+import com.dershane.attendanceservice.schedule.application.port.out.BranchScheduleLockPort;
 import com.dershane.attendanceservice.schedule.application.port.out.LoadSchedulePort;
+import com.dershane.attendanceservice.schedule.application.port.out.LoadTimetableSettingPort;
 import com.dershane.attendanceservice.schedule.application.port.out.SaveSchedulePort;
 import com.dershane.attendanceservice.schedule.application.port.out.ScheduleQueryPort;
 import com.dershane.attendanceservice.schedule.domain.ClassSchedule;
+import com.dershane.attendanceservice.schedule.domain.ScheduleConflicts;
+import com.dershane.attendanceservice.schedule.domain.TimetableGrid;
+import com.dershane.attendanceservice.schedule.domain.TimetableSetting;
 import com.dershane.attendanceservice.session.application.port.in.CreateScheduledSessionUseCase;
 import com.dershane.attendanceservice.session.application.port.in.ScheduledSessionCommand;
 import com.dershane.attendanceservice.session.application.port.in.ScheduledSessionOutcome;
@@ -52,6 +57,8 @@ class ScheduleService
   private final BranchAccessPolicy branchAccess;
   private final ClassroomBranchQuery classrooms;
   private final BusinessCalendar calendar;
+  private final LoadTimetableSettingPort loadSetting;
+  private final BranchScheduleLockPort branchLock;
 
   @Override
   @Transactional
@@ -68,18 +75,19 @@ class ScheduleService
           "branchId",
           command.branchId());
     }
-    ClassSchedule saved =
-        saveSchedule.save(
-            ClassSchedule.create(
-                command.branchId(),
-                command.classroomId(),
-                command.teacherId(),
-                command.subjectId(),
-                command.dayOfWeek(),
-                command.startsAt(),
-                command.endsAt(),
-                command.validFrom(),
-                command.validTo()));
+    ClassSchedule schedule =
+        ClassSchedule.create(
+            command.branchId(),
+            command.classroomId(),
+            command.teacherId(),
+            command.subjectId(),
+            command.dayOfWeek(),
+            command.startsAt(),
+            command.endsAt(),
+            command.validFrom(),
+            command.validTo());
+    requireFree(schedule);
+    ClassSchedule saved = saveSchedule.save(schedule);
     log.atInfo()
         .addKeyValue("scheduleId", saved.getId())
         .addKeyValue("classroomId", saved.getClassroomId())
@@ -101,6 +109,7 @@ class ScheduleService
         command.endsAt(),
         command.validFrom(),
         command.validTo());
+    requireFree(schedule);
     saveSchedule.save(schedule);
     log.atInfo().addKeyValue("scheduleId", scheduleId).log("Class schedule updated");
     return requireView(scheduleId);
@@ -195,6 +204,74 @@ class ScheduleService
         .addKeyValue("failed", failed)
         .log("Session generation finished");
     return new GenerateSessionsResult(created, existing, skipped, failed);
+  }
+
+  /**
+   * The branch is locked first, so two admins cannot each pass this check and then both write. A
+   * schedule never sits on the lunch hour and never shares a classroom or a teacher with another
+   * active schedule of the branch whose validity range meets its own.
+   */
+  private void requireFree(ClassSchedule schedule) {
+    UUID branch = schedule.getBranchId();
+    branchLock.lock(branch);
+    TimetableGrid grid =
+        TimetableGrid.of(
+            loadSetting.findByBranchId(branch).orElseGet(() -> TimetableSetting.defaults(branch)));
+    if (grid.overlapsLunch(schedule.getStartsAt(), schedule.getEndsAt())) {
+      throw Rejections.reject(
+          log,
+          ErrorCode.LUNCH_BREAK_SLOT,
+          "Schedule rejected: it falls on the lunch hour",
+          "branchId",
+          branch,
+          "classroomId",
+          schedule.getClassroomId());
+    }
+    List<ScheduleConflicts.Lesson> others =
+        scheduleQuery.findViews(branch, null, null, true, Pageable.unpaged()).stream()
+            .map(ScheduleService::asLesson)
+            .toList();
+    ScheduleConflicts.find(asLesson(schedule), others)
+        .ifPresent(
+            kind -> {
+              boolean classroom = kind == ScheduleConflicts.Kind.CLASSROOM;
+              throw Rejections.reject(
+                  log,
+                  classroom ? ErrorCode.CLASSROOM_BUSY : ErrorCode.TEACHER_BUSY,
+                  classroom
+                      ? "Schedule rejected: the classroom has a lesson then"
+                      : "Schedule rejected: the teacher has a lesson then",
+                  "branchId",
+                  branch,
+                  "classroomId",
+                  schedule.getClassroomId(),
+                  "teacherId",
+                  schedule.getTeacherId());
+            });
+  }
+
+  private static ScheduleConflicts.Lesson asLesson(ClassSchedule s) {
+    return new ScheduleConflicts.Lesson(
+        s.getId(),
+        s.getClassroomId(),
+        s.getTeacherId(),
+        s.getDayOfWeek(),
+        s.getStartsAt(),
+        s.getEndsAt(),
+        s.getValidFrom(),
+        s.getValidTo());
+  }
+
+  private static ScheduleConflicts.Lesson asLesson(ScheduleView v) {
+    return new ScheduleConflicts.Lesson(
+        v.id(),
+        v.classroomId(),
+        v.teacherId(),
+        v.dayOfWeek(),
+        v.startsAt(),
+        v.endsAt(),
+        v.validFrom(),
+        v.validTo());
   }
 
   private static ScheduledSessionCommand commandFor(ClassSchedule schedule, LocalDate day) {

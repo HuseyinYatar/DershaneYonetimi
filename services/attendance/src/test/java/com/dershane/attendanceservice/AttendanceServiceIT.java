@@ -146,7 +146,12 @@ class AttendanceServiceIT {
     }
     linkGuardian(ayse, aysesGuardian);
 
-    assertThat(jdbc.queryForObject("select count(*) from membership_replica", Long.class))
+    // Other ITs share the database, so count only this test's classroom.
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from membership_replica where classroom_id = ?",
+                Long.class,
+                classroomId))
         .isEqualTo(3L);
   }
 
