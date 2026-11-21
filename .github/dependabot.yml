@@ -18,3 +18,13 @@ updates:
     groups:
       base-images:
         patterns: ["*"]
+    # Major/minor jumps are decided by hand: Java 25, Python 3.14 and Node 24 are fixed in the project
+    # (pom.xml, pyproject.toml, .nvmrc), and Keycloak is bumped together with docker-compose.yml and the k8s manifest.
+    ignore:
+      - dependency-name: eclipse-temurin
+        update-types: ["version-update:semver-major"]
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+      - dependency-name: quay.io/keycloak/keycloak
