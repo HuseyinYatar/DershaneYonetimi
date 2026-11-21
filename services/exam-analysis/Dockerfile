@@ -3,7 +3,7 @@
 #   Worker:     python -m app.worker
 #   Migrations: alembic upgrade head   (Kubernetes Job / init container)
 
-FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS builder
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -12,7 +12,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 # Debian security fixes the base image does not carry yet (the Trivy step fails on HIGH/CRITICAL).
 # pip (with the urllib3, msgpack and setuptools code vendored in it) only installs packages; the
 # service runs from /app/.venv, so the base interpreter's pip and ensurepip are removed.
