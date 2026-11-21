@@ -30,7 +30,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: keycloak
-          image: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/keycloak:bf900069f36e7c31699bc21a720847b606283ee9
+          image: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/keycloak:941244c6f77fe247e7efa90ac7a9b763013613c2
           args: ["start", "--optimized", "--import-realm"]
           env:
             # Tokens always carry the public issuer; services inside the cluster still call
