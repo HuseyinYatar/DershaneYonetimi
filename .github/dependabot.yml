@@ -1,0 +1,20 @@
+# Base images in every Dockerfile are pinned as tag@digest, so a build is reproducible.
+# Dependabot opens one weekly PR with the new digests/versions; CI builds the images and runs Trivy on it.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories:
+      - /frontend
+      - /infra/keycloak
+      - /services/api-gateway
+      - /services/attendance
+      - /services/exam-analysis
+      - /services/messaging
+      - /services/notification
+      - /services/task
+      - /services/user
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]

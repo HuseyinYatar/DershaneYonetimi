@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Build: compile and package the Spring Boot jar ----
-FROM eclipse-temurin:25-jdk-noble AS build
+FROM eclipse-temurin:25-jdk-noble@sha256:4ddc1a8bdaf283421df5487411aff10b797ccf1e06a339041005114c8f489b5c AS build
 WORKDIR /workspace
 
 # Dependencies first, so source changes don't invalidate the dependency layer.
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.m2 \
       --destination target/extracted
 
 # ---- Runtime: JRE only, non-root, one layer per change frequency ----
-FROM eclipse-temurin:25-jre-noble
+FROM eclipse-temurin:25-jre-noble@sha256:f3dd0838e69b881cc382237d5901e74ae3705b1056ad964b2e0e523b174fef99
 
 # The image tag is the commit SHA (CI passes it); /info shows it.
 ARG GIT_COMMIT_SHA=unknown
