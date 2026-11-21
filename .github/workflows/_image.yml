@@ -60,7 +60,9 @@ jobs:
           file: ${{ inputs.file }}
           load: true
           tags: ${{ env.IMAGE }}
-          build-args: GIT_COMMIT_SHA=${{ github.sha }}
+          build-args: |
+            GIT_COMMIT_SHA=${{ github.sha }}
+            CACHE_BUST=${{ github.run_id }}
           cache-from: type=gha,scope=${{ inputs.service }}
           cache-to: type=gha,mode=max,scope=${{ inputs.service }}
       # SBOM first: the scan below fails the job, the SBOM should still be uploaded.

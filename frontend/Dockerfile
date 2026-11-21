@@ -8,7 +8,9 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
 # Pull in fixed Alpine packages the base image has not picked up yet (Trivy HIGH/CRITICAL gate); the base runs as uid 101.
 USER root
-RUN apk upgrade --no-cache
+# Changes on every CI run so the cached layer below never keeps stale packages.
+ARG CACHE_BUST=0
+RUN echo "$CACHE_BUST" > /dev/null && apk upgrade --no-cache
 USER 101
 # The image renders these templates into /etc/nginx/conf.d at startup, substituting only defined env vars.
 COPY nginx/default.conf.template nginx/security-headers.inc.template /etc/nginx/templates/
