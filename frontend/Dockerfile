@@ -10,7 +10,13 @@ FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28
 USER root
 # Changes on every CI run so the cached layer below never keeps stale packages.
 ARG CACHE_BUST=0
-RUN echo "$CACHE_BUST" > /dev/null && apk upgrade --no-cache
+# The base pins nginx and its modules to exact versions in /etc/apk/world, so a plain `apk upgrade` never moves
+# nginx; the modules (geoip, image-filter, njs, xslt) are unused here and lag behind nginx in the Alpine repo.
+# Dropping them lets `apk add --upgrade nginx` take the fixed version.
+RUN echo "$CACHE_BUST" > /dev/null \
+ && apk del --no-cache nginx-module-geoip nginx-module-image-filter nginx-module-njs nginx-module-xslt \
+ && apk add --no-cache --upgrade nginx \
+ && apk upgrade --no-cache
 USER 101
 # The image renders these templates into /etc/nginx/conf.d at startup, substituting only defined env vars.
 COPY nginx/default.conf.template nginx/security-headers.inc.template /etc/nginx/templates/
