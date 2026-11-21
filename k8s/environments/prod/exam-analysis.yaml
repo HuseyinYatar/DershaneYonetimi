@@ -4,7 +4,7 @@
 name: exam-analysis
 image:
   repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/exam-analysis
-  tag: bf900069f36e7c31699bc21a720847b606283ee9
+  tag: 941244c6f77fe247e7efa90ac7a9b763013613c2
 aws:
   roleArn: arn:aws:iam::423082503744:role/dershane-prod-exam-analysis
 
