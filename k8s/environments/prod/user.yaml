@@ -4,7 +4,7 @@
 name: user
 image:
   repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/user
-  tag: bf900069f36e7c31699bc21a720847b606283ee9
+  tag: e7f537917a29c1f828a842c947dec1915b68e567
 aws:
   roleArn: arn:aws:iam::423082503744:role/dershane-prod-user
 
