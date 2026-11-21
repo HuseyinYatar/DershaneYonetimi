@@ -380,6 +380,8 @@ Pull request'te 1–4, ana dala birleştirmede 1–6 çalışır. Terraform içi
 
 İmaj etiketi commit SHA'sıdır; `latest` kullanılmaz.
 
+**Taban imajlar `etiket@digest` olarak sabitlenir** (`FROM eclipse-temurin:25-jre-noble@sha256:…`); etiket okunabilirlik, digest tekrarlanabilir derleme içindir. Güncellemeleri Dependabot (`.github/dependabot.yml`, `docker`) haftada bir tek gruplu PR olarak açar; CI o PR'da imajı derler ve Trivy'den geçirir. Yeni Dockerfile eklenince `directories` listesine de eklenir. Elle digest almak için: `docker buildx imagetools inspect <imaj:etiket>` (ilk `Digest:` satırı).
+
 ## Test
 
 | Tür | Java | Python |
