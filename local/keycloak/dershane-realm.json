@@ -152,7 +152,8 @@
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "implicitFlowEnabled": false,
-      "serviceAccountsEnabled": true
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": ["web-origins", "acr", "roles", "profile", "basic", "email", "kc-admin-api"]
     },
     {
       "clientId": "omr-service",
@@ -231,8 +232,6 @@
           }
         }
       ]
-      "serviceAccountsEnabled": true,
-      "defaultClientScopes": ["web-origins", "acr", "roles", "profile", "basic", "email", "kc-admin-api"]
     }
   ],
   "users": [
