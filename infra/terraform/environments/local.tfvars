@@ -7,4 +7,5 @@ create_inspection_queues = true
 
 buckets = {
   "exam-analysis-optical-files" = {}
+  "file-uploads"                = {}
 }

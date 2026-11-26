@@ -19,3 +19,6 @@ CREATE DATABASE task_service OWNER task_service;
 
 CREATE USER messaging_service WITH PASSWORD 'messaging_service';
 CREATE DATABASE messaging_service OWNER messaging_service;
+
+CREATE USER file_service WITH PASSWORD 'file_service';
+CREATE DATABASE file_service OWNER file_service;

@@ -111,6 +111,10 @@ spring:
               uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8003}
               predicates:
                 - Path=/api/v1/notifications/**,/api/v1/notification-preferences/**
+            - id: file
+              uri: ${FILE_SERVICE_URL:http://localhost:8004}
+              predicates:
+                - Path=/api/v1/files/**
 
   lifecycle:
     timeout-per-shutdown-phase: 20s

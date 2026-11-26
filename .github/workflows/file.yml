@@ -1,0 +1,34 @@
+name: file
+
+on:
+  pull_request:
+    paths:
+      - services/file/**
+      - .github/workflows/file.yml
+      - .github/workflows/_python-service.yml
+      - .github/workflows/_image.yml
+  push:
+    branches: [main]
+    paths:
+      - services/file/**
+      - .github/workflows/file.yml
+      - .github/workflows/_python-service.yml
+      - .github/workflows/_image.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    uses: ./.github/workflows/_python-service.yml
+    with:
+      service: file
+  image:
+    needs: test
+    uses: ./.github/workflows/_image.yml
+    with:
+      service: file

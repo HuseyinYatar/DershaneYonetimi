@@ -34,6 +34,7 @@ checks=(
   "messaging http://localhost:8087/health/readiness"
   "exam-analysis-api http://localhost:8001/health/ready"
   "notification-api http://localhost:8003/health/ready"
+  "file-api http://localhost:8004/health/ready"
   "api-gateway http://localhost:8002/health/readiness"
 )
 for check in "${checks[@]}"; do

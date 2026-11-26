@@ -292,6 +292,7 @@ services:
       MESSAGING_SERVICE_URL: http://messaging:8080
       EXAM_ANALYSIS_SERVICE_URL: http://exam-analysis-api:8000
       NOTIFICATION_SERVICE_URL: http://notification-api:8000
+      FILE_SERVICE_URL: http://file-api:8000
       KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/dershane
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
       REDIS_HOST: redis
@@ -313,6 +314,8 @@ services:
       exam-analysis-api:
         condition: service_started
       notification-api:
+        condition: service_started
+      file-api:
         condition: service_started
 
   exam-analysis-migrate:
@@ -414,6 +417,42 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+
+  file-migrate:
+    profiles: ["services"]
+    build: ../services/file
+    command: ["alembic", "upgrade", "head"]
+    environment: &file-env
+      ENVIRONMENT: local
+      DATABASE_URL: postgresql+psycopg://file_service:file_service@postgres:5432/file_service
+      AWS_ENDPOINT_URL: http://floci:4566
+      # Download URLs are opened by the browser, which reaches Floci on localhost.
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: eu-central-1
+      # Created by floci-init (infra/terraform).
+      FILES_BUCKET: file-uploads
+      OIDC_ISSUER: http://localhost:8180/realms/dershane
+      OIDC_JWKS_URL: http://keycloak:8080/realms/dershane/protocol/openid-connect/certs
+      OIDC_AUDIENCE: dershane-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  file-api:
+    profiles: ["services"]
+    build: ../services/file
+    environment: *file-env
+    ports:
+      - "8004:8000"
+    depends_on:
+      file-migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+      floci-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:
