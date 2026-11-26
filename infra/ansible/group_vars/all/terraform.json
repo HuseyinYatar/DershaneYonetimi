@@ -1,0 +1,6 @@
+{
+  "control_plane_public_ip": "3.69.143.240",
+  "oidc_issuer": "https://dershane-prod-oidc-423082503744.s3.eu-central-1.amazonaws.com",
+  "oidc_bucket": "dershane-prod-oidc-423082503744",
+  "etcd_backup_bucket": "dershane-prod-etcd-backups"
+}

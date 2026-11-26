@@ -62,11 +62,13 @@ def _is_utf8_text(data: bytes) -> bool:
 @dataclass(frozen=True)
 class ImageLimits:
     max_pixels: int
-    max_edge_px: int
+    # None keeps the original size (answer sheets); only the metadata is dropped.
+    max_edge_px: int | None
 
 
 def sanitize_image(data: bytes, kind: FileKind, limits: ImageLimits) -> bytes:
-    """Re-encodes a photo: orientation applied, too long edges scaled down, metadata dropped."""
+    """Re-encodes a photo: orientation applied, metadata dropped, too long edges scaled down unless
+    limits.max_edge_px is None."""
     expected_format = _PILLOW_FORMATS[kind]
     try:
         with Image.open(io.BytesIO(data)) as image:
@@ -77,7 +79,8 @@ def sanitize_image(data: bytes, kind: FileKind, limits: ImageLimits) -> bytes:
                 raise _invalid("too_many_pixels")
             icc_profile = image.info.get("icc_profile")
             upright = ImageOps.exif_transpose(image)
-            upright.thumbnail((limits.max_edge_px, limits.max_edge_px))
+            if limits.max_edge_px is not None:
+                upright.thumbnail((limits.max_edge_px, limits.max_edge_px))
             if kind is FileKind.JPEG and upright.mode not in _JPEG_MODES:
                 upright = upright.convert("RGB")
             output = io.BytesIO()

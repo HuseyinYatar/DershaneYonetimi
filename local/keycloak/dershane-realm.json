@@ -28,7 +28,7 @@
       { "name": "guardian", "description": "Veli" },
       { "name": "admin", "description": "Şube yöneticisi" },
       { "name": "super-admin", "description": "Tüm şubeleri yöneten yönetici (admin ile birlikte verilir)" },
-      { "name": "internal-service", "description": "Diğer servislerin servis hesabı (omr-service, exam-analysis-service); kişilere verilmez" }
+      { "name": "internal-service", "description": "Diğer servislerin servis hesabı (omr-service, exam-analysis-service, messaging-service); kişilere verilmez" }
     ]
   },
   "components": {
@@ -205,6 +205,32 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "messaging-service",
+      "name": "messaging (stores and reads chat photos in the file service)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "messaging-service-local-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-dershane-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "dershane-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -226,6 +252,12 @@
       "username": "service-account-exam-analysis-service",
       "enabled": true,
       "serviceAccountClientId": "exam-analysis-service",
+      "realmRoles": ["internal-service"]
+    },
+    {
+      "username": "service-account-messaging-service",
+      "enabled": true,
+      "serviceAccountClientId": "messaging-service",
       "realmRoles": ["internal-service"]
     },
     {

@@ -54,11 +54,18 @@ TokenFactory = Callable[..., str]
 @pytest.fixture(scope="session")
 def make_token(signing_keys: SigningKeys) -> TokenFactory:
     def factory(
-        *, sub: uuid.UUID, roles: list[str], expires_in: int = 300, audience: str = TEST_AUDIENCE
+        *,
+        sub: uuid.UUID,
+        roles: list[str],
+        expires_in: int = 300,
+        audience: str = TEST_AUDIENCE,
+        client: str = "dershane-frontend",
     ) -> str:
         now = int(time.time())
         claims = {
             "sub": str(sub),
+            # Keycloak client the token was issued to; services are told apart by it.
+            "azp": client,
             "iss": TEST_ISSUER,
             "aud": audience,
             "iat": now,

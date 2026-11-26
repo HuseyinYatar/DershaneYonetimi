@@ -95,6 +95,15 @@ class TestSanitizeImage:
         with Image.open(io.BytesIO(cleaned)) as after:
             assert after.size == (150, 50)
 
+    def test_answer_sheet_is_not_scaled_down(self) -> None:
+        original = image_bytes("JPEG", size=(3000, 100), exif=exif_with_gps_and_orientation())
+        cleaned = sanitize_image(
+            original, FileKind.JPEG, ImageLimits(max_pixels=40_000_000, max_edge_px=None)
+        )
+        with Image.open(io.BytesIO(cleaned)) as after:
+            assert after.size == (3000, 100)
+            assert not after.getexif().get_ifd(GPS_IFD)
+
     def test_a_small_photo_keeps_its_size(self) -> None:
         cleaned = sanitize_image(image_bytes("WEBP", (40, 30)), FileKind.WEBP, LIMITS)
         with Image.open(io.BytesIO(cleaned)) as after:

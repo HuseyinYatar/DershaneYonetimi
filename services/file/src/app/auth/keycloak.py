@@ -31,9 +31,16 @@ _KNOWN_ROLES = frozenset(role.value for role in Role)
 class CurrentUser:
     id: uuid.UUID
     roles: frozenset[Role]
+    # Keycloak client the token was issued to (`azp`): dershane-frontend for people,
+    # omr-service / exam-analysis-service / messaging-service for services.
+    client_id: str | None = None
 
     def has_any_role(self, *roles: Role) -> bool:
         return not self.roles.isdisjoint(roles)
+
+    def is_service(self, client_id: str) -> bool:
+        """True for the service account of that Keycloak client."""
+        return self.client_id == client_id and Role.INTERNAL_SERVICE in self.roles
 
 
 def jwks_key_resolver(jwks_url: str) -> KeyResolver:
@@ -84,7 +91,12 @@ class KeycloakTokenVerifier:
             user_id = uuid.UUID(str(claims["sub"]))
         except ValueError as exc:
             raise UnauthorizedError("TOKEN_INVALID", "Token claim is not a UUID", claim="sub") from exc
-        return CurrentUser(id=user_id, roles=self._extract_roles(claims))
+        client_id = claims.get("azp")
+        return CurrentUser(
+            id=user_id,
+            roles=self._extract_roles(claims),
+            client_id=client_id if isinstance(client_id, str) else None,
+        )
 
     def _extract_roles(self, claims: dict[str, Any]) -> frozenset[Role]:
         value: Any = claims

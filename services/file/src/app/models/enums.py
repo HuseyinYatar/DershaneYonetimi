@@ -21,6 +21,10 @@ class FilePurpose(StrEnum):
     SUBMISSION = "SUBMISSION"
     # Text file the optical reading service produces; exam-analysis scores it.
     OMR_RESULT = "OMR_RESULT"
+    # Photo of a scanned answer sheet, uploaded by the optical reading service.
+    OMR_SHEET = "OMR_SHEET"
+    # Photo sent in a chat. Stored for the messaging service, which decides who sees it.
+    MESSAGE_PHOTO = "MESSAGE_PHOTO"
 
 
 class FileKind(StrEnum):

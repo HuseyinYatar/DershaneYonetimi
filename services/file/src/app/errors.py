@@ -38,6 +38,10 @@ class NotFoundError(DomainError):
     status_code = 404
 
 
+class ConflictError(DomainError):
+    status_code = 409
+
+
 class PayloadTooLargeError(DomainError):
     status_code = 413
 
@@ -104,6 +108,10 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "IDEMPOTENCY_KEY_REUSED": (
         "Bu istek anahtarı daha önce başka bir dosya için kullanıldı.",
         "This idempotency key was already used for another file.",
+    ),
+    "FILE_ID_TAKEN": (
+        "Bu dosya kimliği başka bir dosya için kullanılıyor.",
+        "This file id is already used by another file.",
     ),
     "FILE_STORAGE_UNAVAILABLE": (
         "Dosya deposuna şu anda ulaşılamıyor. Lütfen biraz sonra tekrar deneyin.",

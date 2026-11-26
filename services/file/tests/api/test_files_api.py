@@ -31,6 +31,27 @@ class Api:
     def headers(self, user_id: uuid.UUID, *roles: str, **extra: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._make_token(sub=user_id, roles=list(roles))}", **extra}
 
+    def service(self, user_id: uuid.UUID, client: str, *roles: str) -> dict[str, str]:
+        """A service account token: the Keycloak client plus the internal-service role by default."""
+        token = self._make_token(sub=user_id, roles=list(roles or ("internal-service",)), client=client)
+        return {"Authorization": f"Bearer {token}"}
+
+    @staticmethod
+    def _form(
+        purpose: str,
+        student_ids: list[uuid.UUID] | None,
+        teacher_id: uuid.UUID | None,
+        viewer_ids: list[uuid.UUID] | None,
+    ) -> dict[str, object]:
+        data: dict[str, object] = {"purpose": purpose}
+        if student_ids:
+            data["studentIds"] = [str(s) for s in student_ids]
+        if teacher_id:
+            data["teacherId"] = str(teacher_id)
+        if viewer_ids:
+            data["viewerIds"] = [str(v) for v in viewer_ids]
+        return data
+
     def upload(
         self,
         headers: dict[str, str],
@@ -40,14 +61,31 @@ class Api:
         name: str = "ödev.pdf",
         student_ids: list[uuid.UUID] | None = None,
         teacher_id: uuid.UUID | None = None,
+        viewer_ids: list[uuid.UUID] | None = None,
     ):
-        data: dict[str, object] = {"purpose": purpose}
-        if student_ids:
-            data["studentIds"] = [str(s) for s in student_ids]
-        if teacher_id:
-            data["teacherId"] = str(teacher_id)
         return self.client.post(
-            "/api/v1/files", headers=headers, data=data, files={"file": (name, content, "application/pdf")}
+            "/api/v1/files",
+            headers=headers,
+            data=self._form(purpose, student_ids, teacher_id, viewer_ids),
+            files={"file": (name, content, "application/octet-stream")},
+        )
+
+    def put(
+        self,
+        headers: dict[str, str],
+        file_id: uuid.UUID,
+        purpose: str,
+        content: bytes,
+        *,
+        name: str = "foto.jpg",
+        viewer_ids: list[uuid.UUID] | None = None,
+        student_ids: list[uuid.UUID] | None = None,
+    ):
+        return self.client.put(
+            f"/api/v1/files/{file_id}",
+            headers=headers,
+            data=self._form(purpose, student_ids, None, viewer_ids),
+            files={"file": (name, content, "application/octet-stream")},
         )
 
 
@@ -70,7 +108,7 @@ def api(session_factory, signing_keys, make_token) -> Api:
 
 TEACHER, OTHER_TEACHER = uuid.uuid4(), uuid.uuid4()
 STUDENT_A, STUDENT_B, STUDENT_C = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-OMR_SERVICE, EXAM_SERVICE = uuid.uuid4(), uuid.uuid4()
+OMR_SERVICE, EXAM_SERVICE, MESSAGING_SERVICE = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 SUPER_ADMIN, BRANCH_ADMIN = uuid.uuid4(), uuid.uuid4()
 
 
@@ -166,15 +204,13 @@ class TestSubmission:
 class TestOpticalResult:
     def test_omr_service_uploads_and_exam_analysis_reads_the_text(self, api: Api) -> None:
         text = b"12345678 A CBDAEDCBA\n"
-        response = api.upload(
-            api.headers(OMR_SERVICE, "internal-service"), "OMR_RESULT", text, name="deneme.txt"
-        )
+        response = api.upload(api.service(OMR_SERVICE, "omr-service"), "OMR_RESULT", text, name="deneme.txt")
         assert response.status_code == 201
         assert response.json()["contentType"] == "text/plain"
         file_id = response.json()["id"]
 
         content = api.client.get(
-            f"/api/v1/files/{file_id}/content", headers=api.headers(EXAM_SERVICE, "internal-service")
+            f"/api/v1/files/{file_id}/content", headers=api.service(EXAM_SERVICE, "exam-analysis-service")
         )
         assert content.status_code == 200
         assert content.content == text
@@ -194,10 +230,168 @@ class TestOpticalResult:
 
     def test_optical_result_takes_no_recipients(self, api: Api) -> None:
         response = api.upload(
-            api.headers(OMR_SERVICE, "internal-service"), "OMR_RESULT", b"123\n", student_ids=[STUDENT_A]
+            api.service(OMR_SERVICE, "omr-service"), "OMR_RESULT", b"123\n", student_ids=[STUDENT_A]
         )
         assert response.status_code == 422
         assert response.json()["errorCode"] == "RECIPIENTS_NOT_ALLOWED"
+
+    def test_another_service_cannot_upload_optical_results(self, api: Api) -> None:
+        for client in ("exam-analysis-service", "messaging-service"):
+            response = api.upload(api.service(EXAM_SERVICE, client), "OMR_RESULT", b"123\n", name="x.txt")
+            assert response.status_code == 403
+            assert response.json()["errorCode"] == "PURPOSE_NOT_ALLOWED"
+
+    def test_client_name_alone_is_not_a_service_account(self, api: Api) -> None:
+        # A token of the omr-service client without the internal-service role.
+        response = api.upload(
+            api.service(OMR_SERVICE, "omr-service", "student"), "OMR_RESULT", b"123\n", name="x.txt"
+        )
+        assert response.status_code == 403
+
+
+def jpeg_with_gps(size: tuple[int, int]) -> bytes:
+    exif = Image.Exif()
+    exif.get_ifd(GPS_IFD)[2] = (40.0, 46.0, 30.0)
+    output = io.BytesIO()
+    Image.new("RGB", size, (1, 2, 3)).save(output, format="JPEG", exif=exif)
+    return output.getvalue()
+
+
+class TestOpticalSheet:
+    def test_sheet_keeps_its_size_loses_its_position_and_only_super_admin_sees_it(self, api: Api) -> None:
+        response = api.upload(
+            api.service(OMR_SERVICE, "omr-service"), "OMR_SHEET", jpeg_with_gps((3000, 120)), name="optik.jpg"
+        )
+        assert response.status_code == 201
+        assert response.json()["contentType"] == "image/jpeg"
+        file_id = uuid.UUID(response.json()["id"])
+        stored, _ = api.storage.files[file_id]
+        with Image.open(io.BytesIO(stored)) as image:
+            assert image.size == (3000, 120)
+            assert not image.getexif().get_ifd(GPS_IFD)
+
+        super_admin = api.headers(SUPER_ADMIN, "admin", "super-admin")
+        assert api.client.get(f"/api/v1/files/{file_id}/download-url", headers=super_admin).status_code == 200
+        for outsider in (
+            api.headers(BRANCH_ADMIN, "admin"),
+            api.headers(STUDENT_A, "student"),
+            api.service(EXAM_SERVICE, "exam-analysis-service"),
+        ):
+            assert api.client.get(f"/api/v1/files/{file_id}/content", headers=outsider).status_code == 404
+
+    def test_people_cannot_upload_sheets(self, api: Api) -> None:
+        response = api.upload(api.headers(STUDENT_A, "student"), "OMR_SHEET", png_bytes(), name="optik.png")
+        assert response.status_code == 403
+
+    def test_sheet_must_be_a_photo(self, api: Api) -> None:
+        response = api.upload(api.service(OMR_SERVICE, "omr-service"), "OMR_SHEET", PDF_BYTES)
+        assert response.status_code == 415
+
+
+class TestMessagePhoto:
+    def test_messaging_stores_a_photo_and_gets_it_back_with_its_viewers(self, api: Api) -> None:
+        messaging = api.service(MESSAGING_SERVICE, "messaging-service")
+        file_id = uuid.uuid4()
+
+        stored = api.put(messaging, file_id, "MESSAGE_PHOTO", png_bytes(), viewer_ids=[STUDENT_A, TEACHER])
+
+        assert stored.status_code == 201
+        assert stored.json()["id"] == str(file_id)
+        content = api.client.get(f"/api/v1/files/{file_id}/content", headers=messaging)
+        assert content.status_code == 200
+        assert content.headers["content-type"] == "image/png"
+        assert content.headers["content-disposition"].startswith("inline;")
+        assert content.headers["x-file-viewer-ids"] == ",".join(sorted([str(STUDENT_A), str(TEACHER)]))
+        with Image.open(io.BytesIO(content.content)) as image:
+            assert image.format == "PNG"
+
+    def test_repeating_the_same_put_stores_one_file(self, api: Api, db_session) -> None:
+        messaging = api.service(MESSAGING_SERVICE, "messaging-service")
+        file_id = uuid.uuid4()
+        first = api.put(messaging, file_id, "MESSAGE_PHOTO", png_bytes(), viewer_ids=[STUDENT_A, TEACHER])
+        second = api.put(messaging, file_id, "MESSAGE_PHOTO", png_bytes(), viewer_ids=[STUDENT_A, TEACHER])
+
+        assert (first.status_code, second.status_code) == (201, 200)
+        assert first.json() == second.json()
+        assert db_session.scalar(select(func.count()).select_from(StoredFile)) == 1
+
+    def test_another_photo_under_a_taken_id_is_a_conflict(self, api: Api) -> None:
+        messaging = api.service(MESSAGING_SERVICE, "messaging-service")
+        file_id = uuid.uuid4()
+        api.put(messaging, file_id, "MESSAGE_PHOTO", png_bytes((10, 10)), viewer_ids=[STUDENT_A, TEACHER])
+        original = api.storage.files[file_id]
+
+        response = api.put(messaging, file_id, "MESSAGE_PHOTO", png_bytes((20, 20)), viewer_ids=[STUDENT_A])
+
+        assert response.status_code == 409
+        assert response.json()["errorCode"] == "FILE_ID_TAKEN"
+        assert api.storage.files[file_id] == original
+
+    def test_people_and_other_services_cannot_reach_chat_photos(self, api: Api) -> None:
+        file_id = uuid.uuid4()
+        api.put(
+            api.service(MESSAGING_SERVICE, "messaging-service"),
+            file_id,
+            "MESSAGE_PHOTO",
+            png_bytes(),
+            viewer_ids=[STUDENT_A, TEACHER],
+        )
+        for outsider in (
+            api.headers(STUDENT_A, "student"),
+            api.headers(TEACHER, "teacher"),
+            api.headers(SUPER_ADMIN, "admin", "super-admin"),
+            api.service(OMR_SERVICE, "omr-service"),
+        ):
+            assert api.client.get(f"/api/v1/files/{file_id}/content", headers=outsider).status_code == 404
+
+    def test_only_messaging_stores_chat_photos(self, api: Api) -> None:
+        for headers in (api.headers(STUDENT_A, "student"), api.service(OMR_SERVICE, "omr-service")):
+            response = api.put(headers, uuid.uuid4(), "MESSAGE_PHOTO", png_bytes(), viewer_ids=[STUDENT_A])
+            assert response.status_code == 403
+
+    def test_chat_photo_needs_its_viewers(self, api: Api) -> None:
+        messaging = api.service(MESSAGING_SERVICE, "messaging-service")
+        missing = api.put(messaging, uuid.uuid4(), "MESSAGE_PHOTO", png_bytes())
+        wrong_field = api.put(messaging, uuid.uuid4(), "MESSAGE_PHOTO", png_bytes(), student_ids=[STUDENT_A])
+
+        assert missing.json()["errorCode"] == "RECIPIENTS_REQUIRED"
+        assert missing.json()["expectedField"] == "viewerIds"
+        assert wrong_field.json()["errorCode"] == "RECIPIENTS_NOT_ALLOWED"
+
+    def test_put_cannot_take_over_someone_elses_file(self, api: Api) -> None:
+        file_id = uuid.UUID(
+            api.upload(api.headers(TEACHER, "teacher"), "TASK_ATTACHMENT", student_ids=[STUDENT_A]).json()[
+                "id"
+            ]
+        )
+        response = api.put(
+            api.service(MESSAGING_SERVICE, "messaging-service"),
+            file_id,
+            "MESSAGE_PHOTO",
+            png_bytes(),
+            viewer_ids=[STUDENT_A],
+        )
+        assert response.status_code == 409
+
+
+class TestHomeworkDownload:
+    def test_homework_photo_is_downloaded_not_opened(self, api: Api) -> None:
+        file_id = api.upload(
+            api.headers(TEACHER, "teacher"),
+            "TASK_ATTACHMENT",
+            png_bytes(),
+            name="soru.png",
+            student_ids=[STUDENT_A],
+        ).json()["id"]
+
+        content = api.client.get(
+            f"/api/v1/files/{file_id}/content", headers=api.headers(STUDENT_A, "student")
+        )
+
+        assert content.status_code == 200
+        assert content.headers["content-disposition"].startswith("attachment;")
+        # A classroom's student list is not handed to the students.
+        assert "x-file-viewer-ids" not in content.headers
 
 
 class TestContentChecks:
@@ -348,7 +542,7 @@ class TestCommon:
         assert "reason" not in hidden
 
     def test_unknown_purpose_is_a_validation_error(self, api: Api) -> None:
-        response = api.upload(api.headers(TEACHER, "teacher"), "MESSAGE_PHOTO", student_ids=[STUDENT_A])
+        response = api.upload(api.headers(TEACHER, "teacher"), "VOICE_NOTE", student_ids=[STUDENT_A])
         assert response.status_code == 422
         assert response.json()["errorCode"] == "VALIDATION_ERROR"
 

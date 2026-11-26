@@ -25,9 +25,12 @@ class TestTokenVerifier:
         self, verifier, make_token
     ) -> None:
         user_id = uuid.uuid4()
-        user = verifier.verify(make_token(sub=user_id, roles=["internal-service"]))
+        user = verifier.verify(make_token(sub=user_id, roles=["internal-service"], client="omr-service"))
         assert user.id == user_id
         assert user.roles == frozenset({Role.INTERNAL_SERVICE})
+        assert user.client_id == "omr-service"
+        assert user.is_service("omr-service")
+        assert not user.is_service("messaging-service")
 
     def test_expired_token(self, verifier, make_token) -> None:
         with pytest.raises(UnauthorizedError) as raised:
@@ -40,10 +43,10 @@ class TestTokenVerifier:
         assert raised.value.code == "TOKEN_INVALID"
 
 
-def stored(name: str, kind: FileKind) -> StoredFile:
+def stored(name: str, kind: FileKind, purpose: FilePurpose = FilePurpose.TASK_ATTACHMENT) -> StoredFile:
     return StoredFile(
         id=uuid.uuid4(),
-        purpose=FilePurpose.TASK_ATTACHMENT,
+        purpose=purpose,
         owner_id=uuid.uuid4(),
         kind=kind,
         size_bytes=1,
@@ -58,8 +61,12 @@ class TestDownloadHeaders:
         header = content_disposition(stored("Ödev 1.pdf", FileKind.PDF))
         assert header == "attachment; filename=\"dev 1.pdf\"; filename*=UTF-8''%C3%96dev%201.pdf"
 
-    def test_photo_opens_in_the_browser(self) -> None:
-        assert content_disposition(stored("soru.jpg", FileKind.JPEG)).startswith("inline;")
+    def test_chat_photo_opens_in_the_browser(self) -> None:
+        photo = stored("foto.jpg", FileKind.JPEG, FilePurpose.MESSAGE_PHOTO)
+        assert content_disposition(photo).startswith("inline;")
+
+    def test_homework_photo_is_saved(self) -> None:
+        assert content_disposition(stored("soru.jpg", FileKind.JPEG)).startswith("attachment;")
 
     @pytest.mark.parametrize(
         ("raw", "clean"),
