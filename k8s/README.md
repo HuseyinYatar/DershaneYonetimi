@@ -22,8 +22,8 @@ Her Application'ın üzerindeki `argocd.argoproj.io/sync-wave` numarası sıray�
 |---|---|---|
 | 0 | External Secrets, cert-manager, metrics-server | Sonrakiler bunların getirdiği nesne türlerini kullanıyor |
 | 1 | Traefik, cluster-config (`dershane` namespace'i, Secrets Manager bağlantısı, Let's Encrypt ayarı) | 0'daki programlara dayanıyor |
-| 2 | db-init (RDS'te 7 veritabanı), Keycloak | Keycloak'ın veritabanı ve parolası hazır olmalı |
-| 3 | 8 servis (ApplicationSet) | Veritabanları ve Keycloak hazır |
+| 2 | db-init (RDS'te 8 veritabanı), Keycloak | Keycloak'ın veritabanı ve parolası hazır olmalı |
+| 3 | 9 servis (ApplicationSet) | Veritabanları ve Keycloak hazır |
 | 4 | bootstrap (super-admin'in user servisi kaydı) | user servisinin tabloları oluşmuş olmalı |
 | 5 | demo-seed (demo verisi) | Her şey ayakta, super-admin giriş yapabiliyor |
 
@@ -33,7 +33,7 @@ Not: ApplicationSet'in kendi sağlık durumu yok, bu yüzden 4 ve 5, servisler t
 
 1. **Terraform'u `standby = false` ile uygula.** NLB ve Redis bu adımda açılır. Ardından Güzel Hosting'e `@` ve `*` için A kaydı (`terraform output ingress_public_ip`) ve 3 DKIM CNAME kaydı girilir.
 2. **Dosyalarda doldurulacak bir şey yok.** Parolalar ve veri deposu adresleri Terraform'un yazdığı Secrets Manager kayıtlarından gelir (aşağıdaki "Parolalar"); dosyalarda yalnızca AWS hesap numarası (`423082503744`) yazılı. Başka bir hesaba kurulursa bu numara `k8s/` ve `.github/workflows/_image.yml` içinde değiştirilir.
-3. **İmajlar:** CI gönderiyor (aşağıdaki "İmajlar ve etiketler"). İlk kurulumda imajların hepsi gerekiyor: GitHub'da Actions sekmesinden 9 workflow (7 servis, `frontend`, `keycloak`) main üzerinde **Run workflow** ile bir kez çalıştırılır. Her biri imajı ECR'a gönderir ve `k8s/`'teki etiketini main'e commit'ler. Bitenleri `aws ecr list-images --repository-name <servis>` ile görebilirsin.
+3. **İmajlar:** CI gönderiyor (aşağıdaki "İmajlar ve etiketler"). İlk kurulumda imajların hepsi gerekiyor: GitHub'da Actions sekmesinden 10 workflow (8 servis, `frontend`, `keycloak`) main üzerinde **Run workflow** ile bir kez çalıştırılır. Her biri imajı ECR'a gönderir ve `k8s/`'teki etiketini main'e commit'ler. Bitenleri `aws ecr list-images --repository-name <servis>` ile görebilirsin.
 4. **Ansible'ı çalıştır** (`infra/ansible/README.md`); son adımda ArgoCD kurulur ve gerisini kurar. Durumu `kubectl -n argocd get applications` ile ya da arayüzden (`infra/ansible/README.md`) izlersin. İlk kurulum, sertifikalar ve demo verisiyle birlikte 15–25 dakika sürer.
 
 ## İmajlar ve etiketler (CD)

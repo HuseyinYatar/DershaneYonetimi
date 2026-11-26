@@ -129,7 +129,7 @@ Diğer ayarlar:
 
 | Ad | İçerik | Yazan |
 |---|---|---|
-| `dershane/db/<veritabanı>` (7 adet) | `username`, `password`, `dbname` | Terraform (şifre write-only, state'e girmez) |
+| `dershane/db/<veritabanı>` (8 adet) | `username`, `password`, `dbname` | Terraform (şifre write-only, state'e girmez) |
 | `rds!db-...` | RDS ana kullanıcı şifresi | RDS |
 | `dershane/redis` | `password` (AUTH token) | Terraform (write-only) |
 | `dershane/endpoints` | `rds_host`, `redis_host`: veri depolarının iç adresleri (parola değil; k8s/ Git'te adres tutmasın diye) | Terraform (`endpoints.tf`) |

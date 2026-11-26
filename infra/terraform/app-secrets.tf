@@ -2,6 +2,8 @@
 # External Secrets copies them into the pods (k8s/platform/keycloak, bootstrap, demo-seed):
 #   keycloak/admin                Keycloak's own admin console (master realm), user "admin"
 #   keycloak/user-service-client  client secret the user service uses for the Keycloak Admin API
+#   keycloak/<service>-client     client secrets of the service accounts omr-service,
+#                                 exam-analysis-service and messaging-service (file service callers)
 #   keycloak/superadmin           first password of superadmin@onlinecourses.site (changed at first login)
 #   demo/password                 shared password of every demo teacher, student and guardian (k8s demo-seed)
 # Like the database passwords they are ephemeral: generated during the apply and sent through a write-only
@@ -12,6 +14,9 @@ locals {
   app_secrets = var.platform_enabled ? toset([
     "keycloak/admin",
     "keycloak/user-service-client",
+    "keycloak/omr-service-client",
+    "keycloak/exam-analysis-service-client",
+    "keycloak/messaging-service-client",
     "keycloak/superadmin",
     "demo/password",
   ]) : toset([])

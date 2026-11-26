@@ -9,6 +9,7 @@ updates:
       - /services/api-gateway
       - /services/attendance
       - /services/exam-analysis
+      - /services/file
       - /services/messaging
       - /services/notification
       - /services/task

@@ -5,7 +5,7 @@
 # infra/terraform/main.tf (local.databases).
 set -eu
 
-for db in user_service attendance_service task_service messaging_service exam_analysis notification keycloak; do
+for db in user_service attendance_service task_service messaging_service exam_analysis notification file_service keycloak; do
   password="$(printenv "$db")"
   echo "db-init: $db"
   psql -v ON_ERROR_STOP=1 -v name="$db" -v password="$password" -d postgres <<'SQL'

@@ -27,6 +27,7 @@ github_oidc_subject_prefix = "repo:HuseyinYatar@168910744/DershaneYonetimi@14207
 
 buckets = {
   "exam-analysis-optical-files" = {}
+  "file-uploads"                = {}
 }
 
 domain = "onlinecourses.site"

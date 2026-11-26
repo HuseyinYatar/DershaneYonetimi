@@ -49,6 +49,10 @@
       {
         "name": "super-admin",
         "description": "Tüm şubeleri yöneten yönetici (admin ile birlikte verilir)"
+      },
+      {
+        "name": "internal-service",
+        "description": "Diğer servislerin servis hesabı (omr-service, exam-analysis-service, messaging-service); kişilere verilmez"
       }
     ]
   },
@@ -127,6 +131,84 @@
       "directAccessGrantsEnabled": false,
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": true
+    },
+    {
+      "clientId": "omr-service",
+      "name": "optical reading service (uploads OMR results to the file service)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "{{ .omrServiceClientSecret }}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-dershane-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "dershane-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "exam-analysis-service",
+      "name": "exam-analysis (reads OMR results from the file service)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "{{ .examAnalysisServiceClientSecret }}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-dershane-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "dershane-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "messaging-service",
+      "name": "messaging (stores and reads chat photos in the file service)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "{{ .messagingServiceClientSecret }}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-dershane-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "dershane-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -142,6 +224,30 @@
           "view-realm"
         ]
       }
+    },
+    {
+      "username": "service-account-omr-service",
+      "enabled": true,
+      "serviceAccountClientId": "omr-service",
+      "realmRoles": [
+        "internal-service"
+      ]
+    },
+    {
+      "username": "service-account-exam-analysis-service",
+      "enabled": true,
+      "serviceAccountClientId": "exam-analysis-service",
+      "realmRoles": [
+        "internal-service"
+      ]
+    },
+    {
+      "username": "service-account-messaging-service",
+      "enabled": true,
+      "serviceAccountClientId": "messaging-service",
+      "realmRoles": [
+        "internal-service"
+      ]
     },
     {
       "id": "00000000-0000-0000-0000-00000000a001",

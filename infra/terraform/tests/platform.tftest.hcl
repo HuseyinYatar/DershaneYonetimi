@@ -61,7 +61,7 @@ mock_provider "aws" {
 variables {
   environment   = "prod"
   bucket_prefix = "dershane-prod-"
-  buckets       = { "exam-analysis-optical-files" = {} }
+  buckets       = { "exam-analysis-optical-files" = {}, "file-uploads" = {} }
   domain        = "onlinecourses.site"
   github_repo   = "HuseyinYatar/DershaneYonetimi"
 }
@@ -106,7 +106,7 @@ run "prod_with_irsa" {
 
   assert {
     condition = toset(keys(output.service_role_arns)) == toset([
-      "user", "attendance", "task", "messaging", "exam-analysis", "notification", "external-secrets",
+      "user", "attendance", "task", "messaging", "exam-analysis", "notification", "file", "external-secrets",
     ])
     error_message = "IRSA roles: one per service that calls AWS, plus External Secrets; none for api-gateway or keycloak"
   }
@@ -127,7 +127,7 @@ run "prod_with_irsa" {
   }
 
   assert {
-    condition     = length(output.db_secret_arns) == 7
+    condition     = length(output.db_secret_arns) == 8
     error_message = "One secret per service database"
   }
 
