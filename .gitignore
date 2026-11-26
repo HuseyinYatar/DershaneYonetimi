@@ -25,6 +25,11 @@ local/data/
 .terraform/
 *.tfstate
 *.tfstate.*
+# Saved plans (terraform plan -out=...) can hold secret values in readable form
+tfplan
+tfdestroy
+tfforce
+*.tfplan
 
 # Python
 .venv/

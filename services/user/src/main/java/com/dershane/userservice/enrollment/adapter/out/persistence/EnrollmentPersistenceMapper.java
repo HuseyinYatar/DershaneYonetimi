@@ -20,7 +20,18 @@ interface EnrollmentPersistenceMapper {
   @Mapping(target = "startDate", ignore = true)
   void update(@MappingTarget MembershipJpaEntity entity, ClassroomMembership membership);
 
+  /** {@code withWeeklyHours} returns the same type, so MapStruct would take it for a setter. */
+  @Mapping(target = "withWeeklyHours", ignore = true)
   TeacherAssignment toDomain(TeacherAssignmentJpaEntity entity);
 
   TeacherAssignmentJpaEntity toEntity(TeacherAssignment assignment);
+
+  /**
+   * Only the weekly hours change; the teacher, classroom and subject of an assignment are fixed.
+   */
+  @Mapping(target = "id", ignore = true)
+  @Mapping(target = "teacherId", ignore = true)
+  @Mapping(target = "classroomId", ignore = true)
+  @Mapping(target = "subjectId", ignore = true)
+  void update(@MappingTarget TeacherAssignmentJpaEntity entity, TeacherAssignment assignment);
 }

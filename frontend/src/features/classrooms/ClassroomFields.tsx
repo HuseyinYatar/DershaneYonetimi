@@ -1,14 +1,18 @@
-import type { FieldErrors, UseFormRegister } from "react-hook-form";
+import type { Control, FieldErrors, UseFormRegister } from "react-hook-form";
 import { Field, INPUT } from "@/components/ui/form";
-import type { ClassroomFormValues } from "@/lib/classroomForm";
+import { FormSelect } from "@/components/ui/FormSelect";
+import { maskTerm, type ClassroomFormValues } from "@/lib/classroomForm";
+import { GRADE_OPTIONS } from "@/lib/userForm";
 
 // `withGrade` is off when editing: a classroom's level cannot change.
 export function ClassroomFields({
   register,
+  control,
   errors,
   withGrade,
 }: {
   register: UseFormRegister<ClassroomFormValues>;
+  control: Control<ClassroomFormValues>;
   errors: FieldErrors<ClassroomFormValues>;
   withGrade: boolean;
 }) {
@@ -19,20 +23,22 @@ export function ClassroomFields({
       </Field>
       {withGrade && (
         <Field label="Seviye" htmlFor="classroom-grade" error={errors.gradeLevel?.message}>
-          <select id="classroom-grade" className={INPUT} {...register("gradeLevel")}>
-            <option value="">Seçin</option>
-            {Array.from({ length: 13 }, (_, i) => i + 1).map((grade) => (
-              <option key={grade} value={grade}>
-                {grade}. sınıf
-              </option>
-            ))}
-          </select>
+          <FormSelect
+            id="classroom-grade"
+            control={control}
+            name="gradeLevel"
+            options={GRADE_OPTIONS}
+          />
         </Field>
       )}
       <Field label="Dönem" htmlFor="classroom-term" error={errors.term?.message}>
         <input
           id="classroom-term"
           placeholder="2026-2027"
+          inputMode="numeric"
+          maxLength={9}
+          // onInput fires before RHF's onChange, so the form stores the masked value.
+          onInput={(e) => (e.currentTarget.value = maskTerm(e.currentTarget.value))}
           className={INPUT}
           {...register("term")}
         />

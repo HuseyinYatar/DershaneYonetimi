@@ -1,0 +1,38 @@
+# task: tasks, assignments, submissions
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
+name: task
+image:
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/task
+  tag: 941244c6f77fe247e7efa90ac7a9b763013613c2
+aws:
+  roleArn: arn:aws:iam::423082503744:role/dershane-prod-task
+
+env:
+  DB_USERNAME: task_service
+  DB_POOL_SIZE: "5"             # db.t4g.micro allows ~100 connections in total
+  KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
+  KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  KEYCLOAK_PUBLIC_URL: https://auth.onlinecourses.site
+  AWS_REGION: eu-central-1
+  TASK_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:423082503744:task-events
+  TASK_USER_EVENTS_QUEUE: task-user-events
+secretEnv:
+  DB_PASSWORD: { key: dershane/db/task_service, property: password }
+
+cronJobs:
+  # Today's assignments of the daily and weekly tasks.
+  - name: generate-assignments
+    schedule: "5 0 * * *"
+    args: ["--task.job=generate-assignments"]
+  # Reminders before the deadline, then OVERDUE marking.
+  - name: check-deadlines
+    schedule: "*/15 * * * *"
+    args: ["--task.job=check-deadlines"]
+
+secretTemplates:
+  # The database address comes from Secrets Manager (dershane/endpoints), not from Git.
+  DB_URL:
+    template: "jdbc:postgresql://{{ .rdsHost }}:5432/task_service?sslmode=require"
+    from:
+      rdsHost: { key: dershane/endpoints, property: rds_host }

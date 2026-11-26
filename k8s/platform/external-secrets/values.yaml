@@ -1,0 +1,26 @@
+# Helm values for external-secrets/external-secrets.
+installCRDs: true
+
+# IRSA: Terraform's role "dershane-prod-external-secrets" trusts exactly this ServiceAccount
+# (system:serviceaccount:external-secrets:external-secrets) and may read dershane/* in Secrets Manager.
+# The ClusterSecretStore (cluster-config) logs in with this account's token; External Secrets reads the
+# role from the annotation below.
+serviceAccount:
+  name: external-secrets
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::423082503744:role/dershane-prod-external-secrets
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+certController:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi

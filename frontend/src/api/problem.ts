@@ -4,6 +4,9 @@ export interface ApiProblem {
 }
 
 const FALLBACK_MESSAGE = "Beklenmeyen bir hata oluştu.";
+export const NETWORK_ERROR_CODE = "SERVICE_UNREACHABLE";
+const NETWORK_MESSAGE = "Bağlantı kurulamadı, birazdan tekrar deneyin.";
+const OFFLINE_MESSAGE = "İnternet bağlantınız yok.";
 const RATE_LIMIT_MESSAGE = "Çok fazla istek gönderildi, biraz sonra tekrar deneyin.";
 
 // Parses an RFC 9457 ProblemDetail body (application/problem+json). `detail` is already Turkish.
@@ -29,7 +32,24 @@ export class ApiError extends Error {
   }
 }
 
-// Network failures and other non-API errors have no problem body.
+// fetch rejects with a TypeError when the server cannot be reached (connection refused, DNS, offline).
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError;
+}
+
+// The browser knows when the device itself is offline; then the problem is not on our side.
+export function isOffline(): boolean {
+  return typeof navigator !== "undefined" && !navigator.onLine;
+}
+
+// Other non-API errors have no problem body.
 export function problemOf(error: unknown): ApiProblem {
-  return error instanceof ApiError ? error.problem : { message: FALLBACK_MESSAGE };
+  if (error instanceof ApiError) return error.problem;
+  if (isNetworkError(error)) {
+    return {
+      errorCode: NETWORK_ERROR_CODE,
+      message: isOffline() ? OFFLINE_MESSAGE : NETWORK_MESSAGE,
+    };
+  }
+  return { message: FALLBACK_MESSAGE };
 }

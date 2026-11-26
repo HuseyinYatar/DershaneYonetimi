@@ -62,16 +62,6 @@ export function useClassroomStudents(classroomId: string | undefined) {
   return useQuery({ ...classroomStudentsQuery(classroomId ?? ""), enabled: !!classroomId });
 }
 
-// classroomId -> active student count. GET /me/classrooms never fills activeStudentCount, so the
-// count comes from each classroom's student list (shared cache with the detail page).
-export function useMyClassroomStudentCounts() {
-  const classrooms = useMyClassrooms();
-  const results = useQueries({
-    queries: (classrooms.data ?? []).map((c) => classroomStudentsQuery(c.id ?? "")),
-  });
-  return new Map((classrooms.data ?? []).map((c, i) => [c.id, results[i]?.data?.length] as const));
-}
-
 // studentId -> "First Last" across the teacher's classrooms (assignments only carry student ids).
 export function useMyStudentNames() {
   const classrooms = useMyClassrooms();
@@ -253,6 +243,47 @@ export function useClassroomTeachers(classroomId: string) {
         }),
       ),
   });
+}
+
+// Teacher–subject assignments of several classrooms at once (the timetable plans the whole branch).
+// Shares its cache key with useClassroomTeachers, so both screens read the same data.
+export function useClassroomsTeachers(classroomIds: string[]) {
+  return useQueries({
+    queries: classroomIds.map((classroomId) => ({
+      queryKey: ["user", "classroom-teachers", classroomId],
+      queryFn: () =>
+        unwrap(
+          userApi.GET("/api/v1/classrooms/{classroomId}/teachers", {
+            params: { path: { classroomId } },
+          }),
+        ),
+    })),
+    combine: (results) => ({
+      pending: results.some((r) => r.isPending),
+      byClassroom: new Map(classroomIds.map((id, i) => [id, results[i].data ?? []])),
+    }),
+  });
+}
+
+export function useSetWeeklyHours() {
+  return useUserMutation(
+    ({
+      teacherId,
+      assignmentId,
+      weeklyHours,
+    }: {
+      teacherId: string;
+      assignmentId: string;
+      weeklyHours: number;
+    }) =>
+      unwrap(
+        userApi.PUT("/api/v1/teachers/{teacherId}/assignments/{assignmentId}", {
+          params: { path: { teacherId, assignmentId } },
+          body: { weeklyHours },
+        }),
+      ),
+    undefined,
+  );
 }
 
 export function useTeacherAssignments(teacherId: string) {

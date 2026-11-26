@@ -1,0 +1,46 @@
+name: keycloak
+
+# Our Keycloak image (infra/keycloak/Dockerfile: the official image plus the login theme). No tests of its
+# own: the theme is checked by looking at the login page. On main the image goes to ECR and
+# k8s/platform/keycloak/deployment.yaml is pointed at it (_image.yml).
+on:
+  pull_request:
+    paths:
+      - infra/keycloak/**
+      - local/keycloak/themes/**
+      - .github/workflows/keycloak.yml
+      - .github/workflows/_image.yml
+  push:
+    branches: [main]
+    paths:
+      - infra/keycloak/**
+      - local/keycloak/themes/**
+      - .github/workflows/keycloak.yml
+      - .github/workflows/_image.yml
+
+  # Manual run on main: builds and delivers the current image (first install, re-deploy).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  image:
+    # On main: id-token to push to ECR through the AWS role, contents to commit the new tag to k8s/.
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/_image.yml
+    with:
+      service: keycloak
+      # The theme lives in local/keycloak/themes, so the build context is the repository root;
+      # infra/keycloak/Dockerfile.dockerignore keeps everything else out of it.
+      context: .
+      file: infra/keycloak/Dockerfile
+      tag-file: k8s/platform/keycloak/deployment.yaml
+      # Accepted vulnerabilities inside Keycloak's own build, each with a reason and an expiry date.
+      trivy-ignore-file: infra/keycloak/.trivyignore

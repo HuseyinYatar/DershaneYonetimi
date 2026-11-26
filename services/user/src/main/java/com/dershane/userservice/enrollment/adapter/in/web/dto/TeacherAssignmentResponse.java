@@ -10,4 +10,5 @@ public record TeacherAssignmentResponse(
     String classroomName,
     UUID subjectId,
     String subjectName,
+    int weeklyHours,
     Instant createdAt) {}

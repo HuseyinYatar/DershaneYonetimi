@@ -7,6 +7,7 @@ import {
 } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
 import { TemporaryPasswordPanel } from "./TemporaryPasswordPanel";
 
 // Login account actions: password reset (by e-mail, or a temporary password without one) and deactivation.
@@ -14,6 +15,7 @@ export function AccountCard({ user }: { user: UserRow }) {
   const id = user.id ?? "";
   const sendEmail = useSendPasswordSetupEmail(id);
   const resetPassword = useResetTemporaryPassword(id);
+  const ask = useConfirm();
   const deactivate = useDeactivateUser(id);
   // Page state only: the password is never cached, stored or toasted.
   const [password, setPassword] = useState<string>();
@@ -51,8 +53,15 @@ export function AccountCard({ user }: { user: UserRow }) {
             )}
             <PillButton
               disabled={deactivate.isPending}
-              onClick={() => {
-                if (window.confirm("Hesap pasife alınsın mı? Kullanıcı giriş yapamaz.")) {
+              onClick={async () => {
+                if (
+                  await ask({
+                    title: "Hesap pasife alınsın mı?",
+                    text: "Kullanıcı giriş yapamaz.",
+                    confirmLabel: "Pasife al",
+                    danger: true,
+                  })
+                ) {
                   deactivate.mutate();
                 }
               }}

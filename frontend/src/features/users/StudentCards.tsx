@@ -10,8 +10,10 @@ import {
 } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
-import { INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
+import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { RELATIONSHIP_LABELS, fullName, type Relationship } from "@/lib/userForm";
 
@@ -36,6 +38,7 @@ export function GuardianCard({ studentId, active }: { studentId: string; active:
   const current = useStudentGuardian(studentId);
   const guardians = useBranchGuardians();
   const link = useLinkGuardian(studentId);
+  const ask = useConfirm();
   const unlink = useUnlinkGuardian(studentId);
   const [guardianId, setGuardianId] = useState("");
   const [relationship, setRelationship] = useState<Relationship>("MOTHER");
@@ -59,8 +62,15 @@ export function GuardianCard({ studentId, active }: { studentId: string; active:
           guardian && (
             <PillButton
               disabled={unlink.isPending}
-              onClick={() => {
-                if (window.confirm("Veli bağı kaldırılsın mı?")) unlink.mutate();
+              onClick={async () => {
+                if (
+                  await ask({
+                    title: "Veli bağı kaldırılsın mı?",
+                    confirmLabel: "Bağı kaldır",
+                    danger: true,
+                  })
+                )
+                  unlink.mutate();
               }}
             >
               Bağı kaldır
@@ -80,33 +90,26 @@ export function GuardianCard({ studentId, active }: { studentId: string; active:
       )}
       {active && (
         <div className="mt-3 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row">
-          <select
+          <Select
             aria-label="Veli"
+            className="w-full"
+            placeholder={guardian ? "Başka veli seç" : "Veli seç"}
             value={guardianId}
-            onChange={(e) => setGuardianId(e.target.value)}
-            className={INPUT}
-          >
-            <option value="">{guardian ? "Başka veli seç" : "Veli seç"}</option>
-            {(guardians.data ?? [])
+            onChange={setGuardianId}
+            options={(guardians.data ?? [])
               .filter((g) => g.active && g.id !== guardian?.guardianId)
-              .map((g) => (
-                <option key={g.id} value={g.id}>
-                  {fullName(g)} · {g.phone}
-                </option>
-              ))}
-          </select>
-          <select
+              .map((g) => ({ value: g.id ?? "", label: `${fullName(g)} · ${g.phone}` }))}
+          />
+          <Select
             aria-label="Yakınlık"
+            className="w-full sm:w-44"
             value={relationship}
-            onChange={(e) => setRelationship(e.target.value as Relationship)}
-            className={`${INPUT} sm:max-w-40`}
-          >
-            {Object.entries(RELATIONSHIP_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setRelationship(value as Relationship)}
+            options={Object.entries(RELATIONSHIP_LABELS).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
           <button
             type="button"
             disabled={!guardianId || link.isPending}
@@ -140,6 +143,7 @@ export function EnrollmentCard({
 }) {
   const classrooms = useBranchClassrooms();
   const assign = useAssignClassroom(studentId);
+  const ask = useConfirm();
   const remove = useRemoveFromClassroom();
   const [classroomId, setClassroomId] = useState("");
 
@@ -162,8 +166,15 @@ export function EnrollmentCard({
           active && (
             <PillButton
               disabled={remove.isPending}
-              onClick={() => {
-                if (window.confirm("Öğrenci sınıftan çıkarılsın mı?")) remove.mutate(studentId);
+              onClick={async () => {
+                if (
+                  await ask({
+                    title: "Öğrenci sınıftan çıkarılsın mı?",
+                    confirmLabel: "Sınıftan çıkar",
+                    danger: true,
+                  })
+                )
+                  remove.mutate(studentId);
               }}
             >
               Sınıftan çıkar
@@ -177,19 +188,14 @@ export function EnrollmentCard({
       </p>
       {active && (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <select
+          <Select
             aria-label="Sınıf"
+            className="w-full"
+            placeholder={options.length === 0 ? "Uygun sınıf yok" : "Sınıf seç"}
             value={classroomId}
-            onChange={(e) => setClassroomId(e.target.value)}
-            className={INPUT}
-          >
-            <option value="">{options.length === 0 ? "Uygun sınıf yok" : "Sınıf seç"}</option>
-            {options.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} · {c.term}
-              </option>
-            ))}
-          </select>
+            onChange={setClassroomId}
+            options={options.map((c) => ({ value: c.id ?? "", label: `${c.name} · ${c.term}` }))}
+          />
           <button
             type="button"
             disabled={!classroomId || assign.isPending}

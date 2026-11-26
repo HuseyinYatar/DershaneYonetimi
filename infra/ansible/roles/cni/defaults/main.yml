@@ -1,0 +1,2 @@
+cni_calico_manifest_base: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests"
+cni_installation_file: /etc/kubernetes/calico-installation.yaml

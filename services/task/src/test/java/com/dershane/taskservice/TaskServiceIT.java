@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -146,7 +147,13 @@ class TaskServiceIT {
         ali,
         alisGuardian);
 
-    assertThat(jdbc.queryForObject("select count(*) from membership_replica", Long.class))
+    // Only this test's classroom: the other IT classes share the database container and add
+    // memberships too.
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from membership_replica where classroom_id = ?",
+                Long.class,
+                classroomId))
         .isEqualTo(2L);
   }
 
@@ -270,14 +277,27 @@ class TaskServiceIT {
   @Test
   @Order(6)
   void eventsReachTheConsumerQueueAndMatchTheirSchemas() throws IOException {
-    List<Received> received = eventQueue().receive(3, Duration.ofSeconds(20));
+    // The outbox table is shared with the other IT classes (same database container).
+    // UserEventsInboxIT runs with the outbox publisher off, so when it ran first this context also
+    // publishes its TaskAssigned rows to this topic. Read until this test's own events arrived.
+    List<Received> received = new ArrayList<>();
+    Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
+    while (Instant.now().isBefore(deadline)
+        && !ownEventTypes(received).containsAll(List.of("TaskAssigned", "SubmissionGraded"))) {
+      received.addAll(eventQueue().receive(1, Duration.ofSeconds(2)));
+    }
 
-    assertThat(received)
-        .extracting(Received::eventType)
-        .contains("TaskAssigned", "SubmissionGraded");
+    assertThat(ownEventTypes(received)).contains("TaskAssigned", "SubmissionGraded");
     for (Received event : received) {
       assertMatchesSchema("task/" + event.eventType() + ".schema.json", event.data());
     }
+  }
+
+  private List<String> ownEventTypes(List<Received> received) {
+    return received.stream()
+        .filter(event -> taskId.toString().equals(event.data().path("taskId").asString()))
+        .map(Received::eventType)
+        .toList();
   }
 
   @Test

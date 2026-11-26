@@ -1,16 +1,19 @@
-import type { FieldErrors, UseFormRegister } from "react-hook-form";
+import type { Control, FieldErrors, UseFormRegister } from "react-hook-form";
 import { useUserSubjects } from "@/api/queries/user";
 import { Field, INPUT } from "@/components/ui/form";
-import type { UserFormValues } from "@/lib/userForm";
+import { FormSelect } from "@/components/ui/FormSelect";
+import { GRADE_OPTIONS, type UserFormValues } from "@/lib/userForm";
 
 // Form fields shared by the create page and the edit card; the kind decides the extra ones.
 export function UserFields({
   kind,
   register,
+  control,
   errors,
 }: {
   kind: UserFormValues["kind"];
   register: UseFormRegister<UserFormValues>;
+  control: Control<UserFormValues>;
   errors: FieldErrors<UserFormValues>;
 }) {
   const subjects = useUserSubjects();
@@ -61,35 +64,37 @@ export function UserFields({
             />
           </Field>
           <Field label="Sınıf seviyesi" htmlFor="user-grade" error={errors.gradeLevel?.message}>
-            <select id="user-grade" className={INPUT} {...register("gradeLevel")}>
-              <option value="">Seçin</option>
-              {Array.from({ length: 13 }, (_, i) => i + 1).map((grade) => (
-                <option key={grade} value={grade}>
-                  {grade}. sınıf
-                </option>
-              ))}
-            </select>
+            <FormSelect
+              id="user-grade"
+              control={control}
+              name="gradeLevel"
+              options={GRADE_OPTIONS}
+            />
           </Field>
           <Field label="Hedef sınav" htmlFor="user-target">
-            <select id="user-target" className={INPUT} {...register("targetExam")}>
-              <option value="YKS">YKS</option>
-              <option value="LGS">LGS</option>
-            </select>
+            <FormSelect
+              id="user-target"
+              control={control}
+              name="targetExam"
+              options={[
+                { value: "YKS", label: "YKS" },
+                { value: "LGS", label: "LGS" },
+              ]}
+            />
           </Field>
         </div>
       )}
       {kind === "teacher" && (
         <Field label="Branş" htmlFor="user-specialty" error={errors.specialtySubjectId?.message}>
-          <select id="user-specialty" className={INPUT} {...register("specialtySubjectId")}>
-            <option value="">{subjects.isPending ? "Yükleniyor…" : "Seçin"}</option>
-            {(subjects.data ?? [])
+          <FormSelect
+            id="user-specialty"
+            control={control}
+            name="specialtySubjectId"
+            loading={subjects.isPending}
+            options={(subjects.data ?? [])
               .filter((s) => s.active)
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-          </select>
+              .map((s) => ({ value: s.id ?? "", label: s.name ?? "" }))}
+          />
         </Field>
       )}
     </>

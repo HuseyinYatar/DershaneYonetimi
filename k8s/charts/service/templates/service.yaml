@@ -1,0 +1,17 @@
+# In-cluster address http://<name>.dershane:<port>; the api-gateway reaches the services through these.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "service.name" . }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  selector:
+    app.kubernetes.io/name: {{ include "service.name" . }}
+    app.kubernetes.io/component: web
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http

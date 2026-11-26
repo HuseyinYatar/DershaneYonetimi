@@ -1,0 +1,6 @@
+argocd_namespace: argocd
+argocd_release: argocd
+argocd_chart_repo: https://argoproj.github.io/argo-helm
+argocd_values_file: /etc/kubernetes/argocd-values.yaml
+argocd_root_app_file: /etc/kubernetes/argocd-root-app.yaml
+argocd_helm_url: "https://get.helm.sh/helm-{{ helm_version }}-linux-{{ deb_arch }}.tar.gz"

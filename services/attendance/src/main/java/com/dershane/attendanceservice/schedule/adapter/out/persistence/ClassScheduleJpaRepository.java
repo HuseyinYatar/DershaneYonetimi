@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 interface ClassScheduleJpaRepository
     extends JpaRepository<ClassScheduleJpaEntity, UUID>,
@@ -18,4 +19,19 @@ interface ClassScheduleJpaRepository
       order by s.id
       """)
   List<ClassScheduleJpaEntity> findActiveValidBetween(LocalDate from, LocalDate to);
+
+  /**
+   * Takes the branch's advisory lock for the rest of the transaction. The wrapping select exists
+   * only because the lock function returns void, which a native query cannot read directly.
+   */
+  @Query(
+      value =
+          """
+          select count(*) from (
+            select pg_advisory_xact_lock(
+              cast(cast('x' || substr(md5(cast(:key as text)), 1, 16) as bit(64)) as bigint))
+          ) locked
+          """,
+      nativeQuery = true)
+  long lockBranch(@Param("key") String key);
 }

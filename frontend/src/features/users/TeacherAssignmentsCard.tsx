@@ -9,8 +9,10 @@ import {
 } from "@/api/queries/user";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState, QueryError } from "@/components/ui/EmptyState";
-import { INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { PRIMARY_BUTTON } from "@/components/ui/form";
 import { PillButton } from "@/components/ui/Pill";
+import { useConfirm } from "@/lib/useConfirm";
+import { Select } from "@/components/ui/Select";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { useIdempotencyKey } from "@/lib/useIdempotencyKey";
 
@@ -37,6 +39,7 @@ export function TeacherAssignmentsCard({
   const classrooms = useBranchClassrooms();
   const subjects = useUserSubjects();
   const create = useCreateTeacherAssignment(teacherId);
+  const ask = useConfirm();
   const remove = useDeleteTeacherAssignment(teacherId);
   const idempotency = useIdempotencyKey();
   const [classroomId, setClassroomId] = useState("");
@@ -77,8 +80,15 @@ export function TeacherAssignmentsCard({
               </div>
               <PillButton
                 disabled={remove.isPending}
-                onClick={() => {
-                  if (window.confirm("Atama kaldırılsın mı?")) remove.mutate(a.id ?? "");
+                onClick={async () => {
+                  if (
+                    await ask({
+                      title: "Atama kaldırılsın mı?",
+                      confirmLabel: "Kaldır",
+                      danger: true,
+                    })
+                  )
+                    remove.mutate(a.id ?? "");
                 }}
               >
                 Kaldır
@@ -89,36 +99,26 @@ export function TeacherAssignmentsCard({
       )}
       {active && (
         <div className="mt-3 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row">
-          <select
+          <Select
             aria-label="Sınıf"
+            className="w-full"
+            placeholder="Sınıf seç"
             value={classroomId}
-            onChange={(e) => setClassroomId(e.target.value)}
-            className={INPUT}
-          >
-            <option value="">Sınıf seç</option>
-            {(classrooms.data ?? [])
+            onChange={setClassroomId}
+            options={(classrooms.data ?? [])
               .filter((c) => c.active)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-          </select>
-          <select
+              .map((c) => ({ value: c.id ?? "", label: c.name ?? "" }))}
+          />
+          <Select
             aria-label="Ders"
+            className="w-full"
+            placeholder="Ders seç"
             value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
-            className={INPUT}
-          >
-            <option value="">Ders seç</option>
-            {(subjects.data ?? [])
+            onChange={setSubjectId}
+            options={(subjects.data ?? [])
               .filter((s) => s.active)
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-          </select>
+              .map((s) => ({ value: s.id ?? "", label: s.name ?? "" }))}
+          />
           <button
             type="button"
             disabled={!classroomId || !subjectId || create.isPending}

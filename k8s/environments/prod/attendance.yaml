@@ -1,0 +1,38 @@
+# attendance: class sessions, attendance, excuses
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
+name: attendance
+image:
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/attendance
+  tag: 941244c6f77fe247e7efa90ac7a9b763013613c2
+aws:
+  roleArn: arn:aws:iam::423082503744:role/dershane-prod-attendance
+
+env:
+  DB_USERNAME: attendance_service
+  DB_POOL_SIZE: "5"             # db.t4g.micro allows ~100 connections in total
+  KEYCLOAK_ISSUER_URI: https://auth.onlinecourses.site/realms/dershane
+  KEYCLOAK_JWK_SET_URI: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  KEYCLOAK_PUBLIC_URL: https://auth.onlinecourses.site
+  AWS_REGION: eu-central-1
+  ATTENDANCE_EVENTS_TOPIC_ARN: arn:aws:sns:eu-central-1:423082503744:attendance-events
+  ATTENDANCE_USER_EVENTS_QUEUE: attendance-user-events
+secretEnv:
+  DB_PASSWORD: { key: dershane/db/attendance_service, property: password }
+
+cronJobs:
+  # Sessions of the next 7 days from the weekly schedules (idempotent).
+  - name: generate-sessions
+    schedule: "30 0 * * *"
+    args: ["--attendance.job=generate-sessions"]
+  # Sessions whose day ended without attendance become EXPIRED.
+  - name: expire-sessions
+    schedule: "5 0 * * *"
+    args: ["--attendance.job=expire-sessions"]
+
+secretTemplates:
+  # The database address comes from Secrets Manager (dershane/endpoints), not from Git.
+  DB_URL:
+    template: "jdbc:postgresql://{{ .rdsHost }}:5432/attendance_service?sslmode=require"
+    from:
+      rdsHost: { key: dershane/endpoints, property: rds_host }

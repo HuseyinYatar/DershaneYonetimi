@@ -156,6 +156,12 @@ export function toUpdateRequest(v: UserFormValues, version: number): UpdateCall 
 }
 
 // A person's full name for tables and headings.
+// "1. sınıf" … "13. sınıf" (13 = mezun), shared by the student and classroom forms.
+export const GRADE_OPTIONS = Array.from({ length: 13 }, (_, i) => ({
+  value: String(i + 1),
+  label: `${i + 1}. sınıf`,
+}));
+
 export function fullName(person: { firstName?: string; lastName?: string }): string {
   return `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim();
 }

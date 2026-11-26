@@ -3,7 +3,7 @@ package com.dershane.userservice.enrollment.application.port.in;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A classroom as the caller's own classrooms list shows it (no student count). */
+/** A classroom as the caller's own classrooms list shows it. */
 public record ClassroomSummaryView(
     UUID id,
     UUID branchId,
@@ -11,5 +11,6 @@ public record ClassroomSummaryView(
     int gradeLevel,
     String term,
     boolean active,
+    Long activeStudentCount,
     Instant createdAt,
     Instant updatedAt) {}

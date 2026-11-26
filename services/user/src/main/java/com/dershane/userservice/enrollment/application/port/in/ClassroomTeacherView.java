@@ -9,7 +9,8 @@ public record ClassroomTeacherView(
     String firstName,
     String lastName,
     UUID subjectId,
-    String subjectName) {
+    String subjectName,
+    int weeklyHours) {
 
   @Override
   public String toString() {

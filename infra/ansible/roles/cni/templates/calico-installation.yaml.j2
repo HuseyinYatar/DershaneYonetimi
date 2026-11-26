@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+# Tells the Tigera operator how to run Calico. Based on manifests/custom-resources.yaml of
+# {{ calico_version }}, without the optional Goldmane/Whisker flow UI (saves memory on small nodes).
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        # Same as kubeadm's podSubnet; must not overlap the VPC.
+        cidr: {{ pod_cidr }}
+        # Unencapsulated between nodes in the same subnet (Terraform turns off source/dest check),
+        # VXLAN only when traffic crosses subnets.
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()

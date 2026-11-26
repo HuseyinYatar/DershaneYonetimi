@@ -19,6 +19,7 @@ import com.dershane.userservice.shared.application.BranchAccessPolicy;
 import com.dershane.userservice.shared.domain.ErrorCode;
 import com.dershane.userservice.shared.domain.Rejections;
 import io.micrometer.observation.annotation.Observed;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -112,7 +113,10 @@ class ClassroomService
   public Page<ClassroomView> list(
       Actor actor, UUID branchId, String term, Boolean active, Pageable pageable) {
     UUID branchFilter = branchAccess.resolveBranchFilter(actor, branchId, "classroom.list");
-    return classroomQuery.findViews(branchFilter, term, active, pageable);
+    Page<ClassroomView> views = classroomQuery.findViews(branchFilter, term, active, pageable);
+    Map<UUID, Long> counts =
+        enrollment.countActiveStudents(views.map(ClassroomView::id).getContent());
+    return views.map(view -> withCount(view, counts.get(view.id())));
   }
 
   private ClassroomView withCurrentCount(ClassroomView view) {

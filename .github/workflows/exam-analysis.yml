@@ -17,6 +17,9 @@ on:
       - .github/workflows/_python-service.yml
       - .github/workflows/_image.yml
 
+  # Manual run on main: builds and delivers this service's current image (first install, re-deploy).
+  workflow_dispatch:
+
 permissions:
   contents: read
 
@@ -31,6 +34,10 @@ jobs:
       service: exam-analysis
   image:
     needs: test
+    # On main: id-token to push to ECR through the AWS role, contents to commit the new tag to k8s/.
+    permissions:
+      contents: write
+      id-token: write
     uses: ./.github/workflows/_image.yml
     with:
       service: exam-analysis

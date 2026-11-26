@@ -1,0 +1,19 @@
+# Keycloak: login page, users' passwords and tokens. One pod, data in the "keycloak" database on RDS.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dershane
+resources:
+  - external-secrets.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+# The realm file is a template: External Secrets fills in the passwords (external-secrets.yaml) and writes
+# the finished file into a Secret that the pod mounts. The passwords never appear in Git or in a ConfigMap.
+configMapGenerator:
+  - name: keycloak-realm-template
+    files:
+      - realm/dershane-realm.json
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"

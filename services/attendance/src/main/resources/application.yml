@@ -141,6 +141,9 @@ attendance:
   correction-window-days: 7
   # Generate-sessions looks this many days ahead.
   schedule-horizon-days: 7
+  # The automatic timetable reads the branch's teacher assignments (and weekly hours) from here.
+  user-service:
+    url: ${USER_SERVICE_URL:http://localhost:8080}
   aws:
     region: ${AWS_REGION:eu-central-1}
     endpoint-url: ${AWS_ENDPOINT_URL:}

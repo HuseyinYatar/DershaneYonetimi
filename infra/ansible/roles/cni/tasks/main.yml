@@ -1,0 +1,53 @@
+# Installs Calico, the pod network. Until it runs every node is NotReady: pods cannot reach each other.
+# `kubectl diff` decides whether anything differs, so `kubectl apply` runs only for real changes.
+
+- name: Install Calico
+  environment:
+    KUBECONFIG: "{{ kubeconfig_admin }}"
+  block:
+    - name: Compare the Tigera operator manifests with the cluster
+      ansible.builtin.command: kubectl diff --server-side --force-conflicts -f {{ cni_calico_manifest_base }}/{{ item }}
+      register: cni_operator_diff
+      changed_when: false
+      # 0: no difference, 1: difference, >1: error. On a new cluster the operator's namespace does not
+      # exist yet, so kubectl diff cannot compare the objects inside it and answers NotFound (rc 2):
+      # that is a difference, not an error.
+      failed_when: cni_operator_diff.rc > 1 and 'NotFound' not in cni_operator_diff.stderr
+      loop:
+        - operator-crds.yaml
+        - tigera-operator.yaml
+
+    # Server-side apply: the CRDs are too large for the annotation client-side apply keeps.
+    - name: Apply the Tigera operator manifests
+      ansible.builtin.command: kubectl apply --server-side --force-conflicts -f {{ cni_calico_manifest_base }}/{{ item.item }}
+      loop: "{{ cni_operator_diff.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.rc != 0
+      changed_when: true
+
+    - name: Wait for the Installation resource type
+      ansible.builtin.command: kubectl wait --for=condition=Established crd/installations.operator.tigera.io --timeout=120s
+      changed_when: false
+
+    - name: Write the Calico installation
+      ansible.builtin.template:
+        src: calico-installation.yaml.j2
+        dest: "{{ cni_installation_file }}"
+        mode: "0644"
+
+    - name: Compare the Calico installation with the cluster
+      ansible.builtin.command: kubectl diff --server-side -f {{ cni_installation_file }}
+      register: cni_installation_diff
+      changed_when: false
+      # Same rule as above: NotFound means the object is not there yet, so it is applied.
+      failed_when: cni_installation_diff.rc > 1 and 'NotFound' not in cni_installation_diff.stderr
+
+    - name: Apply the Calico installation
+      ansible.builtin.command: kubectl apply --server-side -f {{ cni_installation_file }}
+      when: cni_installation_diff.rc != 0
+      changed_when: true
+
+    - name: Wait until every node is Ready
+      ansible.builtin.command: kubectl wait --for=condition=Ready nodes --all --timeout=600s
+      changed_when: false

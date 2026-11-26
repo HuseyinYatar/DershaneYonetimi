@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classroomFormSchema, toCreateClassroom } from "./classroomForm";
+import { classroomFormSchema, maskTerm, toCreateClassroom } from "./classroomForm";
 import {
   EMPTY_USER_FORM,
   toCreateRequest,
@@ -96,6 +96,12 @@ describe("classroomFormSchema", () => {
     expect(
       classroomFormSchema.safeParse({ name: "", gradeLevel: "0", term: "2026" }).error?.issues,
     ).toHaveLength(3);
+  });
+
+  it("masks the term as digits with a fixed dash", () => {
+    expect(maskTerm("2026")).toBe("2026");
+    expect(maskTerm("20262027")).toBe("2026-2027");
+    expect(maskTerm("a2b0-26x2027999")).toBe("2026-2027");
   });
 
   it("builds the create request", () => {

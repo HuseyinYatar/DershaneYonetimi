@@ -4,19 +4,26 @@ import static com.dershane.attendanceservice.support.TestJwts.actor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.dershane.attendanceservice.roster.application.port.in.ClassroomBranchQuery;
+import com.dershane.attendanceservice.schedule.application.port.in.CreateScheduleCommand;
 import com.dershane.attendanceservice.schedule.application.port.in.GenerateSessionsResult;
 import com.dershane.attendanceservice.schedule.application.port.in.ScheduleView;
 import com.dershane.attendanceservice.schedule.application.port.in.UpdateScheduleCommand;
+import com.dershane.attendanceservice.schedule.application.port.out.BranchScheduleLockPort;
 import com.dershane.attendanceservice.schedule.application.port.out.LoadSchedulePort;
+import com.dershane.attendanceservice.schedule.application.port.out.LoadTimetableSettingPort;
 import com.dershane.attendanceservice.schedule.application.port.out.SaveSchedulePort;
 import com.dershane.attendanceservice.schedule.application.port.out.ScheduleQueryPort;
 import com.dershane.attendanceservice.schedule.domain.ClassSchedule;
+import com.dershane.attendanceservice.schedule.domain.TimetableSetting;
 import com.dershane.attendanceservice.session.application.port.in.CreateScheduledSessionUseCase;
 import com.dershane.attendanceservice.session.application.port.in.ScheduledSessionCommand;
 import com.dershane.attendanceservice.session.application.port.in.ScheduledSessionOutcome;
@@ -38,8 +45,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class ScheduleServiceTest {
@@ -52,6 +62,8 @@ class ScheduleServiceTest {
   @Mock private ScheduleQueryPort scheduleQuery;
   @Mock private CreateScheduledSessionUseCase createSession;
   @Mock private ClassroomBranchQuery classrooms;
+  @Mock private LoadTimetableSettingPort loadSetting;
+  @Mock private BranchScheduleLockPort branchLock;
 
   private final UUID branchId = UUID.randomUUID();
   private final Actor admin = actor(UUID.randomUUID(), branchId, "ADMIN");
@@ -70,7 +82,9 @@ class ScheduleServiceTest {
             classrooms,
             new BusinessCalendar(
                 Clock.fixed(Instant.parse("2026-10-30T07:00:00Z"), ZoneOffset.UTC),
-                "Europe/Istanbul"));
+                "Europe/Istanbul"),
+            loadSetting,
+            branchLock);
   }
 
   @Test
@@ -83,8 +97,7 @@ class ScheduleServiceTest {
             () ->
                 service.create(
                     admin,
-                    new com.dershane.attendanceservice.schedule.application.port.in
-                        .CreateScheduleCommand(
+                    new CreateScheduleCommand(
                         branchId,
                         classroomId,
                         UUID.randomUUID(),
@@ -112,6 +125,243 @@ class ScheduleServiceTest {
         validFrom,
         validTo,
         true);
+  }
+
+  // --- clash and lunch rules on create/update
+
+  private final UUID classroomA = UUID.randomUUID();
+  private final UUID teacherA = UUID.randomUUID();
+
+  private ScheduleView viewOf(
+      UUID id,
+      UUID classroomId,
+      UUID teacherId,
+      String from,
+      String to,
+      LocalDate validFrom,
+      LocalDate validTo) {
+    return new ScheduleView(
+        id,
+        branchId,
+        classroomId,
+        teacherId,
+        UUID.randomUUID(),
+        DayOfWeek.MONDAY,
+        LocalTime.parse(from),
+        LocalTime.parse(to),
+        validFrom,
+        validTo,
+        true,
+        Instant.now(),
+        Instant.now());
+  }
+
+  /** What the active-schedules query of the branch answers. */
+  private void activeSchedules(ScheduleView... views) {
+    when(scheduleQuery.findViews(eq(branchId), isNull(), isNull(), eq(true), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of(views)));
+  }
+
+  private CreateScheduleCommand createMonday(
+      UUID classroomId, UUID teacherId, String from, String to, LocalDate validFrom) {
+    return new CreateScheduleCommand(
+        branchId,
+        classroomId,
+        teacherId,
+        UUID.randomUUID(),
+        DayOfWeek.MONDAY,
+        LocalTime.parse(from),
+        LocalTime.parse(to),
+        validFrom,
+        null);
+  }
+
+  private static DomainException thrownBy(Runnable action) {
+    try {
+      action.run();
+    } catch (DomainException ex) {
+      return ex;
+    }
+    throw new AssertionError("expected a DomainException");
+  }
+
+  @Test
+  void aClassroomCannotHaveTwoLessonsAtOnce() {
+    activeSchedules(
+        viewOf(UUID.randomUUID(), classroomA, UUID.randomUUID(), "09:10", "10:00", TODAY, null));
+
+    DomainException thrown =
+        thrownBy(
+            () ->
+                service.create(admin, createMonday(classroomA, teacherA, "09:30", "10:20", TODAY)));
+
+    assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.CLASSROOM_BUSY);
+    verify(branchLock).lock(branchId);
+    verify(saveSchedule, never()).save(any());
+  }
+
+  @Test
+  void aTeacherCannotBeInTwoClassroomsAtOnce() {
+    activeSchedules(
+        viewOf(UUID.randomUUID(), UUID.randomUUID(), teacherA, "09:10", "10:00", TODAY, null));
+
+    DomainException thrown =
+        thrownBy(
+            () ->
+                service.create(admin, createMonday(classroomA, teacherA, "09:10", "10:00", TODAY)));
+
+    assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.TEACHER_BUSY);
+    verify(saveSchedule, never()).save(any());
+  }
+
+  @Test
+  void lessonsWhoseValidityRangesDoNotMeetMayShareAnHour() {
+    activeSchedules(
+        viewOf(
+            UUID.randomUUID(),
+            classroomA,
+            teacherA,
+            "09:10",
+            "10:00",
+            LocalDate.of(2026, 9, 1),
+            LocalDate.of(2026, 12, 31)));
+    ClassSchedule saved = schedule(DayOfWeek.MONDAY, LocalDate.of(2027, 1, 11), null);
+    when(saveSchedule.save(any())).thenReturn(saved);
+    when(scheduleQuery.findViewById(saved.getId()))
+        .thenReturn(
+            Optional.of(
+                viewOf(saved.getId(), classroomA, teacherA, "09:10", "10:00", TODAY, null)));
+
+    service.create(
+        admin, createMonday(classroomA, teacherA, "09:10", "10:00", LocalDate.of(2027, 1, 11)));
+
+    verify(saveSchedule).save(any());
+  }
+
+  @Test
+  void onlyActiveSchedulesAreComparedAndTheBranchIsLockedFirst() {
+    activeSchedules();
+    ClassSchedule saved = schedule(DayOfWeek.MONDAY, TODAY, null);
+    when(saveSchedule.save(any())).thenReturn(saved);
+    when(scheduleQuery.findViewById(saved.getId()))
+        .thenReturn(
+            Optional.of(
+                viewOf(saved.getId(), classroomA, teacherA, "09:10", "10:00", TODAY, null)));
+
+    service.create(admin, createMonday(classroomA, teacherA, "09:10", "10:00", TODAY));
+
+    InOrder order = inOrder(branchLock, scheduleQuery, saveSchedule);
+    order.verify(branchLock).lock(branchId);
+    order
+        .verify(scheduleQuery)
+        .findViews(eq(branchId), isNull(), isNull(), eq(true), any(Pageable.class));
+    order.verify(saveSchedule).save(any());
+  }
+
+  @Test
+  void aScheduleCannotSitOnTheLunchHour() {
+    when(loadSetting.findByBranchId(branchId))
+        .thenReturn(
+            Optional.of(new TimetableSetting(branchId, 1L, LocalTime.of(8, 10), 50, 10, 12, 2)));
+
+    DomainException thrown =
+        thrownBy(
+            () ->
+                service.create(admin, createMonday(classroomA, teacherA, "09:30", "10:20", TODAY)));
+
+    assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.LUNCH_BREAK_SLOT);
+    verify(saveSchedule, never()).save(any());
+  }
+
+  @Test
+  void aLessonRightAfterTheLunchHourIsFine() {
+    when(loadSetting.findByBranchId(branchId))
+        .thenReturn(
+            Optional.of(new TimetableSetting(branchId, 1L, LocalTime.of(8, 10), 50, 10, 12, 2)));
+    activeSchedules();
+    ClassSchedule saved = schedule(DayOfWeek.MONDAY, TODAY, null);
+    when(saveSchedule.save(any())).thenReturn(saved);
+    when(scheduleQuery.findViewById(saved.getId()))
+        .thenReturn(
+            Optional.of(
+                viewOf(saved.getId(), classroomA, teacherA, "10:10", "11:00", TODAY, null)));
+
+    service.create(admin, createMonday(classroomA, teacherA, "10:10", "11:00", TODAY));
+
+    verify(saveSchedule).save(any());
+  }
+
+  @Test
+  void updatingAScheduleDoesNotClashWithItself() {
+    ClassSchedule existing = schedule(DayOfWeek.MONDAY, TODAY, null);
+    when(loadSchedule.findById(existing.getId())).thenReturn(Optional.of(existing));
+    ScheduleView itself =
+        viewOf(
+            existing.getId(),
+            existing.getClassroomId(),
+            existing.getTeacherId(),
+            "09:00",
+            "09:40",
+            TODAY,
+            null);
+    activeSchedules(itself);
+    when(scheduleQuery.findViewById(existing.getId())).thenReturn(Optional.of(itself));
+
+    service.update(
+        admin,
+        existing.getId(),
+        new UpdateScheduleCommand(
+            existing.getTeacherId(),
+            existing.getSubjectId(),
+            DayOfWeek.MONDAY,
+            LocalTime.of(9, 10),
+            LocalTime.of(9, 50),
+            TODAY,
+            null));
+
+    verify(branchLock).lock(branchId);
+    verify(saveSchedule).save(existing);
+  }
+
+  @Test
+  void updatingOntoAnotherLessonIsRejected() {
+    ClassSchedule existing = schedule(DayOfWeek.MONDAY, TODAY, null);
+    when(loadSchedule.findById(existing.getId())).thenReturn(Optional.of(existing));
+    activeSchedules(
+        viewOf(
+            existing.getId(),
+            existing.getClassroomId(),
+            existing.getTeacherId(),
+            "09:00",
+            "09:40",
+            TODAY,
+            null),
+        viewOf(
+            UUID.randomUUID(),
+            existing.getClassroomId(),
+            UUID.randomUUID(),
+            "10:10",
+            "11:00",
+            TODAY,
+            null));
+
+    DomainException thrown =
+        thrownBy(
+            () ->
+                service.update(
+                    admin,
+                    existing.getId(),
+                    new UpdateScheduleCommand(
+                        existing.getTeacherId(),
+                        existing.getSubjectId(),
+                        DayOfWeek.MONDAY,
+                        LocalTime.of(10, 10),
+                        LocalTime.of(11, 0),
+                        TODAY,
+                        null)));
+
+    assertThat(thrown.getErrorCode()).isEqualTo(ErrorCode.CLASSROOM_BUSY);
+    verify(saveSchedule, never()).save(any());
   }
 
   @Test

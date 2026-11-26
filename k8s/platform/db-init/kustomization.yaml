@@ -1,0 +1,16 @@
+# Creates the service databases and their users inside RDS. Terraform cannot do it: RDS is in a private
+# subnet that only the cluster reaches. The counterpart of local/postgres/init.sql.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dershane
+resources:
+  - external-secret.yaml
+  - job.yaml
+configMapGenerator:
+  - name: db-init-script
+    files:
+      - init.sh
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"

@@ -1,0 +1,25 @@
+# https://auth.onlinecourses.site -> Keycloak. cert-manager sees the annotation, gets the certificate from
+# Let's Encrypt and stores it in the keycloak-tls Secret that Traefik serves.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [auth.onlinecourses.site]
+      secretName: keycloak-tls
+  rules:
+    - host: auth.onlinecourses.site
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  name: http

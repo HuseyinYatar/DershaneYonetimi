@@ -4,7 +4,9 @@ import { useCreateSchedule, useUpdateSchedule } from "@/api/queries/attendance";
 import { useBranchClassrooms, useBranchTeachers, useUserSubjects } from "@/api/queries/user";
 import { useBranchId } from "@/auth/useBranchId";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { Field, INPUT, PRIMARY_BUTTON } from "@/components/ui/form";
+import { Field, PRIMARY_BUTTON } from "@/components/ui/form";
+import { FormDatePicker, FormTimePicker } from "@/components/ui/FormPickers";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { PillButton } from "@/components/ui/Pill";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
@@ -60,7 +62,7 @@ export function ScheduleForm({
   const idempotency = useIdempotencyKey();
   const editing = !!scheduleId;
   const {
-    register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<ScheduleFormValues>({
@@ -101,62 +103,51 @@ export function ScheduleForm({
       <form onSubmit={onSubmit} noValidate className="mt-4 flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Sınıf" htmlFor="schedule-classroom" error={errors.classroomId?.message}>
-            <select
+            <FormSelect
               id="schedule-classroom"
+              control={control}
+              name="classroomId"
               disabled={editing}
-              className={INPUT}
-              {...register("classroomId")}
-            >
-              <option value="">Seçin</option>
-              {(classrooms.data ?? [])
+              options={(classrooms.data ?? [])
                 .filter((c) => c.active || c.id === initial.classroomId)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
+                .map((c) => ({ value: c.id ?? "", label: c.name ?? "" }))}
+            />
           </Field>
           <Field label="Öğretmen" htmlFor="schedule-teacher" error={errors.teacherId?.message}>
-            <select id="schedule-teacher" className={INPUT} {...register("teacherId")}>
-              <option value="">Seçin</option>
-              {(teachers.data ?? [])
+            <FormSelect
+              id="schedule-teacher"
+              control={control}
+              name="teacherId"
+              options={(teachers.data ?? [])
                 .filter((t) => t.active || t.id === initial.teacherId)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {fullName(t)}
-                  </option>
-                ))}
-            </select>
+                .map((t) => ({ value: t.id ?? "", label: fullName(t) }))}
+            />
           </Field>
           <Field label="Ders" htmlFor="schedule-subject" error={errors.subjectId?.message}>
-            <select id="schedule-subject" className={INPUT} {...register("subjectId")}>
-              <option value="">Seçin</option>
-              {(subjects.data ?? [])
+            <FormSelect
+              id="schedule-subject"
+              control={control}
+              name="subjectId"
+              options={(subjects.data ?? [])
                 .filter((s) => s.active || s.id === initial.subjectId)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
+                .map((s) => ({ value: s.id ?? "", label: s.name ?? "" }))}
+            />
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Gün" htmlFor="schedule-day">
-            <select id="schedule-day" className={INPUT} {...register("dayOfWeek")}>
-              {WEEKDAYS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {DAY_LABELS[d.value]}
-                </option>
-              ))}
-            </select>
+            <FormSelect
+              id="schedule-day"
+              control={control}
+              name="dayOfWeek"
+              options={WEEKDAYS.map((d) => ({ value: d.value, label: DAY_LABELS[d.value] }))}
+            />
           </Field>
           <Field label="Başlangıç saati" htmlFor="schedule-start" error={errors.startsAt?.message}>
-            <input id="schedule-start" type="time" className={INPUT} {...register("startsAt")} />
+            <FormTimePicker id="schedule-start" control={control} name="startsAt" />
           </Field>
           <Field label="Bitiş saati" htmlFor="schedule-end" error={errors.endsAt?.message}>
-            <input id="schedule-end" type="time" className={INPUT} {...register("endsAt")} />
+            <FormTimePicker id="schedule-end" control={control} name="endsAt" />
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -165,14 +156,20 @@ export function ScheduleForm({
             htmlFor="schedule-from"
             error={errors.validFrom?.message}
           >
-            <input id="schedule-from" type="date" className={INPUT} {...register("validFrom")} />
+            <FormDatePicker id="schedule-from" control={control} name="validFrom" />
           </Field>
           <Field
             label="Geçerli (bitiş, isteğe bağlı)"
             htmlFor="schedule-to"
             error={errors.validTo?.message}
           >
-            <input id="schedule-to" type="date" className={INPUT} {...register("validTo")} />
+            <FormDatePicker
+              id="schedule-to"
+              control={control}
+              name="validTo"
+              clearable
+              placeholder="Süresiz"
+            />
           </Field>
         </div>
         <div className="flex gap-2">

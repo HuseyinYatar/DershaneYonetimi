@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ApiError, parseProblem, problemOf } from "./problem";
 
 const FALLBACK = "Beklenmeyen bir hata oluştu.";
@@ -30,6 +30,19 @@ describe("problemOf", () => {
       errorCode: "NOT_FOUND",
       message: "Yok.",
     });
-    expect(problemOf(new TypeError("Failed to fetch")).message).toBe(FALLBACK);
+    expect(problemOf(new Error("boom")).message).toBe(FALLBACK);
+  });
+
+  it("reports an unreachable server instead of the generic message", () => {
+    expect(problemOf(new TypeError("Failed to fetch"))).toEqual({
+      errorCode: "SERVICE_UNREACHABLE",
+      message: "Bağlantı kurulamadı, birazdan tekrar deneyin.",
+    });
+  });
+
+  it("blames the device, not the server, when the browser is offline", () => {
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    expect(problemOf(new TypeError("Failed to fetch")).message).toBe("İnternet bağlantınız yok.");
+    online.mockRestore();
   });
 });

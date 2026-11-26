@@ -1,14 +1,22 @@
-FROM node:24-alpine AS build
+FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:stable-alpine
+FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
 # Pull in fixed Alpine packages the base image has not picked up yet (Trivy HIGH/CRITICAL gate); the base runs as uid 101.
 USER root
-RUN apk upgrade --no-cache
+# Changes on every CI run so the cached layer below never keeps stale packages.
+ARG CACHE_BUST=0
+# The base pins nginx and its modules to exact versions in /etc/apk/world, so a plain `apk upgrade` never moves
+# nginx; the modules (geoip, image-filter, njs, xslt) are unused here and lag behind nginx in the Alpine repo.
+# Dropping them lets `apk add --upgrade nginx` take the fixed version.
+RUN echo "$CACHE_BUST" > /dev/null \
+ && apk del --no-cache nginx-module-geoip nginx-module-image-filter nginx-module-njs nginx-module-xslt \
+ && apk add --no-cache --upgrade nginx \
+ && apk upgrade --no-cache
 USER 101
 # The image renders these templates into /etc/nginx/conf.d at startup, substituting only defined env vars.
 COPY nginx/default.conf.template nginx/security-headers.inc.template /etc/nginx/templates/

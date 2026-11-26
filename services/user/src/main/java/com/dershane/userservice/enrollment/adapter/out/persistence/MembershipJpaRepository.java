@@ -2,6 +2,7 @@ package com.dershane.userservice.enrollment.adapter.out.persistence;
 
 import com.dershane.userservice.enrollment.application.port.in.ClassroomStudentView;
 import com.dershane.userservice.enrollment.application.port.in.ClassroomSummaryView;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,11 +36,25 @@ interface MembershipJpaRepository extends JpaRepository<MembershipJpaEntity, UUI
   @Query(
       """
       select new com.dershane.userservice.enrollment.application.port.in.ClassroomSummaryView(
-          c.id, c.branchId, c.name, c.gradeLevel, c.term, c.active, c.createdAt, c.updatedAt)
+          c.id, c.branchId, c.name, c.gradeLevel, c.term, c.active,
+          (select count(n) from MembershipJpaEntity n
+           where n.classroomId = c.id and n.endDate is null),
+          c.createdAt, c.updatedAt)
       from ClassroomJpaEntity c
       where c.id in (
           select m.classroomId from MembershipJpaEntity m
           where m.studentId = :studentId and m.endDate is null)
       """)
   Optional<ClassroomSummaryView> findClassroomOfStudent(UUID studentId);
+
+  /** Rows of {@code [classroomId, activeStudentCount]}, one per existing classroom id. */
+  @Query(
+      """
+      select c.id,
+          (select count(m) from MembershipJpaEntity m
+           where m.classroomId = c.id and m.endDate is null)
+      from ClassroomJpaEntity c
+      where c.id in :classroomIds
+      """)
+  List<Object[]> countActiveStudentsOf(Collection<UUID> classroomIds);
 }

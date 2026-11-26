@@ -97,7 +97,7 @@ class PersonalDataMaskingTest {
         new StudentGuardianResponse(id, id, FIRST, LAST, EMAIL, PHONE, Relationship.MOTHER));
     assertMasked(new GuardianChildResponse(id, FIRST, LAST, NUMBER, 12, Relationship.MOTHER, true));
     assertMasked(new ClassroomStudentResponse(id, FIRST, LAST, NUMBER, id, LocalDate.now()));
-    assertMasked(new ClassroomTeacherResponse(id, id, FIRST, LAST, id, "Matematik"));
+    assertMasked(new ClassroomTeacherResponse(id, id, FIRST, LAST, id, "Matematik", 4));
   }
 
   @Test
@@ -123,7 +123,7 @@ class PersonalDataMaskingTest {
     assertMasked(new StudentGuardianView(id, id, FIRST, LAST, EMAIL, PHONE, Relationship.MOTHER));
     assertMasked(new GuardianChildView(id, FIRST, LAST, NUMBER, 12, Relationship.MOTHER, true));
     assertMasked(new ClassroomStudentView(id, FIRST, LAST, NUMBER, id, LocalDate.now()));
-    assertMasked(new ClassroomTeacherView(id, id, FIRST, LAST, id, "Matematik"));
+    assertMasked(new ClassroomTeacherView(id, id, FIRST, LAST, id, "Matematik", 4));
   }
 
   @Test

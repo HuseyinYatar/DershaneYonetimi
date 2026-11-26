@@ -6,8 +6,7 @@ import java.util.UUID;
 
 /**
  * A classroom of the caller. It has the same fields as the classroom endpoints' response and is
- * documented under the same schema name; {@code activeStudentCount} is always null here, as it is
- * in lists.
+ * documented under the same schema name.
  */
 @Schema(name = "ClassroomResponse")
 public record MyClassroomResponse(
