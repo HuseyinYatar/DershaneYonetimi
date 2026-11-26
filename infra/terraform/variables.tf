@@ -206,7 +206,7 @@ variable "cache_auth_token_version" {
 
 variable "ecr_repositories" {
   type    = set(string)
-  default = ["api-gateway", "user", "attendance", "task", "messaging", "exam-analysis", "notification", "frontend", "keycloak"]
+  default = ["api-gateway", "user", "attendance", "task", "messaging", "exam-analysis", "notification", "file", "frontend", "keycloak"]
 }
 
 # --- Domain, e-mail, alerts ---------------------------------------------------------------------

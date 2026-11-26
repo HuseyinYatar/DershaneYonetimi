@@ -21,6 +21,7 @@ env:
   MESSAGING_SERVICE_URL: http://messaging.dershane:8080
   EXAM_ANALYSIS_SERVICE_URL: http://exam-analysis.dershane:8000
   NOTIFICATION_SERVICE_URL: http://notification.dershane:8000
+  FILE_SERVICE_URL: http://file.dershane:8000
   # Rate limit counters live in ElastiCache (TLS + AUTH token).
   REDIS_PORT: "6379"
   SPRING_DATA_REDIS_SSL_ENABLED: "true"

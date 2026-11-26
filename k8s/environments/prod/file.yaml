@@ -1,0 +1,45 @@
+# file: homework files, chat photos and optical reading results in S3
+# Values for k8s/charts/service. image.tag is written by CI (.github/workflows/_image.yml). Passwords and
+# data store addresses come from Secrets Manager (dershane/...); only the AWS account number is written here.
+name: file
+image:
+  repository: 423082503744.dkr.ecr.eu-central-1.amazonaws.com/file
+  tag: 0000000000000000000000000000000000000000   # replaced by the first CI run on main
+aws:
+  roleArn: arn:aws:iam::423082503744:role/dershane-prod-file
+
+web:
+  port: 8000
+  probes:
+    port: 8000
+    liveness: /health/live
+    readiness: /health/ready
+    startupFailureThreshold: 24
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 768Mi }      # photos are decoded in memory (up to 40 megapixels)
+service:
+  port: 8000
+
+migration:
+  enabled: true
+  command: ["alembic", "upgrade", "head"]
+
+env:
+  ENVIRONMENT: prod
+  DB_POOL_SIZE: "5"
+  AWS_REGION: eu-central-1
+  # No AWS_ENDPOINT_URL or S3_PUBLIC_ENDPOINT_URL: real S3, download URLs name the region.
+  FILES_BUCKET: dershane-prod-file-uploads
+  OIDC_ISSUER: https://auth.onlinecourses.site/realms/dershane
+  OIDC_JWKS_URL: http://keycloak.dershane:8080/realms/dershane/protocol/openid-connect/certs
+  OIDC_AUDIENCE: dershane-api
+
+secretTemplates:
+  DATABASE_URL:
+    template: "postgresql+psycopg://{{ .dbUser }}:{{ .dbPassword }}@{{ .rdsHost }}:5432/{{ .dbName }}?sslmode=require"
+    from:
+      dbUser: { key: dershane/db/file_service, property: username }
+      dbPassword: { key: dershane/db/file_service, property: password }
+      dbName: { key: dershane/db/file_service, property: dbname }
+      rdsHost: { key: dershane/endpoints, property: rds_host }

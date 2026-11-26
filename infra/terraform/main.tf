@@ -18,10 +18,11 @@ locals {
     messaging     = { publish = ["messaging"], consume = ["messaging-user-events"] }
     exam-analysis = { publish = ["exam-analysis"], consume = ["exam-analysis-user-events"], buckets = ["exam-analysis-optical-files"] }
     notification  = { consume = ["notification-queue"] }
+    file          = { buckets = ["file-uploads"] }
   }
 
   # One database and role per service, as in local/postgres/init.sql.
-  databases = ["user_service", "attendance_service", "task_service", "messaging_service", "exam_analysis", "notification", "keycloak"]
+  databases = ["user_service", "attendance_service", "task_service", "messaging_service", "exam_analysis", "notification", "file_service", "keycloak"]
 
   # cp = 10.0.1.10, w1 = 10.0.1.11, ... Fixed so a recreated node keeps the address kubeadm knows.
   nodes = var.platform_enabled ? merge(

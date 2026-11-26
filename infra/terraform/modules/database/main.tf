@@ -1,4 +1,4 @@
-# One PostgreSQL instance holding one database and role per service, the same seven as
+# One PostgreSQL instance holding one database and role per service, the same eight as
 # local/postgres/init.sql. No service is granted another service's database.
 #
 # Terraform cannot reach the instance (private subnets, no bastion), so it does not create the
